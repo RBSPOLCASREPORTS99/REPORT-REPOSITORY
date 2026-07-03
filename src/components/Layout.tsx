@@ -100,7 +100,7 @@ export default function Layout() {
             <>
               <Logo className="h-9 w-9 shrink-0" />
               <span className="leading-tight">
-                <span className="block text-sm font-bold text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE</span>
+                <span className="block text-sm font-bold leading-tight text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE CORP.</span>
                 <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">Business Review</span>
               </span>
               <button onClick={toggleSidebar} title="Collapse sidebar" aria-label="Collapse sidebar"
