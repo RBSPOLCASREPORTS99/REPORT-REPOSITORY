@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
-import { formatPercent, formatThousands } from '../lib/format';
+import { formatPercent, formatMoney } from '../lib/format';
+import { useUi } from '../contexts/UiContext';
+import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchRanges, fetchBuCards, fetchBuComparison,
   type RangeRow, type BuCardData, type ComparisonLine,
@@ -16,6 +18,9 @@ const HEADLINE_LABELS: Record<string, string> = {
 
 // Full-screen, large-font meeting view: one BU per screen, swipe / arrow to move.
 export default function PresentMode() {
+  const { units } = useUi();
+  const { labelFor } = useBuLabels();
+  const money = (v: number) => formatMoney(v, 'thousands', units);
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [cards, setCards] = useState<BuCardData[]>([]);
@@ -91,7 +96,7 @@ export default function PresentMode() {
           <p className="text-sm uppercase tracking-widest text-slate-400 dark:text-slate-500">
             {index + 1} / {cards.length}
           </p>
-          <h1 className="mt-2 text-4xl font-bold sm:text-5xl">{active.buName}</h1>
+          <h1 className="mt-2 text-4xl font-bold uppercase sm:text-5xl">{labelFor(active.buCode)}</h1>
 
           <div className="mt-10 grid w-full max-w-2xl gap-4">
             {HEADLINE_KEYS.map((key) => {
@@ -102,14 +107,14 @@ export default function PresentMode() {
               return (
                 <div key={key} className={`rounded-2xl px-6 py-5 ${isNet ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'bg-slate-800'}`}>
                   <div className="flex items-baseline justify-between">
-                    <span className={`text-sm font-medium ${isNet ? 'text-slate-500 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'}`}>{HEADLINE_LABELS[key]}</span>
+                    <span className={`text-sm font-semibold uppercase tracking-wide ${isNet ? 'text-slate-500 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'}`}>{HEADLINE_LABELS[key]}</span>
                     <span className={`text-3xl font-bold tabular-nums sm:text-4xl ${line.current < 0 ? 'text-red-500' : ''}`}>
-                      ₱{formatThousands(line.current)}k
+                      {money(line.current)}
                     </span>
                   </div>
                   {priorLabel && (
                     <div className={`mt-1 text-right text-sm font-medium ${up ? 'text-green-500' : 'text-red-500'}`}>
-                      {up ? '▲' : '▼'} ₱{formatThousands(Math.abs(line.diff))}k · {formatPercent(line.pctDiff)} vs {priorLabel}
+                      {up ? '▲' : '▼'} {money(Math.abs(line.diff))} · {formatPercent(line.pctDiff)} vs {priorLabel}
                     </div>
                   )}
                 </div>

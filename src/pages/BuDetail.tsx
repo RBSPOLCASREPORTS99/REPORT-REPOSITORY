@@ -6,7 +6,7 @@ import ComparisonControl, { type ComparisonState } from '../components/Compariso
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
-import { BUSINESS_UNITS } from '../lib/constants';
+import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchTrend, fetchRanges, rangesWithSupport,
   fetchBuExpenses, rangesWithExpenses, fetchBuSales, rangesWithSales,
@@ -33,7 +33,8 @@ export default function BuDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const buName = BUSINESS_UNITS.find((b) => b.code === code)?.name ?? code;
+  const { labelFor } = useBuLabels();
+  const buName = code ? labelFor(code) : '';
   const currentId = cmp?.currentId;
   const priorLabel = cmp?.priorLabel ?? 'Prior';
   const currentLabel = cmp?.currentLabel ?? 'Current';

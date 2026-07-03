@@ -2,7 +2,7 @@ import { ALLOC_METHOD_LABELS, type AllocMethod } from '../lib/queries';
 
 const METHODS: AllocMethod[] = ['gross_sales', 'revenue', 'per_txn'];
 
-// Toggle the support-center allocation method. The two alternatives are only
+// Support-center allocation method as a dropdown. The two alternatives are only
 // available when the support workbook has been imported for the current range.
 export default function AllocMethodToggle({
   method,
@@ -15,21 +15,17 @@ export default function AllocMethodToggle({
 }) {
   if (!available) return null;
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-slate-400 dark:text-slate-500">Support allocation</span>
-      <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
+    <label className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Support allocation</span>
+      <select
+        value={method}
+        onChange={(e) => onChange(e.target.value as AllocMethod)}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+      >
         {METHODS.map((m) => (
-          <button
-            key={m}
-            onClick={() => onChange(m)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              method === m ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
-            }`}
-          >
-            {ALLOC_METHOD_LABELS[m]}
-          </button>
+          <option key={m} value={m}>{ALLOC_METHOD_LABELS[m]}</option>
         ))}
-      </div>
-    </div>
+      </select>
+    </label>
   );
 }

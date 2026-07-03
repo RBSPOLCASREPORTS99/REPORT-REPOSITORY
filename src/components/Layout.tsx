@@ -14,7 +14,7 @@ interface NavItem { to: string; label: string; icon: string; end?: boolean }
 
 export default function Layout() {
   const { profile, user, signOut } = useAuth();
-  const { dark, toggleDark, zoom, zoomIn, zoomOut, resetZoom, sidebarCollapsed, toggleSidebar } = useUi();
+  const { dark, toggleDark, zoom, zoomIn, zoomOut, resetZoom, sidebarCollapsed, toggleSidebar, units, toggleUnits } = useUi();
   const location = useLocation();
   const [open, setOpen] = useState(false); // mobile menu
 
@@ -31,6 +31,7 @@ export default function Layout() {
           { to: '/farm', label: 'Lakatan Farm', icon: '🌱' },
           { to: '/publish', label: 'Publish periods', icon: '📢' },
           { to: '/users', label: 'Users & access', icon: '👥' },
+          { to: '/bu-names', label: 'Business Unit Names', icon: '🏷️' },
         ]
       : []),
     { to: '/account', label: 'My account (PIN)', icon: '👤' },
@@ -54,6 +55,10 @@ export default function Layout() {
         <button onClick={zoomIn} aria-label="Zoom in"
           className="h-8 w-8 rounded-md bg-white text-lg font-semibold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">+</button>
       </div>
+      <button onClick={toggleUnits}
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 py-2 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+        {units === 'thousands' ? '₱ Show full amounts' : '₱ Show in thousands'}
+      </button>
       <button onClick={toggleDark}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 py-2 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
         {dark ? '☀️ Light mode' : '🌙 Night mode'}

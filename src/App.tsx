@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { UiProvider } from './contexts/UiContext';
+import { BuLabelsProvider } from './contexts/BuLabelsContext';
 import { RequireAuth, RequireFinance } from './components/RouteGuards';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -13,12 +14,14 @@ import PresentMode from './pages/PresentMode';
 import TruckingEntry from './pages/TruckingEntry';
 import Users from './pages/Users';
 import Account from './pages/Account';
+import BuNames from './pages/BuNames';
 
 export default function App() {
   return (
     <BrowserRouter>
       <UiProvider>
       <AuthProvider>
+      <BuLabelsProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth />}>
@@ -34,10 +37,12 @@ export default function App() {
                 <Route path="/farm" element={<FarmEntry />} />
                 <Route path="/publish" element={<PublishManager />} />
                 <Route path="/users" element={<Users />} />
+                <Route path="/bu-names" element={<BuNames />} />
               </Route>
             </Route>
           </Route>
         </Routes>
+      </BuLabelsProvider>
       </AuthProvider>
       </UiProvider>
     </BrowserRouter>

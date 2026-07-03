@@ -9,6 +9,8 @@ interface UiState {
   resetZoom: () => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  units: 'thousands' | 'full';
+  toggleUnits: () => void;
 }
 
 const UiContext = createContext<UiState | null>(null);
@@ -29,6 +31,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   });
   const [zoom, setZoom] = useState(() => clampZoom(Number(localStorage.getItem('ui.zoom')) || 100));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('ui.sidebar') === 'collapsed');
+  const [units, setUnits] = useState<'thousands' | 'full'>(() => (localStorage.getItem('ui.units') === 'full' ? 'full' : 'thousands'));
 
   useEffect(() => {
     const root = document.documentElement;
@@ -39,6 +42,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { localStorage.setItem('ui.zoom', String(zoom)); }, [zoom]);
   useEffect(() => { localStorage.setItem('ui.sidebar', sidebarCollapsed ? 'collapsed' : 'open'); }, [sidebarCollapsed]);
+  useEffect(() => { localStorage.setItem('ui.units', units); }, [units]);
 
   const value: UiState = {
     dark,
@@ -49,6 +53,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
     resetZoom: () => setZoom(100),
     sidebarCollapsed,
     toggleSidebar: () => setSidebarCollapsed((c) => !c),
+    units,
+    toggleUnits: () => setUnits((u) => (u === 'thousands' ? 'full' : 'thousands')),
   };
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;

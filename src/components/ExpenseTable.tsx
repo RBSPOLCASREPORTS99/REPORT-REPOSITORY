@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
-import { formatPercent, formatPesos } from '../lib/format';
+import { formatPercent, formatMoney } from '../lib/format';
+import { useUi } from '../contexts/UiContext';
 import type { ExpenseSection } from '../lib/queries';
 
 const SECTION_LABELS: Record<string, string> = {
@@ -19,30 +20,32 @@ export default function ExpenseTable({
   priorLabel: string;
   currentLabel: string;
 }) {
+  const { units } = useUi();
   if (sections.length === 0) return <p className="text-slate-400 dark:text-slate-500">No expense detail for this period.</p>;
 
-  const money = (v: number) => `₱${formatPesos(v)}`;
+  const money = (v: number) => formatMoney(v, 'full', units);
   const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
+  const headCls = 'sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800';
 
   return (
-    <div className="overflow-x-auto rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
+    <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm dark:bg-slate-800">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-400 dark:text-slate-500">
-            <th className="sticky left-0 bg-white dark:bg-slate-800 px-4 py-2 text-left">Account</th>
-            <th className="px-3 py-2 text-right">{priorLabel}</th>
-            <th className="px-2 py-2 text-right">%</th>
-            <th className="px-3 py-2 text-right">{currentLabel}</th>
-            <th className="px-2 py-2 text-right">%</th>
-            <th className="px-3 py-2 text-right">DIFF</th>
-            <th className="px-3 py-2 text-right">%DIFF</th>
+          <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
+            <th className="sticky left-0 top-0 z-20 bg-white px-4 py-2 text-left dark:bg-slate-800">Account</th>
+            <th className={headCls}>{priorLabel}</th>
+            <th className={`${headCls} px-2`}>%</th>
+            <th className={headCls}>{currentLabel}</th>
+            <th className={`${headCls} px-2`}>%</th>
+            <th className={headCls}>DIFF</th>
+            <th className={headCls}>%DIFF</th>
           </tr>
         </thead>
         <tbody>
           {sections.map((sec) => (
             <Fragment key={sec.section}>
               <tr className="bg-slate-50/80 font-semibold text-slate-900 dark:bg-slate-700/50 dark:text-slate-100">
-                <td className="sticky left-0 bg-slate-50 dark:bg-slate-700 px-4 py-2 text-left">{SECTION_LABELS[sec.section]}</td>
+                <td className="sticky left-0 bg-slate-50 px-4 py-2 text-left uppercase dark:bg-slate-700">{SECTION_LABELS[sec.section]}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{money(sec.priorTotal)}</td>
                 <td className="px-2 py-2" />
                 <td className="px-3 py-2 text-right tabular-nums">{money(sec.total)}</td>

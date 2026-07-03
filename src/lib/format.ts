@@ -11,6 +11,21 @@ export function formatPesos(value: number): string {
   return value < 0 ? `(${abs})` : abs;
 }
 
+export type Units = 'thousands' | 'full';
+
+// Format a money value honoring the user's units choice. `base` says whether
+// the raw value is already in ₱ thousands (P&L / computed_pnl) or full pesos
+// (expense_lines). In "thousands" mode small values read as ₱1,234; in "full"
+// mode they read as the real peso figure ₱1,234,000.
+export function formatMoney(value: number, base: Units, units: Units): string {
+  const full = base === 'thousands' ? value * 1000 : value;
+  if (units === 'thousands') {
+    const thousands = full / 1000;
+    return `₱${formatThousands(thousands)}`;
+  }
+  return `₱${formatPesos(full)}`;
+}
+
 export function formatPercent(value: number): string {
   const pct = value * 100;
   const abs = Math.abs(pct).toFixed(1);

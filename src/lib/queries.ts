@@ -345,6 +345,40 @@ export async function fetchTrend(buCode: string, limit = 12): Promise<TrendPoint
 }
 
 // ---------------------------------------------------------------------------
+// Business-unit display names ("BU01/02 - BODEGA 1 & 2").
+// ---------------------------------------------------------------------------
+export interface BuLabel {
+  code: string;          // internal join key (e.g. BU0102)
+  displayCode: string;   // shown code (e.g. BU01/02)
+  name: string;          // proper name (e.g. Bodega 1 & 2)
+  label: string;         // "BU01/02 - BODEGA 1 & 2" (upper-cased)
+}
+
+export async function fetchBuLabels(): Promise<Map<string, BuLabel>> {
+  const { data, error } = await supabase
+    .from('business_units')
+    .select('code, name, display_code, is_profit_center, sort_order')
+    .order('sort_order');
+  if (error) throw error;
+  const m = new Map<string, BuLabel>();
+  for (const r of data ?? []) {
+    const code = r.code as string;
+    const displayCode = (r.display_code as string) || code;
+    const name = (r.name as string) || code;
+    m.set(code, { code, displayCode, name, label: `${displayCode} - ${name}`.toUpperCase() });
+  }
+  return m;
+}
+
+export async function saveBuName(code: string, displayCode: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('business_units')
+    .update({ display_code: displayCode.trim() || null, name: name.trim() })
+    .eq('code', code);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
 // User management (Finance-only; enforced by RLS on allowed_users / _bus).
 // ---------------------------------------------------------------------------
 import type { AllowedUser, UserRole } from './types';
