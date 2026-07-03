@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import BuCard from '../components/BuCard';
 import AllocMethodToggle from '../components/AllocMethodToggle';
@@ -18,6 +18,7 @@ export default function Home() {
 
   const currentId = cmp?.currentId;
   const methodAvailable = !!currentId && supportRanges.has(currentId);
+  const reqRef = useRef(0); // guards against out-of-order responses
 
   useEffect(() => {
     Promise.all([fetchRanges(), rangesWithSupport()])
@@ -34,12 +35,26 @@ export default function Home() {
   }, [methodAvailable, method]);
 
   useEffect(() => {
-    if (!cmp?.currentId) { setCards([]); return; }
+    const cur = cmp?.currentId;
+    if (!cur) { setCards([]); return; }
+    const prior = cmp?.priorId;
+    const myReq = ++reqRef.current;
     setLoading(true);
-    fetchBuCards(cmp.currentId, cmp.priorId, method)
-      .then(setCards)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+
+    // Fetch, with one automatic retry if an unexpected empty result comes back
+    // (covers a transient race just after import / range publish).
+    const run = (attempt: number): Promise<void> =>
+      fetchBuCards(cur, prior, method).then((data) => {
+        if (myReq !== reqRef.current) return; // superseded by a newer request
+        if (data.length === 0 && attempt === 0) {
+          return new Promise<void>((res) => setTimeout(() => res(run(1)), 500));
+        }
+        setCards(data);
+      });
+
+    run(0)
+      .catch((e) => { if (myReq === reqRef.current) setError(e.message); })
+      .finally(() => { if (myReq === reqRef.current) setLoading(false); });
   }, [cmp?.currentId, cmp?.priorId, method, tick]);
 
   const refresh = useCallback(() => {

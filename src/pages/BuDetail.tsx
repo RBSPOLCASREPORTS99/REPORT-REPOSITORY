@@ -35,6 +35,7 @@ export default function BuDetail() {
   const [error, setError] = useState('');
 
   const { labelFor } = useBuLabels();
+  const reqRef = useRef(0); // guards against out-of-order responses
   const buName = code ? labelFor(code) : '';
   const currentId = cmp?.currentId;
   const priorLabel = cmp?.priorLabel ?? 'Prior';
@@ -68,16 +69,19 @@ export default function BuDetail() {
 
   useEffect(() => {
     if (!currentId || !code || !cmp) return;
+    const myReq = ++reqRef.current;
     setLoading(true);
     let load: Promise<unknown>;
     if (view === 'expenses') {
-      load = fetchBuExpenses(currentId, cmp.priorId, code).then(setExpenses);
+      load = fetchBuExpenses(currentId, cmp.priorId, code).then((d) => { if (myReq === reqRef.current) setExpenses(d); });
     } else if (view === 'sales') {
-      load = fetchBuSales(currentId, cmp.priorId, code).then(setSalesRows);
+      load = fetchBuSales(currentId, cmp.priorId, code).then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
     } else {
-      load = fetchBuComparison(currentId, cmp.priorId, code, method).then(setLines);
+      load = fetchBuComparison(currentId, cmp.priorId, code, method).then((d) => { if (myReq === reqRef.current) setLines(d); });
     }
-    load.catch((e) => setError((e as Error).message)).finally(() => setLoading(false));
+    load
+      .catch((e) => { if (myReq === reqRef.current) setError((e as Error).message); })
+      .finally(() => { if (myReq === reqRef.current) setLoading(false); });
   }, [currentId, cmp, code, method, view, tick]);
 
   const containerRef = useRef<HTMLDivElement>(null);
