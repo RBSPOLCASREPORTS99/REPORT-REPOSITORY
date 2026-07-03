@@ -343,3 +343,81 @@ export async function fetchTrend(buCode: string, limit = 12): Promise<TrendPoint
   }
   return [...byRange.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd)).slice(-limit);
 }
+
+// ---------------------------------------------------------------------------
+// User management (Finance-only; enforced by RLS on allowed_users / _bus).
+// ---------------------------------------------------------------------------
+import type { AllowedUser, UserRole } from './types';
+
+const normEmail = (e: string) => e.trim().toLowerCase();
+
+export async function fetchAllowedUsers(): Promise<AllowedUser[]> {
+  const [usersRes, busRes] = await Promise.all([
+    supabase.from('allowed_users').select('email, role, full_name, registered_at').order('created_at'),
+    supabase.from('allowed_user_bus').select('email, bu_code'),
+  ]);
+  if (usersRes.error) throw usersRes.error;
+  if (busRes.error) throw busRes.error;
+  const busByEmail = new Map<string, string[]>();
+  for (const r of busRes.data ?? []) {
+    const e = r.email as string;
+    if (!busByEmail.has(e)) busByEmail.set(e, []);
+    busByEmail.get(e)!.push(r.bu_code as string);
+  }
+  return (usersRes.data ?? []).map((u) => ({
+    email: u.email as string,
+    role: u.role as UserRole,
+    full_name: (u.full_name as string) ?? null,
+    registered_at: (u.registered_at as string) ?? null,
+    bus: (busByEmail.get(u.email as string) ?? []).sort(
+      (a, b) => (BU_SORT.get(a) ?? 99) - (BU_SORT.get(b) ?? 99),
+    ),
+  }));
+}
+
+// Add or update a user's authorization + designation. If the person has
+// already registered, their live profile + BU access are updated too so the
+// change takes effect immediately.
+export async function saveAllowedUser(input: {
+  email: string;
+  role: UserRole;
+  full_name: string | null;
+  bus: string[];
+}): Promise<void> {
+  const email = normEmail(input.email);
+  // bu scoping only applies to bu_head; finance/gm see everything.
+  const bus = input.role === 'bu_head' ? input.bus : [];
+
+  const up = await supabase
+    .from('allowed_users')
+    .upsert({ email, role: input.role, full_name: input.full_name }, { onConflict: 'email' })
+    .select('user_id')
+    .single();
+  if (up.error) throw up.error;
+
+  await supabase.from('allowed_user_bus').delete().eq('email', email);
+  if (bus.length) {
+    const ins = await supabase.from('allowed_user_bus').insert(bus.map((bu_code) => ({ email, bu_code })));
+    if (ins.error) throw ins.error;
+  }
+
+  // Apply live to an already-registered user.
+  const userId = (up.data as { user_id: string | null } | null)?.user_id ?? null;
+  if (userId) {
+    await supabase.from('profiles').update({ role: input.role, full_name: input.full_name }).eq('user_id', userId);
+    await supabase.from('profile_bus').delete().eq('user_id', userId);
+    if (bus.length) await supabase.from('profile_bus').insert(bus.map((bu_code) => ({ user_id: userId, bu_code })));
+  }
+}
+
+// Revoke a user: removes them from the allowlist and strips their live BU
+// access. (Their auth login still exists but they can no longer see any BU.)
+export async function removeAllowedUser(email: string): Promise<void> {
+  const e = normEmail(email);
+  const existing = await supabase.from('allowed_users').select('user_id').eq('email', e).maybeSingle();
+  if (existing.error) throw existing.error;
+  const userId = (existing.data as { user_id: string | null } | null)?.user_id ?? null;
+  const del = await supabase.from('allowed_users').delete().eq('email', e);
+  if (del.error) throw del.error;
+  if (userId) await supabase.from('profile_bus').delete().eq('user_id', userId);
+}

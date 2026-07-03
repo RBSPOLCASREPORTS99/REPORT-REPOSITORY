@@ -10,6 +10,8 @@ import FarmEntry from './pages/FarmEntry';
 import PublishManager from './pages/PublishManager';
 import PresentMode from './pages/PresentMode';
 import TruckingEntry from './pages/TruckingEntry';
+import Users from './pages/Users';
+import Account from './pages/Account';
 
 export default function App() {
   return (
@@ -22,12 +24,14 @@ export default function App() {
             <Route path="/present" element={<PresentMode />} />
             <Route element={<Layout />}>
               <Route path="/" element={<Home />} />
+              <Route path="/account" element={<Account />} />
               <Route path="/bu/:code" element={<BuDetail />} />
               <Route element={<RequireFinance />}>
                 <Route path="/import" element={<ImportWizard />} />
                 <Route path="/trucking" element={<TruckingEntry />} />
                 <Route path="/farm" element={<FarmEntry />} />
                 <Route path="/publish" element={<PublishManager />} />
+                <Route path="/users" element={<Users />} />
               </Route>
             </Route>
           </Route>

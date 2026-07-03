@@ -21,8 +21,10 @@ export default function Layout() {
               <Link to="/trucking" className={linkCls}>Trucking</Link>
               <Link to="/farm" className={linkCls}>Farm</Link>
               <Link to="/publish" className={linkCls}>Publish</Link>
+              <Link to="/users" className={linkCls}>Users</Link>
             </>
           )}
+          <Link to="/account" className={linkCls}>Account</Link>
           <button onClick={() => signOut()} className="text-sm text-slate-400">
             Sign out
           </button>

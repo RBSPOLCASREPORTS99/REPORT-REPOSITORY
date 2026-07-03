@@ -8,6 +8,8 @@ interface AuthState {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  signInWithPin: (email: string, pin: string) => Promise<{ error: string | null }>;
+  registerWithPin: (email: string, pin: string) => Promise<{ error: string | null }>;
   signInWithEmail: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -36,22 +38,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
-    supabase
-      .from('profiles')
-      .select('user_id, role, assigned_bu_code, full_name')
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setProfile(data as Profile | null);
-      });
+    const uid = session.user.id;
+    Promise.all([
+      supabase.from('profiles').select('user_id, role, full_name').eq('user_id', uid).maybeSingle(),
+      supabase.from('profile_bus').select('bu_code').eq('user_id', uid),
+    ]).then(([profileRes, busRes]) => {
+      if (cancelled) return;
+      if (!profileRes.data) { setProfile(null); return; }
+      setProfile({
+        user_id: profileRes.data.user_id,
+        role: profileRes.data.role,
+        full_name: profileRes.data.full_name,
+        bus: (busRes.data ?? []).map((r) => r.bu_code as string),
+      } as Profile);
+    });
     return () => {
       cancelled = true;
     };
   }, [session?.user]);
 
+  const normEmail = (e: string) => e.trim().toLowerCase();
+
+  async function signInWithPin(email: string, pin: string) {
+    const { error } = await supabase.auth.signInWithPassword({ email: normEmail(email), password: pin });
+    if (!error) return { error: null };
+    if (/invalid login credentials/i.test(error.message)) {
+      return { error: 'Incorrect email or PIN. First time here? Tap "Set up my PIN".' };
+    }
+    return { error: error.message };
+  }
+
+  async function registerWithPin(email: string, pin: string) {
+    const { data, error } = await supabase.auth.signUp({ email: normEmail(email), password: pin });
+    if (error) {
+      // A blocked (non-allowlisted) email surfaces as a generic DB error from the signup trigger.
+      if (/database error|not authorized/i.test(error.message)) {
+        return { error: "This email isn't authorized yet. Ask Finance to add you on the Users screen." };
+      }
+      if (/already registered/i.test(error.message)) {
+        return { error: 'This email already has a PIN. Use "Sign in" instead.' };
+      }
+      return { error: error.message };
+    }
+    if (!data.session) {
+      return { error: 'PIN set. Please confirm via the email we sent, then sign in.' };
+    }
+    return { error: null };
+  }
+
   async function signInWithEmail(email: string) {
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: normEmail(email),
       options: { emailRedirectTo: window.location.origin },
     });
     return { error: error?.message ?? null };
@@ -63,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, signInWithEmail, signOut }}
+      value={{ session, user: session?.user ?? null, profile, loading, signInWithPin, registerWithPin, signInWithEmail, signOut }}
     >
       {children}
     </AuthContext.Provider>

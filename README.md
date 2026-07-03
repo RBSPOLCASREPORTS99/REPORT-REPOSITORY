@@ -32,18 +32,21 @@ cp .env.example .env   # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-Apply the migrations in `supabase/migrations/` in order (`0001` … `0009`) to your Supabase project
+Apply the migrations in `supabase/migrations/` in order (`0001` … `0010`) to your Supabase project
 (SQL Editor or CLI) before using the app — they create the schema, seed the business unit list and
-per-BU config, and set up RLS.
+per-BU config, and set up RLS. In **Auth → Providers → Email**, turn **Confirm email off** so a
+user's PIN signs them in immediately (only pre-authorized emails can register — see below).
 
-New sign-ups default to the `bu_head` role with no assigned BU (so they see nothing until
-Finance assigns them). Set a user's `role` and `assigned_bu_code` in the `profiles` table via the
-Supabase table editor:
+**Users & access.** Finance manages people on the in-app **Users** screen: add an email, pick a
+designation, and (for BU Heads) tick the approved BUs. Each person then signs in with that email and
+a **6-digit PIN they set themselves** the first time (magic link stays available as a fallback, and
+anyone can set/replace their PIN on the **Account** screen). Only emails Finance has added may
+register. Designations:
 
-- `role = 'finance'` — can import data and see every BU, published or not.
-- `role = 'gm'` — sees every BU, published periods only.
-- `role = 'bu_head'` with `assigned_bu_code = 'BU05'` (etc.) — sees only that BU, published
-  periods only. For BU08's sub-units, assigning `BU08` shows both `BU08LF` and `BU08PH`.
+- **Finance** — imports data and sees every BU, published or not; manages users.
+- **General Manager** — sees every BU, published periods only.
+- **BU Head** — sees only the BUs assigned to them (one or several, e.g. BU01&BU02), published
+  periods only. Assigning `BU08` also grants its children `BU08LF` / `BU08PH`.
 
 ## What's implemented so far
 
@@ -55,7 +58,8 @@ Supabase table editor:
   (Prior · % · Current · % · DIFF · %DIFF), and a trend chart.
 - Set-month + **YTD / QTR / Month Comp** buttons; **Gross Sales / % Revenue / Per Transaction**
   allocation toggle; trucking entry; Lakatan Farm entry; Publish control; Present mode.
-- Auth via Supabase email magic link (+ code fallback), role-gated import, RLS-enforced access.
+- Auth via **email + 6-digit PIN** (magic-link fallback); in-app **Users** admin for Finance to
+  authorize people and scope each BU Head to one or more approved BUs; RLS-enforced access.
 
 - **Flexible periods:** each imported QB pivot becomes a dated range; the viewer compares any
   two ranges (month vs month, YTD vs YTD, quarter vs quarter, custom).
