@@ -267,6 +267,28 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
   return sections
     .map((section) => {
       let secRows = rows.filter((r) => r.section === section);
+      // Finance: show Discounting Fee on its own; roll every OTHER Finance
+      // account (interest, bank charges, …) into one "Cost of Money - allocated".
+      const fin = secRows.filter((r) => /finance/i.test(r.groupName));
+      if (fin.length > 0) {
+        const others = fin.filter((r) => !/discount/i.test(r.account));
+        if (others.length > 0) {
+          const current = others.reduce((s, r) => s + r.current, 0);
+          const prior = others.reduce((s, r) => s + r.prior, 0);
+          secRows = secRows.filter((r) => !(/finance/i.test(r.groupName) && !/discount/i.test(r.account)));
+          if (current !== 0 || prior !== 0) {
+            secRows.push({
+              account: 'Cost of Money - allocated',
+              section, groupName: 'Finance',
+              current, prior,
+              currentPct: grossCur !== 0 ? current / grossCur : 0,
+              priorPct: grossPri !== 0 ? prior / grossPri : 0,
+              diff: current - prior,
+              pctDiff: prior !== 0 ? (current - prior) / prior : 0,
+            });
+          }
+        }
+      }
       // Controllable: collapse every Salaries & Wages account into one total line.
       if (section === 'controllable') {
         const sal = secRows.filter((r) => /salar|wage/i.test(r.groupName));

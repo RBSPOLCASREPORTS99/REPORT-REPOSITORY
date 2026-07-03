@@ -54,7 +54,7 @@ export const PNL_LINE_ITEMS: PnlLineItemDef[] = [
   { key: 'cogs', label: 'Cost of Goods Sold', matches: ['COST OF GOODS SOLD', 'TOTAL COGS'] },
   { key: 'gross_income', label: 'Gross Income', matches: ['GROSS INCOME'] },
   { key: 'admin_expense', label: 'Admin Expense', matches: ['ADMIN EXPENSE', 'TOTAL ADMIN EXPENSES'] },
-  { key: 'discounting_expense', label: 'Discounting / Finance Expense', matches: ['DISCOUNTING EXPENSE', 'TOTAL FINANCE EXPENSES'] },
+  { key: 'discounting_expense', label: 'Discounting Fee', matches: ['DISCOUNTING EXPENSE', 'TOTAL FINANCE EXPENSES'] },
   { key: 'operations_expense', label: 'Operations Expense', matches: ['OPERATIONS EXPENSE', 'TOTAL OPERATIONS EXPENSES'] },
   { key: 'repairs_expense', label: 'Repairs & Maintenance Expense', matches: ['REPAIRS/MAINT. EXPENSE', 'REPAIRS/MAINT EXPENSE', 'TOTAL REPAIRS/MAINTENANCE'] },
   { key: 'salaries_expense', label: 'Salaries & Wages', matches: ['SALARIES & WAGES', 'TOTAL SALARIES AND WAGES'] },
