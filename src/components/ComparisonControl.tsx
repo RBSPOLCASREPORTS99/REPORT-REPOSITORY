@@ -54,7 +54,7 @@ export default function ComparisonControl({
   if (monthRanges.length === 0) return null;
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-start gap-2">
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Set month</span>
         <select
