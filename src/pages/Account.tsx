@@ -69,7 +69,7 @@ export default function Account() {
         {error && <p className="text-sm text-red-600">{error}</p>}
         {msg && <p className="text-sm text-green-700">{msg}</p>}
         <button type="submit" disabled={busy}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
           {busy ? 'Saving…' : 'Save PIN'}
         </button>
       </form>

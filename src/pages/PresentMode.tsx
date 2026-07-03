@@ -76,7 +76,7 @@ export default function PresentMode() {
   if (error) return <p className="p-6 text-red-600">{error}</p>;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-brand-900 text-white" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="flex items-start justify-between px-5 py-3">
         <Link to="/" className="mt-2 text-sm text-slate-400">✕ Exit</Link>
         <div className="[&_span]:text-slate-300">

@@ -78,7 +78,7 @@ export default function TruckingEntry() {
 
       <div className="flex gap-3">
         <button onClick={() => navigate('/')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Done</button>
-        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
           {saving ? 'Recomputing…' : 'Save & recompute'}
         </button>
       </div>

@@ -48,7 +48,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-slate-900">Business Units</h1>
           {ranges.length > 0 && (
-            <Link to="/present" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+            <Link to="/present" className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white">
               ▶ Present
             </Link>
           )}

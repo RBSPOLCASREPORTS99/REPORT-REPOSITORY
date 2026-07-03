@@ -4,18 +4,21 @@ import type { BuCardData } from '../lib/queries';
 
 export default function BuCard({ bu, priorLabel }: { bu: BuCardData; priorLabel?: string }) {
   const up = bu.diff >= 0;
+  const loss = bu.netIncome < 0;
   return (
     <Link
       to={`/bu/${bu.buCode}`}
-      className="flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-sm active:bg-slate-50"
+      className="flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-brand-100 bg-white p-4 shadow-sm transition active:bg-brand-50"
     >
-      <span className="text-sm font-medium text-slate-500">{bu.buName}</span>
-      <span className={`text-2xl font-semibold ${bu.netIncome < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+      <span className="text-sm font-semibold text-brand-800">{bu.buName}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Net income</span>
+      <span className={`text-2xl font-bold ${loss ? 'text-red-600' : 'text-brand-700'}`}>
         ₱{formatThousands(bu.netIncome)}k
       </span>
       {priorLabel && (
-        <span className={`flex items-center gap-1 text-sm font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
-          {up ? '▲' : '▼'} ₱{formatThousands(Math.abs(bu.diff))}k vs {priorLabel}
+        <span className={`flex items-center gap-1 text-sm font-semibold ${up ? 'text-brand-600' : 'text-red-600'}`}>
+          {up ? '▲' : '▼'} ₱{formatThousands(Math.abs(bu.diff))}k
+          <span className="font-normal text-slate-400">{up ? 'higher' : 'lower'} vs {priorLabel}</span>
         </span>
       )}
     </Link>

@@ -88,7 +88,7 @@ export default function FarmEntry() {
         ))}
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white">
+      <div className="flex items-center justify-between rounded-2xl bg-brand-600 px-4 py-3 text-white">
         <span className="text-sm">Net Income (computed)</span>
         <span className="text-lg font-semibold tabular-nums">₱{formatThousands(derived.net_income)}k</span>
       </div>
@@ -98,7 +98,7 @@ export default function FarmEntry() {
 
       <div className="flex gap-3">
         <button onClick={() => navigate('/')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Done</button>
-        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Farm P&L'}
         </button>
       </div>

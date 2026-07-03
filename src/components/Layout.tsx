@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Logo from './Logo';
 
 const ROLE_LABELS: Record<string, string> = {
   finance: 'Finance',
@@ -26,28 +27,32 @@ export default function Layout() {
     { to: '/users', label: 'Users & access' },
   ];
 
-  const itemCls = 'block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100';
+  const itemCls = 'block rounded-lg px-3 py-2.5 text-sm font-medium text-brand-900 hover:bg-brand-50';
 
   return (
     <div className="min-h-svh bg-slate-50">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/" className="font-semibold text-slate-900">
-            POLCAS <span className="font-normal text-slate-500">Business Review</span>
+      <header className="sticky top-0 z-20 bg-brand-700 text-white shadow-sm">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
+            <Logo className="h-9 w-9 shrink-0 bg-white/90 ring-1 ring-white/40" />
+            <span className="leading-tight">
+              <span className="block text-sm font-bold tracking-wide">POLCAS AGRI TRADE CORP.</span>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-100">Business Review</span>
+            </span>
           </Link>
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
             aria-expanded={open}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-700"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white"
           >
             {open ? (
               <span className="text-lg leading-none">✕</span>
             ) : (
               <span className="flex flex-col gap-[3px]">
-                <span className="block h-0.5 w-5 bg-slate-700" />
-                <span className="block h-0.5 w-5 bg-slate-700" />
-                <span className="block h-0.5 w-5 bg-slate-700" />
+                <span className="block h-0.5 w-5 bg-white" />
+                <span className="block h-0.5 w-5 bg-white" />
+                <span className="block h-0.5 w-5 bg-white" />
               </span>
             )}
           </button>
@@ -59,9 +64,9 @@ export default function Layout() {
             <button
               aria-hidden
               onClick={() => setOpen(false)}
-              className="fixed inset-0 top-[57px] z-10 cursor-default bg-black/10"
+              className="fixed inset-0 top-14 z-10 cursor-default bg-black/20"
             />
-            <nav className="relative z-20 mx-auto max-w-3xl space-y-1 border-t border-slate-100 px-3 py-3">
+            <nav className="relative z-20 mx-auto max-w-3xl space-y-1 border-t border-brand-600 bg-white px-3 py-3 shadow-lg">
               <div className="px-3 pb-2">
                 <div className="truncate text-sm font-medium text-slate-800">{user?.email}</div>
                 <div className="text-xs text-slate-400">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : ''}</div>

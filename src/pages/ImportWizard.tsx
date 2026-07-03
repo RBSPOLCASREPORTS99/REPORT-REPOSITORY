@@ -126,7 +126,7 @@ export default function ImportWizard() {
       <div className="space-y-4 rounded-2xl bg-white p-6 text-center shadow-sm">
         <p className="text-lg font-semibold text-slate-900">Import confirmed</p>
         <p className="text-sm text-slate-500">YTD and quarter figures were refreshed from your imported months. Publish the period so BU Heads and the GM can see it.</p>
-        <button onClick={() => navigate('/')} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Back to Home</button>
+        <button onClick={() => navigate('/')} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Back to Home</button>
       </div>
     );
   }
@@ -184,7 +184,7 @@ export default function ImportWizard() {
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Cancel</button>
-          <button onClick={handleConfirmMonth} disabled={confirming} className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+          <button onClick={handleConfirmMonth} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
             {confirming ? 'Importing…' : `Import ${monthLabel(year, month)}`}
           </button>
         </div>
@@ -208,7 +208,7 @@ export default function ImportWizard() {
       {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
       <div className="flex gap-3">
         <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Cancel</button>
-        <button onClick={onConfirm} disabled={confirming} className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+        <button onClick={onConfirm} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
           {confirming ? 'Importing…' : 'Confirm import'}
         </button>
       </div>

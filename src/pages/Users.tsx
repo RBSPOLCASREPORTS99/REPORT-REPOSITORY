@@ -146,7 +146,7 @@ export default function Users() {
                     key={bu.code}
                     type="button"
                     onClick={() => toggleBu(bu.code)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${on ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${on ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}
                   >
                     {bu.code} · {bu.name}
                   </button>
@@ -158,7 +158,7 @@ export default function Users() {
 
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" disabled={saving}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             {saving ? 'Saving…' : editingEmail ? 'Save changes' : 'Add user'}
           </button>
           {editingEmail && (
