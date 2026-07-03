@@ -47,9 +47,7 @@ export function extractBuInputs(pivot: ParsedPivot, cfg: BuConfig): BuInputs {
     gross_sales: sumMemberCols(pivot, cols, PULLS.grossSales.hierCol, PULLS.grossSales.label),
     cogs: sumMemberCols(pivot, cols, PULLS.cogs.hierCol, PULLS.cogs.label),
     admin_expense: sumMemberCols(pivot, cols, PULLS.admin.hierCol, PULLS.admin.label),
-    // Direct per-BU line is the Discounting Fee leaf account only (interest and
-    // other finance costs go into the pooled Cost of Money — see extractPools).
-    discounting_expense: sumMemberCols(pivot, cols, PULLS.discountingFee.hierCol, PULLS.discountingFee.label),
+    discounting_expense: sumMemberCols(pivot, cols, PULLS.discounting.hierCol, PULLS.discounting.label),
     operations_expense: sumMemberCols(pivot, cols, PULLS.operations.hierCol, PULLS.operations.label),
     repairs_expense: sumMemberCols(pivot, cols, PULLS.repairs.hierCol, PULLS.repairs.label),
     salaries_expense: sumMemberCols(pivot, cols, PULLS.salaries.hierCol, PULLS.salaries.label),
@@ -60,19 +58,11 @@ export function extractBuInputs(pivot: ParsedPivot, cfg: BuConfig): BuInputs {
 // Pull the company-level pools out of a raw pivot.
 export function extractPools(pivot: ParsedPivot): PoolInputs {
   const at = (hierCol: number, label: string, col: string) => lookupValue(pivot, hierCol, label, col) / 1000;
-  // Admin's own finance expense — used only to split Admin's cost into the
-  // "Admin Expense (allocated)" pool (its non-finance portion).
-  const adminFinance = at(PULLS.discounting.hierCol, PULLS.discounting.label, COLS.admin);
+  const costMoneyPool = at(PULLS.discounting.hierCol, PULLS.discounting.label, COLS.admin);
   const adminNetIncome = at(PULLS.netIncome.hierCol, PULLS.netIncome.label, COLS.admin);
-  // Cost of Money to allocate = company-wide Total Finance Expense minus company
-  // Discounting Fee (discounting is booked directly to each BU; the remaining
-  // finance cost is shared pro-rata).
-  const totalFinance = at(PULLS.discounting.hierCol, PULLS.discounting.label, COLS.companyTotal);
-  const totalDiscountingFee = at(PULLS.discountingFee.hierCol, PULLS.discountingFee.label, COLS.companyTotal);
-  const costMoneyPool = totalFinance - totalDiscountingFee;
   return {
     company_gross_sales: at(PULLS.grossSales.hierCol, PULLS.grossSales.label, COLS.companyTotal),
-    admin_pool: -adminNetIncome - adminFinance,
+    admin_pool: -adminNetIncome - costMoneyPool,
     cost_money_pool: costMoneyPool,
     finance_pool: at(PULLS.classTotalExpense.hierCol, PULLS.classTotalExpense.label, COLS.finance),
     hr_pool: at(PULLS.classTotalExpense.hierCol, PULLS.classTotalExpense.label, COLS.hr),

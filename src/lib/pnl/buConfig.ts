@@ -14,8 +14,7 @@ export const PULLS = {
   grossSales: { hierCol: 3, label: 'Total Income' } as LinePull,
   cogs: { hierCol: 3, label: 'Total COGS' } as LinePull,
   admin: { hierCol: 4, label: 'Total Admin Expenses' } as LinePull,
-  discounting: { hierCol: 4, label: 'Total Finance Expenses' } as LinePull, // subtotal (pool math)
-  discountingFee: { hierCol: 5, label: 'Discounting Fee' } as LinePull, // leaf account (per-BU direct line)
+  discounting: { hierCol: 4, label: 'Total Finance Expenses' } as LinePull,
   operations: { hierCol: 4, label: 'Total Operations Expenses' } as LinePull,
   repairs: { hierCol: 4, label: 'Total Repairs/Maintenance' } as LinePull,
   salaries: { hierCol: 4, label: 'Total Salaries and Wages' } as LinePull,
