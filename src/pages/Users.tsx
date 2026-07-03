@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS } from '../lib/constants';
 import { fetchAllowedUsers, saveAllowedUser, removeAllowedUser } from '../lib/queries';
 import type { AllowedUser, UserRole } from '../lib/types';
@@ -83,6 +84,7 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
+      <Link to="/" className="inline-block text-sm text-slate-500">← Back to Home</Link>
       <div>
         <h1 className="text-lg font-semibold text-slate-900">Users</h1>
         <p className="mt-1 text-sm text-slate-500">

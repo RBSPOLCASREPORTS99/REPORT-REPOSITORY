@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { BUSINESS_UNITS } from '../lib/constants';
@@ -34,6 +35,7 @@ export default function Account() {
 
   return (
     <div className="space-y-6">
+      <Link to="/" className="inline-block text-sm text-slate-500">← Back to Home</Link>
       <h1 className="text-lg font-semibold text-slate-900">My account</h1>
 
       <div className="rounded-2xl bg-white p-5 text-sm shadow-sm">
