@@ -54,9 +54,9 @@ export default function ComparisonControl({
   if (monthRanges.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-center gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Set month</span>
         <select
           value={setMonthId}
           onChange={(e) => setSetMonthId(e.target.value)}
@@ -69,7 +69,7 @@ export default function ComparisonControl({
         </select>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
           {COMP_ORDER.map((c) => (
             <button

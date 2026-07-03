@@ -252,7 +252,26 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
   const sections: ('controllable' | 'uncontrollable')[] = ['controllable', 'uncontrollable'];
   return sections
     .map((section) => {
-      const sectionRows = rows.filter((r) => r.section === section).sort((a, b) => b.current - a.current);
+      let secRows = rows.filter((r) => r.section === section);
+      // Controllable: collapse every Salaries & Wages account into one total line.
+      if (section === 'controllable') {
+        const sal = secRows.filter((r) => /salar|wage/i.test(r.groupName));
+        if (sal.length > 0) {
+          const current = sal.reduce((s, r) => s + r.current, 0);
+          const prior = sal.reduce((s, r) => s + r.prior, 0);
+          secRows = secRows.filter((r) => !/salar|wage/i.test(r.groupName));
+          secRows.push({
+            account: 'Salaries & Wages',
+            section, groupName: 'Salaries & Wages',
+            current, prior,
+            currentPct: grandCur !== 0 ? current / grandCur : 0,
+            priorPct: grandPri !== 0 ? prior / grandPri : 0,
+            diff: current - prior,
+            pctDiff: prior !== 0 ? (current - prior) / prior : 0,
+          });
+        }
+      }
+      const sectionRows = secRows.sort((a, b) => b.current - a.current);
       return {
         section,
         total: sectionRows.reduce((s, r) => s + r.current, 0),

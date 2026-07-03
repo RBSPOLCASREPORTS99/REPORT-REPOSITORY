@@ -20,7 +20,7 @@ const HEADLINE_LABELS: Record<string, string> = {
 export default function PresentMode() {
   const { units } = useUi();
   const { labelFor } = useBuLabels();
-  const money = (v: number) => formatMoney(v, 'thousands', units);
+  const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [cards, setCards] = useState<BuCardData[]>([]);
@@ -109,12 +109,12 @@ export default function PresentMode() {
                   <div className="flex items-baseline justify-between">
                     <span className={`text-sm font-semibold uppercase tracking-wide ${isNet ? 'text-slate-500 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'}`}>{HEADLINE_LABELS[key]}</span>
                     <span className={`text-3xl font-bold tabular-nums sm:text-4xl ${line.current < 0 ? 'text-red-500' : ''}`}>
-                      {money(line.current)}
+                      {money(line.current, isNet)}
                     </span>
                   </div>
                   {priorLabel && (
                     <div className={`mt-1 text-right text-sm font-medium ${up ? 'text-green-500' : 'text-red-500'}`}>
-                      {up ? '▲' : '▼'} {money(Math.abs(line.diff))} · {formatPercent(line.pctDiff)} vs {priorLabel}
+                      {up ? '▲' : '▼'} {money(Math.abs(line.diff), isNet)} · {formatPercent(line.pctDiff)} vs {priorLabel}
                     </div>
                   )}
                 </div>

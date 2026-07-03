@@ -22,7 +22,9 @@ export default function PnlTable({
   currentLabel: string;
 }) {
   const { units } = useUi();
-  const money = (v: number) => formatMoney(v, 'thousands', units);
+  // Peso sign only on the Net Income lines; everything else is a bare number.
+  const PESO_KEYS = new Set(['net_income', 'net_income_ops']);
+  const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
 
   // Auto-sort the operating-expense lines by current amount (biggest first),
   // keeping every other row (subtotals, section rows) in its fixed position.
@@ -52,6 +54,7 @@ export default function PnlTable({
         <tbody>
           {rows.map((line) => {
             const bold = BOLD_KEYS.has(line.key);
+            const peso = PESO_KEYS.has(line.key);
             const up = line.diff >= 0;
             const rowCls = bold ? 'bg-slate-50/60 font-semibold dark:bg-slate-700/50' : '';
             const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
@@ -71,12 +74,12 @@ export default function PnlTable({
                   </>
                 ) : (
                   <>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.prior)}`}>{money(line.prior)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.prior)}`}>{money(line.prior, peso)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(line.priorPct)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.current)}`}>{money(line.current)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.current)}`}>{money(line.current, peso)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(line.currentPct)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
-                      {up ? '▲' : '▼'} {money(Math.abs(line.diff))}
+                      {up ? '▲' : '▼'} {money(Math.abs(line.diff), peso)}
                     </td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-green-600' : 'text-red-600'}`}>
                       {formatPercent(line.pctDiff)}

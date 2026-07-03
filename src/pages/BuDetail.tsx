@@ -31,6 +31,7 @@ export default function BuDetail() {
   const [salesRanges, setSalesRanges] = useState<Set<string>>(new Set());
   const [salesRows, setSalesRows] = useState<SalesItemRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
 
   const { labelFor } = useBuLabels();
@@ -54,7 +55,7 @@ export default function BuDetail() {
         if (r.length === 0) setLoading(false);
       })
       .catch((e) => { setError(e.message); setLoading(false); });
-  }, [code]);
+  }, [code, tick]);
 
   useEffect(() => {
     if (!methodAvailable && method !== 'gross_sales') setMethod('gross_sales');
@@ -77,7 +78,7 @@ export default function BuDetail() {
       load = fetchBuComparison(currentId, cmp.priorId, code, method).then(setLines);
     }
     load.catch((e) => setError((e as Error).message)).finally(() => setLoading(false));
-  }, [currentId, cmp, code, method, view]);
+  }, [currentId, cmp, code, method, view, tick]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFull, setIsFull] = useState(false);
@@ -103,10 +104,16 @@ export default function BuDetail() {
           {!isFull && <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← All business units</Link>}
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{buName}</h1>
         </div>
-        <button onClick={toggleFull}
-          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-          {isFull ? '✕ Exit full screen' : '⛶ Full screen'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button onClick={() => setTick((t) => t + 1)} title="Reload data"
+            className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+            ↻ Refresh
+          </button>
+          <button onClick={toggleFull}
+            className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+            {isFull ? '✕ Exit full screen' : '⛶ Full screen'}
+          </button>
+        </div>
       </div>
 
       <ComparisonControl ranges={ranges} onChange={setCmp} />

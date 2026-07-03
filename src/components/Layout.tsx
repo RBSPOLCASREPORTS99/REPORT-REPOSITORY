@@ -70,6 +70,19 @@ export default function Layout() {
     </div>
   );
 
+  // Icon-only controls for the collapsed sidebar.
+  const iconBtn = 'flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+  const collapsedControls = () => (
+    <div className="flex flex-col items-center gap-1.5">
+      <button onClick={zoomIn} title="Zoom in" className={`${iconBtn} text-lg font-semibold`}>+</button>
+      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">{zoom}%</span>
+      <button onClick={zoomOut} title="Zoom out" className={`${iconBtn} text-lg font-semibold`}>−</button>
+      <button onClick={toggleUnits} title={units === 'thousands' ? 'Show full amounts' : 'Show in thousands'} className={iconBtn}>₱</button>
+      <button onClick={toggleDark} title="Light / dark mode" className={iconBtn}>{dark ? '☀️' : '🌙'}</button>
+      <button onClick={() => signOut()} title="Sign out" className={`${iconBtn} !text-red-600`}>⎋</button>
+    </div>
+  );
+
   return (
     <div className="min-h-svh bg-slate-50 dark:bg-slate-900 lg:flex">
       {/* ---------------- Desktop collapsible sidebar ---------------- */}
@@ -79,12 +92,20 @@ export default function Layout() {
         }`}
       >
         <div className={`flex items-center gap-2 border-b border-slate-100 px-3 py-3 dark:border-slate-700 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          <Logo className="h-9 w-9 shrink-0" />
-          {!sidebarCollapsed && (
-            <span className="leading-tight">
-              <span className="block text-sm font-bold text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE</span>
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">Business Review</span>
-            </span>
+          {sidebarCollapsed ? (
+            <button onClick={toggleSidebar} title="Expand sidebar" aria-label="Expand sidebar">
+              <Logo className="h-9 w-9 shrink-0" />
+            </button>
+          ) : (
+            <>
+              <Logo className="h-9 w-9 shrink-0" />
+              <span className="leading-tight">
+                <span className="block text-sm font-bold text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE</span>
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">Business Review</span>
+              </span>
+              <button onClick={toggleSidebar} title="Collapse sidebar" aria-label="Collapse sidebar"
+                className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-lg text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700">‹</button>
+            </>
           )}
         </div>
 
@@ -100,22 +121,17 @@ export default function Layout() {
         </nav>
 
         <div className="border-t border-slate-100 p-2 dark:border-slate-700">
-          {!sidebarCollapsed && (
-            <div className="mb-2 px-2">
-              <div className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{user?.email}</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : ''}</div>
-            </div>
+          {!sidebarCollapsed ? (
+            <>
+              {controls()}
+              <div className="mt-2 px-2">
+                <div className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{user?.email}</div>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : ''}</div>
+              </div>
+            </>
+          ) : (
+            collapsedControls()
           )}
-          {!sidebarCollapsed ? controls() : (
-            <button onClick={toggleDark} title="Toggle light/dark" className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
-              {dark ? '☀️' : '🌙'}
-            </button>
-          )}
-          <button onClick={toggleSidebar}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="mt-2 flex w-full items-center justify-center rounded-lg py-1.5 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700">
-            {sidebarCollapsed ? '»' : '« Collapse'}
-          </button>
         </div>
       </aside>
 
@@ -147,10 +163,6 @@ export default function Layout() {
             <>
               <button aria-hidden onClick={() => setOpen(false)} className="fixed inset-0 top-14 z-10 cursor-default bg-black/20" />
               <nav className="relative z-20 space-y-1 border-t border-brand-600 bg-white px-3 py-3 text-left shadow-lg dark:bg-slate-800">
-                <div className="px-2 pb-1">
-                  <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{user?.email}</div>
-                  <div className="text-xs text-slate-400 dark:text-slate-500">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : ''}</div>
-                </div>
                 {items.map((it) => (
                   <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => navLinkCls(isActive)}>
                     <span className="text-base leading-none">{it.icon}</span>
@@ -159,6 +171,10 @@ export default function Layout() {
                 ))}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                 {controls(true)}
+                <div className="px-2 pt-1">
+                  <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{user?.email}</div>
+                  <div className="text-xs text-slate-400 dark:text-slate-500">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : ''}</div>
+                </div>
               </nav>
             </>
           )}

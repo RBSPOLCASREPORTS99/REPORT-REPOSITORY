@@ -9,7 +9,7 @@ export default function BuCard({ bu, priorLabel }: { bu: BuCardData; priorLabel?
   const { labelFor } = useBuLabels();
   const up = bu.diff >= 0;
   const loss = bu.netIncome < 0;
-  const money = (v: number) => formatMoney(v, 'thousands', units);
+  const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
   return (
     <Link
       to={`/bu/${bu.buCode}`}
@@ -18,7 +18,7 @@ export default function BuCard({ bu, priorLabel }: { bu: BuCardData; priorLabel?
       <span className="text-sm font-semibold uppercase text-brand-800 dark:text-brand-300">{labelFor(bu.buCode)}</span>
       <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Net income</span>
       <span className={`text-2xl font-bold ${loss ? 'text-red-600' : 'text-brand-700 dark:text-brand-400'}`}>
-        {money(bu.netIncome)}
+        {money(bu.netIncome, true)}
       </span>
       {priorLabel && (
         <span className={`flex items-center gap-1 text-sm font-semibold ${up ? 'text-brand-600 dark:text-brand-400' : 'text-red-600'}`}>
