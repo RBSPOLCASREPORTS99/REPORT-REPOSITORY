@@ -220,15 +220,29 @@ async function expensesByAccount(rangeId: string, buCode: string): Promise<Map<s
   }]));
 }
 
+// Gross sales for a BU in a range, in FULL pesos (computed_pnl stores thousands).
+async function grossSalesFull(rangeId: string, buCode: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('computed_pnl')
+    .select('amount')
+    .eq('range_id', rangeId)
+    .eq('bu_code', buCode)
+    .eq('line_item', 'gross_sales')
+    .maybeSingle();
+  if (error) throw error;
+  return ((data?.amount as number) ?? 0) * 1000;
+}
+
 // Expense accounts for a BU in the current range (compared to a prior range),
-// grouped by section and sorted largest-first, with share of the grand total.
+// grouped by section and sorted largest-first. The % column is each account as
+// a share of that period's GROSS SALES (expense ÷ gross sales).
 export async function fetchBuExpenses(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<ExpenseSection[]> {
-  const [cur, pri] = await Promise.all([
+  const [cur, pri, grossCur, grossPri] = await Promise.all([
     expensesByAccount(currentRangeId, buCode),
     priorRangeId ? expensesByAccount(priorRangeId, buCode) : Promise.resolve(new Map<string, { amount: number; section: 'controllable' | 'uncontrollable'; groupName: string }>()),
+    grossSalesFull(currentRangeId, buCode),
+    priorRangeId ? grossSalesFull(priorRangeId, buCode) : Promise.resolve(0),
   ]);
-  const grandCur = [...cur.values()].reduce((s, r) => s + r.amount, 0);
-  const grandPri = [...pri.values()].reduce((s, r) => s + r.amount, 0);
   const accounts = new Set([...cur.keys(), ...pri.keys()]);
 
   const rows: ExpenseRow[] = [...accounts].map((account) => {
@@ -242,8 +256,8 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
       groupName: c?.groupName ?? p?.groupName ?? '',
       current,
       prior,
-      currentPct: grandCur !== 0 ? current / grandCur : 0,
-      priorPct: grandPri !== 0 ? prior / grandPri : 0,
+      currentPct: grossCur !== 0 ? current / grossCur : 0,
+      priorPct: grossPri !== 0 ? prior / grossPri : 0,
       diff: current - prior,
       pctDiff: prior !== 0 ? (current - prior) / prior : 0,
     };
@@ -264,8 +278,8 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
             account: 'Salaries & Wages',
             section, groupName: 'Salaries & Wages',
             current, prior,
-            currentPct: grandCur !== 0 ? current / grandCur : 0,
-            priorPct: grandPri !== 0 ? prior / grandPri : 0,
+            currentPct: grossCur !== 0 ? current / grossCur : 0,
+            priorPct: grossPri !== 0 ? prior / grossPri : 0,
             diff: current - prior,
             pctDiff: prior !== 0 ? (current - prior) / prior : 0,
           });
