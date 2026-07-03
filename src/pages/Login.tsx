@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import Logo from '../components/Logo';
@@ -6,7 +7,14 @@ import Logo from '../components/Logo';
 type Mode = 'signin' | 'setup' | 'magiclink';
 
 export default function Login() {
-  const { signInWithPin, registerWithPin, signInWithEmail } = useAuth();
+  const { session, signInWithPin, registerWithPin, signInWithEmail } = useAuth();
+  const navigate = useNavigate();
+
+  // Once signed in (PIN, magic-link code, or first-time PIN setup), leave the
+  // login screen. Without this the session is set but the route stays on /login.
+  useEffect(() => {
+    if (session) navigate('/', { replace: true });
+  }, [session, navigate]);
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
