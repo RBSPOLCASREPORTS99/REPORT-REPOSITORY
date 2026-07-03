@@ -136,7 +136,8 @@ export default function Login() {
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={busy || !pinValid}
+            {/* Not disabled on PIN length — submit always gives feedback (see handlePinSubmit). */}
+            <button type="submit" disabled={busy}
               className="w-full rounded-lg bg-brand-600 px-4 py-3 text-base font-medium text-white disabled:opacity-50">
               {busy ? 'Please wait…' : mode === 'setup' ? 'Set PIN & sign in' : 'Sign in'}
             </button>
