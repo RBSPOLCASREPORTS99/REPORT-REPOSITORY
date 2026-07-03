@@ -56,12 +56,12 @@ export default function ComparisonControl({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-500">Month</span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
         <select
           value={setMonthId}
           onChange={(e) => setSetMonthId(e.target.value)}
           aria-label="Set month"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
+          className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-900 dark:text-slate-100"
         >
           {monthRanges.map((r) => (
             <option key={r.id} value={r.id}>{r.label}{!r.is_published ? ' (draft)' : ''}</option>
@@ -70,7 +70,7 @@ export default function ComparisonControl({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
           {COMP_ORDER.map((c) => (
             <button
               key={c}
@@ -78,7 +78,7 @@ export default function ComparisonControl({
               disabled={!avail[c]}
               title={!avail[c] ? (c === 'qtr' ? 'Only for quarter-end months with quarter data imported' : 'No matching period imported') : ''}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-30 ${
-                comp === c ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                comp === c ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               {COMP_LABELS[c]}
@@ -87,12 +87,12 @@ export default function ComparisonControl({
         </div>
 
         {comp === 'qtr' && (
-          <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+          <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
             {(['yoy', 'qoq'] as QtrBasis[]).map((b) => (
               <button
                 key={b}
                 onClick={() => setQtrBasis(b)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${qtrBasis === b ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${qtrBasis === b ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
               >
                 {b === 'yoy' ? 'vs Last Year' : 'vs Prior Qtr'}
               </button>

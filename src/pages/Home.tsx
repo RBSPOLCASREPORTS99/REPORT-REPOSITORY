@@ -46,7 +46,7 @@ export default function Home() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-slate-900">Business Units</h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Business Units</h1>
           {ranges.length > 0 && (
             <Link to="/present" className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white">
               ▶ Present
@@ -58,13 +58,13 @@ export default function Home() {
       <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />
 
       {loading ? (
-        <p className="text-slate-400">Loading…</p>
+        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
       ) : ranges.length === 0 ? (
-        <p className="text-slate-400">No published reports yet.</p>
+        <p className="text-slate-400 dark:text-slate-500">No published reports yet.</p>
       ) : cards.length === 0 ? (
-        <p className="text-slate-400">No data for this comparison.</p>
+        <p className="text-slate-400 dark:text-slate-500">No data for this comparison.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {cards.map((bu) => (
             <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} />
           ))}

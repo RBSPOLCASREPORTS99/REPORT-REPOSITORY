@@ -16,14 +16,14 @@ export default function AllocMethodToggle({
   if (!available) return null;
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-slate-400">Support allocation</span>
-      <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+      <span className="text-xs font-medium text-slate-400 dark:text-slate-500">Support allocation</span>
+      <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
         {METHODS.map((m) => (
           <button
             key={m}
             onClick={() => onChange(m)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              method === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              method === m ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
             }`}
           >
             {ALLOC_METHOD_LABELS[m]}

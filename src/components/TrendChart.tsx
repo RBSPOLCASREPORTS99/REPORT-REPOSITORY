@@ -11,8 +11,8 @@ export default function TrendChart({ data }: { data: TrendPoint[] }) {
   }));
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <h3 className="mb-2 text-sm font-medium text-slate-500">Trend (₱ thousands)</h3>
+    <div className="rounded-2xl bg-white dark:bg-slate-800 p-4 shadow-sm">
+      <h3 className="mb-2 text-sm font-medium text-slate-500 dark:text-slate-400">Trend (₱ thousands)</h3>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />

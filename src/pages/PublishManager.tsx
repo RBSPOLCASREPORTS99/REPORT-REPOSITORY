@@ -28,25 +28,25 @@ export default function PublishManager() {
     }
   }
 
-  if (loading) return <p className="text-slate-400">Loading…</p>;
+  if (loading) return <p className="text-slate-400 dark:text-slate-500">Loading…</p>;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Publish periods</h1>
-      <p className="text-sm text-slate-500">
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Publish periods</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Published periods are visible to Business Unit Heads and the General Manager. Unpublished
         periods are drafts only Finance can see.
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm">
-        {ranges.length === 0 && <p className="px-4 py-6 text-slate-400">No periods imported yet.</p>}
+      <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
+        {ranges.length === 0 && <p className="px-4 py-6 text-slate-400 dark:text-slate-500">No periods imported yet.</p>}
         {ranges.map((r) => (
           <div key={r.id} className="flex items-center justify-between px-4 py-3">
             <div>
-              <span className="font-medium text-slate-900">{r.label}</span>
-              <span className="ml-2 text-xs text-slate-400">
+              <span className="font-medium text-slate-900 dark:text-slate-100">{r.label}</span>
+              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
                 {r.period_start} → {r.period_end}
               </span>
             </div>
@@ -56,7 +56,7 @@ export default function PublishManager() {
               className={`rounded-lg px-4 py-1.5 text-sm font-medium disabled:opacity-50 ${
                 r.is_published
                   ? 'bg-green-100 text-green-800'
-                  : 'bg-slate-100 text-slate-600'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
               }`}
             >
               {busyId === r.id ? '…' : r.is_published ? 'Published' : 'Draft'}

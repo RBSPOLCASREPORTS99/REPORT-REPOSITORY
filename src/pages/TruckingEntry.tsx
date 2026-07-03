@@ -43,32 +43,32 @@ export default function TruckingEntry() {
     }
   }
 
-  if (loading) return <p className="text-slate-400">Loading…</p>;
-  if (months.length === 0) return <p className="text-slate-400">Import a monthly P&L first.</p>;
+  if (loading) return <p className="text-slate-400 dark:text-slate-500">Loading…</p>;
+  if (months.length === 0) return <p className="text-slate-400 dark:text-slate-500">Import a monthly P&L first.</p>;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Trucking cost per BU</h1>
-      <p className="text-sm text-slate-500">
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Trucking cost per BU</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Enter each BU's trucking cost (₱ thousands) for the selected month. On save, the P&amp;L is
         recomputed — each BU's trucking allocation = its % share × the total BU10 trucking cost from
         QuickBooks — and the month's YTD and quarter figures refresh.
       </p>
 
       <label className="flex items-center gap-2 text-sm">
-        <span className="font-medium text-slate-700">Month</span>
-        <select value={monthId} onChange={(e) => setMonthId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-base">
+        <span className="font-medium text-slate-700 dark:text-slate-200">Month</span>
+        <select value={monthId} onChange={(e) => setMonthId(e.target.value)} className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base">
           {months.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
       </label>
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-3 shadow-sm sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
         {TRUCKING_CODES.map((code) => (
           <label key={code} className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-slate-600">{code}</span>
+            <span className="text-slate-600 dark:text-slate-300">{code}</span>
             <input type="number" inputMode="decimal" value={trucking[code] || ''}
               onChange={(e) => { setTrucking((t) => ({ ...t, [code]: e.target.value === '' ? 0 : Number(e.target.value) })); setSaved(false); }}
-              className="w-24 rounded border border-slate-200 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
+              className="w-24 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
           </label>
         ))}
       </div>
@@ -77,7 +77,7 @@ export default function TruckingEntry() {
       {saved && <p className="text-sm text-green-600">Saved and P&L recomputed.</p>}
 
       <div className="flex gap-3">
-        <button onClick={() => navigate('/')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Done</button>
+        <button onClick={() => navigate('/')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Done</button>
         <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
           {saving ? 'Recomputing…' : 'Save & recompute'}
         </button>

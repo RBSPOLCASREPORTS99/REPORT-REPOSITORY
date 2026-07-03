@@ -78,17 +78,17 @@ export default function PresentMode() {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-brand-900 text-white" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="flex items-start justify-between px-5 py-3">
-        <Link to="/" className="mt-2 text-sm text-slate-400">✕ Exit</Link>
+        <Link to="/" className="mt-2 text-sm text-slate-400 dark:text-slate-500">✕ Exit</Link>
         <div className="[&_span]:text-slate-300">
           <ComparisonControl ranges={ranges} onChange={setCmp} />
         </div>
       </div>
 
       {!active ? (
-        <div className="flex flex-1 items-center justify-center text-slate-400">No data to present.</div>
+        <div className="flex flex-1 items-center justify-center text-slate-400 dark:text-slate-500">No data to present.</div>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="text-sm uppercase tracking-widest text-slate-400">
+          <p className="text-sm uppercase tracking-widest text-slate-400 dark:text-slate-500">
             {index + 1} / {cards.length}
           </p>
           <h1 className="mt-2 text-4xl font-bold sm:text-5xl">{active.buName}</h1>
@@ -100,9 +100,9 @@ export default function PresentMode() {
               const up = line.diff >= 0;
               const isNet = key === 'net_income';
               return (
-                <div key={key} className={`rounded-2xl px-6 py-5 ${isNet ? 'bg-white text-slate-900' : 'bg-slate-800'}`}>
+                <div key={key} className={`rounded-2xl px-6 py-5 ${isNet ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'bg-slate-800'}`}>
                   <div className="flex items-baseline justify-between">
-                    <span className={`text-sm font-medium ${isNet ? 'text-slate-500' : 'text-slate-400'}`}>{HEADLINE_LABELS[key]}</span>
+                    <span className={`text-sm font-medium ${isNet ? 'text-slate-500 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500'}`}>{HEADLINE_LABELS[key]}</span>
                     <span className={`text-3xl font-bold tabular-nums sm:text-4xl ${line.current < 0 ? 'text-red-500' : ''}`}>
                       ₱{formatThousands(line.current)}k
                     </span>
@@ -124,7 +124,7 @@ export default function PresentMode() {
           className="rounded-full bg-slate-800 px-6 py-3 text-lg font-medium disabled:opacity-30">←</button>
         <div className="flex gap-1.5">
           {cards.map((_, i) => (
-            <span key={i} className={`h-2 w-2 rounded-full ${i === index ? 'bg-white' : 'bg-slate-600'}`} />
+            <span key={i} className={`h-2 w-2 rounded-full ${i === index ? 'bg-white dark:bg-slate-800' : 'bg-slate-600'}`} />
           ))}
         </div>
         <button onClick={next} disabled={index >= cards.length - 1}

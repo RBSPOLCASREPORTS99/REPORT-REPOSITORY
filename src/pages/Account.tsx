@@ -35,36 +35,36 @@ export default function Account() {
 
   return (
     <div className="space-y-6">
-      <Link to="/" className="inline-block text-sm text-slate-500">← Back to Home</Link>
-      <h1 className="text-lg font-semibold text-slate-900">My account</h1>
+      <Link to="/" className="inline-block text-sm text-slate-500 dark:text-slate-400">← Back to Home</Link>
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">My account</h1>
 
-      <div className="rounded-2xl bg-white p-5 text-sm shadow-sm">
-        <div className="text-slate-500">Email</div>
-        <div className="font-medium text-slate-900">{user?.email}</div>
-        <div className="mt-3 text-slate-500">Designation</div>
-        <div className="font-medium text-slate-900">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : '—'}</div>
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-5 text-sm shadow-sm">
+        <div className="text-slate-500 dark:text-slate-400">Email</div>
+        <div className="font-medium text-slate-900 dark:text-slate-100">{user?.email}</div>
+        <div className="mt-3 text-slate-500 dark:text-slate-400">Designation</div>
+        <div className="font-medium text-slate-900 dark:text-slate-100">{profile ? (ROLE_LABELS[profile.role] ?? profile.role) : '—'}</div>
         {profile?.role === 'bu_head' && (
-          <div className="mt-1 text-xs text-slate-500">
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {profile.bus.length ? profile.bus.map((c) => `${c} · ${buName(c)}`).join('  |  ') : 'No BUs assigned yet'}
           </div>
         )}
       </div>
 
-      <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-800">Set / change PIN</h2>
+      <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Set / change PIN</h2>
         <div>
-          <label className="block text-xs font-medium text-slate-600">New 6-digit PIN</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">New 6-digit PIN</label>
           <input type="password" inputMode="numeric" value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="••••••"
-            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg tracking-[0.5em]" />
+            className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-center text-lg tracking-[0.5em]" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600">Confirm PIN</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Confirm PIN</label>
           <input type="password" inputMode="numeric" value={pin2}
             onChange={(e) => setPin2(e.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="••••••"
-            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg tracking-[0.5em]" />
+            className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-center text-lg tracking-[0.5em]" />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {msg && <p className="text-sm text-green-700">{msg}</p>}

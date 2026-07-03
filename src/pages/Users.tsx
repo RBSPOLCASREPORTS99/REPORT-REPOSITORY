@@ -84,10 +84,10 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      <Link to="/" className="inline-block text-sm text-slate-500">← Back to Home</Link>
+      <Link to="/" className="inline-block text-sm text-slate-500 dark:text-slate-400">← Back to Home</Link>
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Users</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Users</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Authorize who can sign in and what they see. Each person sets their own 6-digit PIN the
           first time they sign in with the email you add here.
         </p>
@@ -96,38 +96,38 @@ export default function Users() {
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
       {/* Add / edit form */}
-      <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-800">{editingEmail ? `Edit ${editingEmail}` : 'Add a user'}</h2>
+      <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{editingEmail ? `Edit ${editingEmail}` : 'Add a user'}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-xs font-medium text-slate-600">Email</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Email</label>
             <input
               type="email"
               value={form.email}
               disabled={!!editingEmail}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm disabled:bg-slate-100"
               placeholder="head@polcas.com"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600">Full name (optional)</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Full name (optional)</label>
             <input
               type="text"
               value={form.full_name}
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
               placeholder="Juan Dela Cruz"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600">Designation</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Designation</label>
           <select
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
-            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           >
             {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
@@ -137,7 +137,7 @@ export default function Users() {
 
         {form.role === 'bu_head' && (
           <div>
-            <label className="block text-xs font-medium text-slate-600">Approved BUs (sees only these)</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Approved BUs (sees only these)</label>
             <div className="mt-2 flex flex-wrap gap-2">
               {SELECTABLE_BUS.map((bu) => {
                 const on = form.bus.includes(bu.code);
@@ -146,7 +146,7 @@ export default function Users() {
                     key={bu.code}
                     type="button"
                     onClick={() => toggleBu(bu.code)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${on ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium ${on ? 'bg-brand-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}
                   >
                     {bu.code} · {bu.name}
                   </button>
@@ -162,40 +162,40 @@ export default function Users() {
             {saving ? 'Saving…' : editingEmail ? 'Save changes' : 'Add user'}
           </button>
           {editingEmail && (
-            <button type="button" onClick={resetForm} className="text-sm text-slate-500">Cancel</button>
+            <button type="button" onClick={resetForm} className="text-sm text-slate-500 dark:text-slate-400">Cancel</button>
           )}
         </div>
       </form>
 
       {/* Users list */}
-      <div className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm">
+      <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         {loading ? (
-          <p className="px-4 py-6 text-slate-400">Loading…</p>
+          <p className="px-4 py-6 text-slate-400 dark:text-slate-500">Loading…</p>
         ) : users.length === 0 ? (
-          <p className="px-4 py-6 text-slate-400">No users yet. Add the first one above.</p>
+          <p className="px-4 py-6 text-slate-400 dark:text-slate-500">No users yet. Add the first one above.</p>
         ) : (
           users.map((u) => (
             <div key={u.email} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-900">{u.full_name || u.email}</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{u.full_name || u.email}</span>
                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${u.registered_at ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                     {u.registered_at ? 'PIN set' : 'Pending'}
                   </span>
                 </div>
-                {u.full_name && <div className="text-xs text-slate-400">{u.email}</div>}
-                <div className="mt-1 text-xs text-slate-500">
+                {u.full_name && <div className="text-xs text-slate-400 dark:text-slate-500">{u.email}</div>}
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {ROLE_LABELS[u.role]}
                   {u.role === 'bu_head' && u.bus.length > 0 && (
                     <> — {u.bus.map((c) => c).join(', ')}</>
                   )}
                 </div>
                 {u.role === 'bu_head' && u.bus.length > 0 && (
-                  <div className="mt-1 text-[11px] text-slate-400">{u.bus.map(buName).join(' · ')}</div>
+                  <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{u.bus.map(buName).join(' · ')}</div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => startEdit(u)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700">Edit</button>
+                <button onClick={() => startEdit(u)} className="rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200">Edit</button>
                 <button onClick={() => remove(u.email)} className="rounded-lg px-3 py-1.5 text-sm text-red-600">Remove</button>
               </div>
             </div>

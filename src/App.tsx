@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { UiProvider } from './contexts/UiContext';
 import { RequireAuth, RequireFinance } from './components/RouteGuards';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -16,6 +17,7 @@ import Account from './pages/Account';
 export default function App() {
   return (
     <BrowserRouter>
+      <UiProvider>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -37,6 +39,7 @@ export default function App() {
           </Route>
         </Routes>
       </AuthProvider>
+      </UiProvider>
     </BrowserRouter>
   );
 }

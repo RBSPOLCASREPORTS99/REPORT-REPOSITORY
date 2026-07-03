@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import PnlTable from '../components/PnlTable';
 import TrendChart from '../components/TrendChart';
@@ -78,24 +78,47 @@ export default function BuDetail() {
     load.catch((e) => setError((e as Error).message)).finally(() => setLoading(false));
   }, [currentId, cmp, code, method, view]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFull, setIsFull] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFull(document.fullscreenElement === containerRef.current);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  function toggleFull() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else containerRef.current?.requestFullscreen?.();
+  }
+
   if (error) return <p className="text-red-600">{error}</p>;
 
   return (
-    <div className="space-y-4">
-      <Link to="/" className="text-sm text-slate-400">← All business units</Link>
-      <h1 className="text-lg font-semibold text-slate-900">{buName}</h1>
+    <div
+      ref={containerRef}
+      className={`space-y-4 ${isFull ? 'h-full overflow-auto bg-slate-50 p-6 dark:bg-slate-900' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          {!isFull && <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← All business units</Link>}
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{buName}</h1>
+        </div>
+        <button onClick={toggleFull}
+          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+          {isFull ? '✕ Exit full screen' : '⛶ Full screen'}
+        </button>
+      </div>
 
       <ComparisonControl ranges={ranges} onChange={setCmp} />
 
       {(expensesAvailable || salesAvailable) && (
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
           {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
             if (v === 'expenses' && !expensesAvailable) return null;
             if (v === 'sales' && !salesAvailable) return null;
             const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
             return (
               <button key={v} onClick={() => setView(v)}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                className={`flex-1 rounded-lg py-2 text-sm font-medium ${view === v ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
                 {label}
               </button>
             );
@@ -106,13 +129,13 @@ export default function BuDetail() {
       {view === 'pnl' && <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />}
 
       {loading ? (
-        <p className="text-slate-400">Loading…</p>
+        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
       ) : view === 'expenses' ? (
         <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : lines.length === 0 ? (
-        <p className="text-slate-400">No data for this business unit yet.</p>
+        <p className="text-slate-400 dark:text-slate-500">No data for this business unit yet.</p>
       ) : (
         <>
           <PnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />

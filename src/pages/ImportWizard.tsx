@@ -123,9 +123,9 @@ export default function ImportWizard() {
   // ---- Done ---------------------------------------------------------------
   if (step === 'done') {
     return (
-      <div className="space-y-4 rounded-2xl bg-white p-6 text-center shadow-sm">
-        <p className="text-lg font-semibold text-slate-900">Import confirmed</p>
-        <p className="text-sm text-slate-500">YTD and quarter figures were refreshed from your imported months. Publish the period so BU Heads and the GM can see it.</p>
+      <div className="space-y-4 rounded-2xl bg-white dark:bg-slate-800 p-6 text-center shadow-sm">
+        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import confirmed</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">YTD and quarter figures were refreshed from your imported months. Publish the period so BU Heads and the GM can see it.</p>
         <button onClick={() => navigate('/')} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Back to Home</button>
       </div>
     );
@@ -138,52 +138,52 @@ export default function ImportWizard() {
     }));
     return (
       <div className="space-y-4">
-        <h1 className="text-lg font-semibold text-slate-900">Import monthly P&L</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import monthly P&L</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           One QuickBooks "P&L by Class" export. Confirm the month, enter that month's trucking cost per
           BU, then import — YTD and quarter figures are rebuilt automatically from your months.
         </p>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">Month</span>
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
             {MONTH_NAMES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
           </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-          <span className="text-xs text-slate-400">detected sheet: {pivot.sheetName}</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500">detected sheet: {pivot.sheetName}</span>
         </div>
 
         <div>
-          <p className="mb-1 text-sm font-medium text-slate-700">Trucking cost per BU (₱ '000)</p>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-3 shadow-sm sm:grid-cols-3">
+          <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Trucking cost per BU (₱ '000)</p>
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
             {TRUCKING_CODES.map((code) => (
               <label key={code} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-slate-600">{code}</span>
+                <span className="text-slate-600 dark:text-slate-300">{code}</span>
                 <input type="number" inputMode="decimal" value={trucking[code] || ''}
                   onChange={(e) => setTrucking((t) => ({ ...t, [code]: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                  className="w-24 rounded border border-slate-200 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
+                  className="w-24 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
               </label>
             ))}
           </div>
         </div>
 
-        <div className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm">
-          <div className="grid grid-cols-[1fr_auto] px-4 py-2 text-xs font-medium text-slate-400">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
+          <div className="grid grid-cols-[1fr_auto] px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
             <span>{monthLabel(year, month)} Net Income</span><span>₱'000</span>
           </div>
           {previews.map(({ cfg, netIncome }) => (
             <div key={cfg.buCode} className="grid grid-cols-[1fr_auto] items-center px-4 py-2.5">
-              <span className="text-sm text-slate-900">{cfg.buName}</span>
-              <span className={`text-sm tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900'}`}>₱{formatThousands(netIncome)}k</span>
+              <span className="text-sm text-slate-900 dark:text-slate-100">{cfg.buName}</span>
+              <span className={`text-sm tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(netIncome)}k</span>
             </div>
           ))}
         </div>
 
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
-          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Cancel</button>
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
           <button onClick={handleConfirmMonth} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
             {confirming ? 'Importing…' : `Import ${monthLabel(year, month)}`}
           </button>
@@ -197,17 +197,17 @@ export default function ImportWizard() {
     title: string, detected: string, summary: string, onConfirm: () => void, warnings?: string[],
   ) => (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h1>
       <div className="rounded-xl bg-blue-50 px-4 py-2 text-sm text-blue-800">
         {detected}. Import the P&L for these months first so the periods line up.
       </div>
       {warnings && warnings.length > 0 && (
         <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><ul className="list-disc space-y-0.5 pl-4">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul></div>
       )}
-      <div className="rounded-2xl bg-white p-4 text-sm shadow-sm"><p className="text-slate-600">{summary}</p></div>
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-4 text-sm shadow-sm"><p className="text-slate-600 dark:text-slate-300">{summary}</p></div>
       {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
       <div className="flex gap-3">
-        <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">Cancel</button>
+        <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
         <button onClick={onConfirm} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
           {confirming ? 'Importing…' : 'Confirm import'}
         </button>
@@ -234,8 +234,8 @@ export default function ImportWizard() {
   // ---- Upload step --------------------------------------------------------
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900">Import</h1>
-      <p className="text-sm text-slate-500">
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Upload a monthly QuickBooks <strong>P&L by Class</strong> export (one per month), or the Expense,
         Sales-in-Qty, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
       </p>
@@ -243,10 +243,10 @@ export default function ImportWizard() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
         onClick={() => fileInputRef.current?.click()}
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-white p-12 text-center"
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-12 text-center"
       >
-        <p className="font-medium text-slate-700">Drag and drop a workbook here</p>
-        <p className="text-sm text-slate-400">or tap to browse — .xlsx / .xlsm</p>
+        <p className="font-medium text-slate-700 dark:text-slate-200">Drag and drop a workbook here</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500">or tap to browse — .xlsx / .xlsm</p>
         <input ref={fileInputRef} type="file" accept=".xlsx,.xlsm" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
       </div>

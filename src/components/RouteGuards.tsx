@@ -17,7 +17,7 @@ export function RequireFinance() {
 
 function FullScreenSpinner() {
   return (
-    <div className="flex min-h-svh items-center justify-center text-slate-400">
+    <div className="flex min-h-svh items-center justify-center text-slate-400 dark:text-slate-500">
       Loading…
     </div>
   );

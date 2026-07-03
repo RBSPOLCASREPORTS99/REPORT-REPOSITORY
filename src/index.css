@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: `dark:` styles apply when <html> has the `dark` class
+   (toggled from the UI), instead of following the OS setting only. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* POLCAS Agritrade brand palette, taken from the corporate logo:
    fresh field green, mountain green, soil brown, sky blue, sun gold. */
 @theme {
@@ -31,4 +35,12 @@ body {
   background: #f5f9ee;
   color: #24301c;
   -webkit-font-smoothing: antialiased;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+html.dark body {
+  background: #0b1220;
+  color: #e5eaf0;
 }
