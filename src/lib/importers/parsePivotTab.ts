@@ -51,12 +51,20 @@ export function parsePivotSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedPi
 
   const header = data[0] ?? [];
   const subtitles = data[1] ?? []; // "(ProfitCost Center)" vs "(BU01 - Bodega 1)" (sub-account)
+  const width = Math.max(header.length, subtitles.length);
   const columns: PivotColumn[] = [];
-  for (let c = 0; c < header.length; c++) {
-    const h = cellStr(header[c]);
-    if (!h) continue;
+  for (let c = 0; c < width; c++) {
+    const h0 = cellStr(header[c]);
     const subtitle = cellStr(subtitles[c]);
-    columns.push({ colIndex: c, header: h, subtitle, topLevel: /profit.?cost.?center/i.test(subtitle) });
+    // Grand-total / aggregate columns ("TOTAL", "Total ProfitCost Center",
+    // "Total Support Cost Centers", "Unclassified") carry their label in the
+    // subtitle row with a blank header cell — fall back to the subtitle.
+    const h = h0 || subtitle;
+    if (!h) continue;
+    // A per-BU top-level class column is marked "(ProfitCost Center)" (in
+    // parens) — distinct from the "Total ProfitCost Center" aggregate.
+    const topLevel = subtitle.startsWith('(') && /profit.?cost.?center/i.test(subtitle);
+    columns.push({ colIndex: c, header: h, subtitle, topLevel });
   }
 
   const rows: PivotRow[] = [];
