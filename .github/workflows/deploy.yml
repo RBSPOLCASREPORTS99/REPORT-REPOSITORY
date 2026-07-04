@@ -1,0 +1,43 @@
+name: Deploy to Cloudflare Pages
+
+# Auto-deploy on push to main. The build runs here on GitHub Actions (free/
+# unlimited for public repos) and the finished `dist` is uploaded to Cloudflare
+# Pages via Direct Upload — so no Cloudflare build minutes are consumed.
+#
+# Skips when a commit only touches docs / SQL / helper scripts (they don't change
+# the deployed app), and honours "[skip ci]" in a commit message.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'supabase/**'
+      - 'scripts/**'
+  workflow_dispatch: {}
+
+# One deploy at a time; a newer push cancels an in-flight run.
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          # Public client values (already shipped in the bundle) — safe to inline.
+          VITE_SUPABASE_URL: https://gfbchmihslthtuesfurb.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_FRgfFkoiaLsw2gv7tOfU4w_bBcyhQSQ
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 5d21d3a584d3db7e6f5d4c426f56f103
+          command: pages deploy dist --project-name=polcas-br --branch=main
