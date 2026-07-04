@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { RangeRow } from '../lib/queries';
+import { useUi } from '../contexts/UiContext';
 import {
   COMP_LABELS, availableComps, resolveComparison,
   type CompType, type QtrBasis, type ResolvedComparison,
@@ -21,14 +22,25 @@ export default function ComparisonControl({
   ranges: RangeRow[];
   onChange: (s: ComparisonState) => void;
 }) {
+  // The month + comparison selection is shared across Home / BU detail / Present
+  // via the UI context (and persisted), so choosing a month anywhere applies
+  // everywhere.
+  const { compSetMonthId, setCompSetMonthId, compType, setCompType, compQtrBasis, setCompQtrBasis } = useUi();
   const monthRanges = ranges.filter((r) => r.kind === 'month');
-  const [setMonthId, setSetMonthId] = useState<string>('');
-  const [comp, setComp] = useState<CompType>('ytd');
-  const [qtrBasis, setQtrBasis] = useState<QtrBasis>('yoy');
+  const setMonthId = compSetMonthId;
+  const setSetMonthId = setCompSetMonthId;
+  const comp = compType as CompType;
+  const setComp = (c: CompType) => setCompType(c);
+  const qtrBasis = compQtrBasis as QtrBasis;
+  const setQtrBasis = (b: QtrBasis) => setCompQtrBasis(b);
 
-  // Default the set month to the latest month range.
+  // Default (or repair) the set month to the latest when the stored one isn't
+  // among the available months.
   useEffect(() => {
-    if (!setMonthId && monthRanges.length > 0) setSetMonthId(monthRanges[0].id);
+    if (monthRanges.length > 0 && !monthRanges.some((r) => r.id === setMonthId)) {
+      setSetMonthId(monthRanges[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthRanges, setMonthId]);
 
   const setMonth = ranges.find((r) => r.id === setMonthId);
