@@ -4,8 +4,8 @@ import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
 import { computeSide, type TruckingInputs } from '../lib/pnl/computeBuPnl';
-import { BU_CONFIGS, TRUCKING_CODES } from '../lib/pnl/buConfig';
-import type { ParsedPivot } from '../lib/importers/parsePivotTab';
+import { BU_CONFIGS, TRUCKING_CODES, PULLS } from '../lib/pnl/buConfig';
+import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
 import { isSupportWorkbook, parseSupportWorkbook, type ParsedSupport } from '../lib/importers/parseSupportWorkbook';
 import { persistSupportImport } from '../lib/importers/persistSupportImport';
 import { isExpenseTxWorkbook, parseExpenseTransactions, type ParsedExpenseTx } from '../lib/importers/parseExpenseTransactions';
@@ -134,7 +134,11 @@ export default function ImportWizard() {
   // ---- Monthly P&L: pick month + trucking + preview ----------------------
   if (step === 'month' && pivot) {
     const previews = BU_CONFIGS.filter((c) => !c.manualEntry).map((cfg) => ({
-      cfg, netIncome: computeSide(pivot, cfg, trucking).net_income,
+      cfg,
+      netIncome: computeSide(pivot, cfg, trucking).net_income,
+      // Raw QuickBooks Net Income for the BU column(s), before any BR
+      // allocations/trucking — a check against the source workbook.
+      rawNI: cfg.memberColumns.reduce((s, col) => s + lookupValue(pivot, PULLS.netIncome.hierCol, PULLS.netIncome.label, col), 0) / 1000,
     }));
     return (
       <div className="space-y-4">
@@ -170,15 +174,23 @@ export default function ImportWizard() {
         </div>
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
-          <div className="grid grid-cols-[1fr_auto] px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
-            <span>{monthLabel(year, month)} Net Income</span><span>₱'000</span>
+          <div className="grid grid-cols-[1fr_7rem_7rem] items-end gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+            <span>{monthLabel(year, month)} · ₱'000</span>
+            <span className="text-right">Raw NI in Excel</span>
+            <span className="text-right">Net Income</span>
           </div>
-          {previews.map(({ cfg, netIncome }) => (
-            <div key={cfg.buCode} className="grid grid-cols-[1fr_auto] items-center px-4 py-2.5">
+          {previews.map(({ cfg, netIncome, rawNI }) => (
+            <div key={cfg.buCode} className="grid grid-cols-[1fr_7rem_7rem] items-center gap-x-3 px-4 py-2.5">
               <span className="text-sm text-slate-900 dark:text-slate-100">{cfg.buName}</span>
-              <span className={`text-sm tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(netIncome)}k</span>
+              <span className={`text-right text-sm tabular-nums ${rawNI < 0 ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>₱{formatThousands(rawNI)}k</span>
+              <span className={`text-right text-sm font-medium tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(netIncome)}k</span>
             </div>
           ))}
+          <p className="px-4 py-2 text-[11px] text-slate-400 dark:text-slate-500">
+            <span className="font-medium">Raw NI in Excel</span> = the BU's own Net Income from the QuickBooks
+            sheet (before Admin / Cost-of-Money / support allocations and trucking) — for checking only.
+            <span className="font-medium"> Net Income</span> is the final figure after allocations.
+          </p>
         </div>
 
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
