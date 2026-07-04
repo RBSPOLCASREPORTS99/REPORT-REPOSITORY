@@ -21,6 +21,8 @@ import * as XLSX from 'xlsx';
 export interface PivotColumn {
   colIndex: number;
   header: string; // verbatim, e.g. "BU01 - Bodega 1" or "Total BU10 - TRUCK"
+  subtitle: string; // row-1 marker, e.g. "(ProfitCost Center)" or "(BU01 - Bodega 1)"
+  topLevel: boolean; // a top-level class column (ProfitCost Center), not a sub-account
 }
 
 export interface PivotRow {
@@ -48,10 +50,13 @@ export function parsePivotSheet(ws: XLSX.WorkSheet, sheetName: string): ParsedPi
   const data = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: '' });
 
   const header = data[0] ?? [];
+  const subtitles = data[1] ?? []; // "(ProfitCost Center)" vs "(BU01 - Bodega 1)" (sub-account)
   const columns: PivotColumn[] = [];
   for (let c = 0; c < header.length; c++) {
     const h = cellStr(header[c]);
-    if (h) columns.push({ colIndex: c, header: h });
+    if (!h) continue;
+    const subtitle = cellStr(subtitles[c]);
+    columns.push({ colIndex: c, header: h, subtitle, topLevel: /profit.?cost.?center/i.test(subtitle) });
   }
 
   const rows: PivotRow[] = [];
@@ -100,18 +105,27 @@ export function parsePivotWorkbookTabs(
   return out;
 }
 
-// Resolve a column index from a header name. Exact match first, then a
-// normalized contains-match so "BU01 - Bodega 1" resolves from "BU01".
+// Resolve a column index from a header name. Exact (case-insensitive) first;
+// then tolerate the newer QuickBooks export that rolls a BU's sub-accounts into
+// a "Total <name>" column — so a requested "BU01 - Bodega 1" also resolves from
+// "Total BU01 - Bodega 1" (and vice-versa), WITHOUT matching a "… - Other"
+// sub-account (we only accept the exact with/without-"Total" variant).
 export function findColumn(pivot: ParsedPivot, header: string): number | null {
-  const exact = pivot.columns.find((c) => c.header === header);
-  if (exact) return exact.colIndex;
   const up = header.toUpperCase();
-  const partial = pivot.columns.find((c) => c.header.toUpperCase() === up);
-  if (partial) return partial.colIndex;
-  return null;
+  const exact = pivot.columns.find((c) => c.header.toUpperCase() === up);
+  if (exact) return exact.colIndex;
+
+  let variant: string | null = null;
+  if (/^total\s/i.test(header)) variant = header.replace(/^total\s+/i, '');
+  else variant = 'Total ' + header;
+  const vUp = variant.toUpperCase();
+  const m = pivot.columns.find((c) => c.header.toUpperCase() === vUp);
+  return m ? m.colIndex : null;
 }
 
 // Look up a raw peso value at (hierCol, label, columnHeader). Missing -> 0.
+// Special case: some exports omit the company-wide "TOTAL" column — for it we
+// sum the value across the top-level (ProfitCost Center) columns instead.
 export function lookupValue(
   pivot: ParsedPivot,
   hierCol: number,
@@ -121,6 +135,11 @@ export function lookupValue(
   const row = pivot.private_index.get(`${hierCol}::${label.toUpperCase()}`);
   if (!row) return 0;
   const colIndex = findColumn(pivot, columnHeader);
-  if (colIndex === null) return 0;
-  return row.values.get(colIndex) ?? 0;
+  if (colIndex !== null) return row.values.get(colIndex) ?? 0;
+  if (columnHeader.trim().toUpperCase() === 'TOTAL') {
+    let sum = 0;
+    for (const col of pivot.columns) if (col.topLevel) sum += row.values.get(col.colIndex) ?? 0;
+    return sum;
+  }
+  return 0;
 }
