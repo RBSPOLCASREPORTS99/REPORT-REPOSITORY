@@ -145,7 +145,7 @@ export default function BuDetail() {
       ) : view === 'expenses' ? (
         <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'sales' ? (
-        <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
       ) : lines.length === 0 ? (
         <p className="text-slate-400 dark:text-slate-500">No data for this business unit yet.</p>
       ) : (
