@@ -161,8 +161,8 @@ export default function Layout() {
 
           {open && (
             <>
-              <button aria-hidden onClick={() => setOpen(false)} className="fixed inset-0 top-14 z-10 cursor-default bg-black/20" />
-              <nav className="relative z-20 space-y-1 border-t border-brand-600 bg-white px-3 py-3 text-left shadow-lg dark:bg-slate-800">
+              <button aria-hidden onClick={() => setOpen(false)} className="fixed inset-0 top-14 z-10 cursor-default" />
+              <nav className="absolute right-2 top-full z-20 w-60 max-w-[calc(100vw-1rem)] space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-800">
                 {items.map((it) => (
                   <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => navLinkCls(isActive)}>
                     <span className="text-base leading-none">{it.icon}</span>
