@@ -50,7 +50,7 @@ export default function ExpenseTable({
                 <td className="px-2 py-2" />
                 <td className="px-3 py-2 text-right tabular-nums">{money(sec.total)}</td>
                 <td className="px-2 py-2" />
-                <td className={`px-3 py-2 text-right tabular-nums ${sec.total - sec.priorTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <td className={`px-3 py-2 text-right tabular-nums ${sec.total - sec.priorTotal >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {money(Math.abs(sec.total - sec.priorTotal))}
                 </td>
                 <td className="px-3 py-2" />
@@ -64,10 +64,10 @@ export default function ExpenseTable({
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(row.priorPct)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.current)}`}>{money(row.current)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(row.currentPct)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-red-600' : 'text-green-600'}`}>
                       {up ? '▲' : '▼'} {money(Math.abs(row.diff))}
                     </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-red-600' : 'text-green-600'}`}>
                       {formatPercent(row.pctDiff)}
                     </td>
                   </tr>
