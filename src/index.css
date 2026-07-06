@@ -32,8 +32,9 @@
 
 body {
   margin: 0;
-  background: #f5f9ee;
-  color: #24301c;
+  /* Cool, neutral canvas so indigo accents and gradient cards read as premium. */
+  background: #f6f7fb;
+  color: #1e293b;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -43,4 +44,15 @@ html.dark {
 html.dark body {
   background: #0b1220;
   color: #e5eaf0;
+}
+
+/* Staggered entrance for dashboard cards — a subtle premium lift-in. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise { animation: none; }
 }

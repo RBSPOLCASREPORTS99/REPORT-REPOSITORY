@@ -4,6 +4,7 @@ import PnlTable from '../components/PnlTable';
 // Charting (recharts) is heavy and only used here — load it on demand.
 const TrendChart = lazy(() => import('../components/TrendChart'));
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
+import SetMonthSelect from '../components/SetMonthSelect';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
@@ -102,12 +103,15 @@ export default function BuDetail() {
   return (
     <div
       ref={containerRef}
-      className={`space-y-4 ${isFull ? 'h-full overflow-auto bg-slate-50 p-6 dark:bg-slate-900' : ''}`}
+      className={`space-y-3 ${isFull ? 'h-full overflow-auto bg-slate-50 p-6 dark:bg-slate-900' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           {!isFull && <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← All business units</Link>}
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{buName}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{buName}</h1>
+            <SetMonthSelect ranges={ranges} />
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button onClick={() => setTick((t) => t + 1)} title="Reload data"
@@ -121,23 +125,26 @@ export default function BuDetail() {
         </div>
       </div>
 
-      <ComparisonControl ranges={ranges} onChange={setCmp} />
-
-      {(expensesAvailable || salesAvailable) && (
-        <div className="flex gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
-          {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
-            if (v === 'expenses' && !expensesAvailable) return null;
-            if (v === 'sales' && !salesAvailable) return null;
-            const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
-            return (
-              <button key={v} onClick={() => setView(v)}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium ${view === v ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* View toggle (P&L / Expenses / Sales) sits on the same line as the
+          YTD / QTR / Month comparison buttons. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(expensesAvailable || salesAvailable) && (
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+            {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
+              if (v === 'expenses' && !expensesAvailable) return null;
+              if (v === 'sales' && !salesAvailable) return null;
+              const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
+              return (
+                <button key={v} onClick={() => setView(v)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
+      </div>
 
       {view === 'pnl' && <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />}
 

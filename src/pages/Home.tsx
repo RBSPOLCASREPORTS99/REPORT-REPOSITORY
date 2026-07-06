@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
+import SetMonthSelect from '../components/SetMonthSelect';
 import BuCard from '../components/BuCard';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
@@ -71,17 +72,18 @@ export default function Home() {
   );
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Business Units</h1>
+        <SetMonthSelect ranges={ranges} />
         <button onClick={refresh} title="Reload data"
-          className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+          className="ml-auto rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
           ↻ Refresh
         </button>
       </div>
 
-      <div className="flex flex-col items-start gap-3">
-        <ComparisonControl ranges={ranges} onChange={setCmp} />
+      <div className="flex flex-wrap items-center gap-2">
+        <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
         <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />
       </div>
 
@@ -92,9 +94,9 @@ export default function Home() {
       ) : cards.length === 0 ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No data for this comparison. Try ↻ Refresh.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {cards.map((bu) => (
-            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} />
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {cards.map((bu, i) => (
+            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={i} />
           ))}
         </div>
       )}
