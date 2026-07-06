@@ -53,9 +53,11 @@ export function resolveComparison(
   }
 
   if (comp === 'ytd') {
+    // YTD is reportable every month; the prior-year YTD is optional (blank until
+    // that year is imported). Only the current-year YTD is required.
     const cur = findYtd(y, m);
     const pri = findYtd(y - 1, m);
-    return { currentId: cur?.id, priorId: pri?.id, currentLabel: cur?.label ?? `YTD ${y}`, priorLabel: pri?.label ?? `YTD ${y - 1}`, available: !!cur && !!pri };
+    return { currentId: cur?.id, priorId: pri?.id, currentLabel: cur?.label ?? `YTD ${y}`, priorLabel: pri?.label ?? `YTD ${y - 1}`, available: !!cur };
   }
 
   // qtr — only meaningful for quarter-end months and requires quarter ranges.
