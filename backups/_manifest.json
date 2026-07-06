@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-07-06T06:58:19.458Z",
+  "tables": {
+    "business_units": 16,
+    "periods": 1,
+    "profiles": 3,
+    "allowed_users": 4,
+    "allowed_user_bus": 2,
+    "profile_bus": 1,
+    "item_units": 11,
+    "pnl_months": 3,
+    "monthly_pnl_inputs": 21,
+    "monthly_pnl_pools": 3,
+    "monthly_trucking": 17,
+    "report_ranges": 6,
+    "computed_pnl": 924,
+    "expense_lines": 1224,
+    "sales_qty_lines": 534,
+    "monthly_expense": 2715,
+    "monthly_sales": 1362,
+    "support_sim": 162,
+    "import_batches": 2,
+    "pnl_lines": 462
+  }
+}
