@@ -15,6 +15,7 @@ import TruckingEntry from './pages/TruckingEntry';
 import Users from './pages/Users';
 import Account from './pages/Account';
 import BuNames from './pages/BuNames';
+import ItemUnits from './pages/ItemUnits';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
                 <Route path="/publish" element={<PublishManager />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/bu-names" element={<BuNames />} />
+                <Route path="/item-units" element={<ItemUnits />} />
               </Route>
             </Route>
           </Route>

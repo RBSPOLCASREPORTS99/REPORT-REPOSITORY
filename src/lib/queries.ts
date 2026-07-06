@@ -319,12 +319,22 @@ async function salesByItem(rangeId: string, buCode: string): Promise<Map<string,
   return new Map((data ?? []).map((r) => [r.item as string, { qty: r.qty as number, uom: r.uom as string }]));
 }
 
+// Finance-set U/M overrides (item -> uom), applied on top of the imported unit.
+// Tolerant of the table not existing yet (returns empty) so Sales never breaks.
+export async function fetchItemUnits(): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('item_units').select('item, uom');
+  if (error) return new Map();
+  return new Map((data ?? []).map((r) => [r.item as string, (r.uom as string) || '']));
+}
+
 // Quantity per item for a BU, comparing a current range vs a prior range,
-// sorted largest-first by current quantity.
+// sorted largest-first by current quantity. U/M uses the Finance override when
+// set, otherwise the unit carried in the import.
 export async function fetchBuSales(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<SalesItemRow[]> {
-  const [cur, pri] = await Promise.all([
+  const [cur, pri, overrides] = await Promise.all([
     salesByItem(currentRangeId, buCode),
     priorRangeId ? salesByItem(priorRangeId, buCode) : Promise.resolve(new Map<string, { qty: number; uom: string }>()),
+    fetchItemUnits(),
   ]);
   const items = new Set([...cur.keys(), ...pri.keys()]);
   return [...items]
@@ -333,9 +343,29 @@ export async function fetchBuSales(currentRangeId: string, priorRangeId: string 
       const p = pri.get(item);
       const current = c?.qty ?? 0;
       const prior = p?.qty ?? 0;
-      return { item, uom: c?.uom ?? p?.uom ?? '', prior, current, diff: current - prior, pctDiff: prior !== 0 ? (current - prior) / prior : 0 };
+      const uom = overrides.get(item) || c?.uom || p?.uom || '';
+      return { item, uom, prior, current, diff: current - prior, pctDiff: prior !== 0 ? (current - prior) / prior : 0 };
     })
     .sort((a, b) => b.current - a.current);
+}
+
+// Distinct sales items across all ranges, with a representative imported unit,
+// for the Finance "Item Units" editor.
+export async function fetchSalesItems(): Promise<{ item: string; importedUom: string }[]> {
+  const { data, error } = await supabase.from('sales_qty_lines').select('item, uom');
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const r of data ?? []) {
+    const item = r.item as string;
+    const uom = (r.uom as string) || '';
+    if (!map.has(item) || (!map.get(item) && uom)) map.set(item, uom);
+  }
+  return [...map.entries()].map(([item, importedUom]) => ({ item, importedUom })).sort((a, b) => a.item.localeCompare(b.item));
+}
+
+export async function saveItemUnit(item: string, uom: string): Promise<void> {
+  const { error } = await supabase.from('item_units').upsert({ item, uom: uom.trim(), updated_at: new Date().toISOString() }, { onConflict: 'item' });
+  if (error) throw error;
 }
 
 // Which ranges have imported sales-quantity detail (→ Sales tab enabled).
