@@ -21,6 +21,14 @@ export async function listTruckingMonths(): Promise<TruckingMonth[]> {
   return (data ?? []) as TruckingMonth[];
 }
 
+// Existing trucking for a year+month if that month was already imported — used
+// to pre-fill the import wizard when re-importing/updating a month.
+export async function loadTruckingByYearMonth(year: number, month: number): Promise<TruckingInputs | null> {
+  const { data } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
+  if (!data) return null;
+  return loadMonthTrucking(data.id as string);
+}
+
 export async function loadMonthTrucking(monthId: string): Promise<TruckingInputs> {
   const { data, error } = await supabase.from('monthly_trucking').select('trucking_code, amount').eq('month_id', monthId);
   if (error) throw error;

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
@@ -11,6 +11,7 @@ import { persistSupportImport } from '../lib/importers/persistSupportImport';
 import { isExpenseTxWorkbook, parseExpenseTransactions, type ParsedExpenseTx } from '../lib/importers/parseExpenseTransactions';
 import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '../lib/importers/parseSalesTransactions';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
+import { loadTruckingByYearMonth } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -31,12 +32,28 @@ export default function ImportWizard() {
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(1);
   const [trucking, setTrucking] = useState<TruckingInputs>({});
+  const [monthExists, setMonthExists] = useState(false);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+
+  // On the monthly step, pre-fill this month's trucking if it was already
+  // imported (so re-importing/updating a month keeps the trucking you entered).
+  useEffect(() => {
+    if (step !== 'month') return;
+    let cancelled = false;
+    loadTruckingByYearMonth(year, month)
+      .then((existing) => {
+        if (cancelled) return;
+        setTrucking(existing ?? {});
+        setMonthExists(!!existing);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [step, year, month]);
 
   async function handleFile(file: File) {
     setParseError('');
@@ -159,6 +176,13 @@ export default function ImportWizard() {
           <span className="text-xs text-slate-400 dark:text-slate-500">detected sheet: {pivot.sheetName}</span>
         </div>
 
+        {monthExists && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            {monthLabel(year, month)} is already imported — importing will <span className="font-medium">update</span> it
+            (YTD/quarter recompute, publish state kept). Trucking below is pre-filled from the last import; edit if it changed.
+          </p>
+        )}
+
         <div>
           <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Trucking cost per BU (₱ '000)</p>
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
@@ -197,7 +221,7 @@ export default function ImportWizard() {
         <div className="flex gap-3">
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
           <button onClick={handleConfirmMonth} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
-            {confirming ? 'Importing…' : `Import ${monthLabel(year, month)}`}
+            {confirming ? (monthExists ? 'Updating…' : 'Importing…') : `${monthExists ? 'Update' : 'Import'} ${monthLabel(year, month)}`}
           </button>
         </div>
       </div>
