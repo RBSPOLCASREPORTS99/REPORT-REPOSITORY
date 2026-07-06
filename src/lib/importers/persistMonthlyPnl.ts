@@ -18,18 +18,12 @@ export interface MonthlyPersistArgs {
 }
 
 export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ monthId: string; ranges: number }> {
-  const { year, month, pivot, trucking, fileName, fileBuffer, userId } = args;
+  const { year, month, pivot, trucking, fileName, userId } = args;
 
-  // 1. upload raw file
-  const storagePath = `pnl/${year}-${String(month).padStart(2, '0')}/${Date.now()}-${fileName}`;
-  const { error: upErr } = await supabase.storage.from('imports').upload(storagePath, fileBuffer, {
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  if (upErr) throw upErr;
-
-  // 2. import batch
+  // 1. audit record only — the raw file is NOT stored (its data is fully
+  // extracted into the DB below and captured by the weekly backup).
   const { data: batch, error: batchErr } = await supabase.from('import_batches').insert({
-    source_report: 'BR', filename: fileName, storage_path: storagePath, uploaded_by: userId, row_count: 0, status: 'pending',
+    source_report: 'BR', filename: fileName, storage_path: null, uploaded_by: userId, row_count: 0, status: 'pending',
   }).select('id').single();
   if (batchErr) throw batchErr;
 

@@ -8,19 +8,17 @@ import type { ParsedSalesTx } from './parseSalesTransactions';
 // new expense/sales figures. Requires the P&L for those months to be imported
 // (ranges come from the P&L).
 
-async function newBatch(source: 'EXPENSE' | 'SALES', fileName: string, fileBuffer: ArrayBuffer, userId: string, rowCount: number): Promise<string> {
-  const storagePath = `${source.toLowerCase()}/${Date.now()}-${fileName}`;
-  await supabase.storage.from('imports').upload(storagePath, fileBuffer, {
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
+// The raw file is not stored — its data is fully extracted into the DB tables
+// (and covered by the weekly backup), so we only keep an audit record.
+async function newBatch(source: 'EXPENSE' | 'SALES', fileName: string, userId: string, rowCount: number): Promise<string> {
   const { data } = await supabase.from('import_batches').insert({
-    source_report: source, filename: fileName, storage_path: storagePath, uploaded_by: userId, row_count: rowCount, status: 'pending',
+    source_report: source, filename: fileName, storage_path: null, uploaded_by: userId, row_count: rowCount, status: 'pending',
   }).select('id').single();
   return data!.id as string;
 }
 
-export async function persistExpenseTx(parsed: ParsedExpenseTx, fileName: string, fileBuffer: ArrayBuffer, userId: string): Promise<{ ranges: number }> {
-  const batchId = await newBatch('EXPENSE', fileName, fileBuffer, userId, parsed.rows.length);
+export async function persistExpenseTx(parsed: ParsedExpenseTx, fileName: string, _fileBuffer: ArrayBuffer, userId: string): Promise<{ ranges: number }> {
+  const batchId = await newBatch('EXPENSE', fileName, userId, parsed.rows.length);
 
   // Replace the covered months' aggregates.
   for (const ym of parsed.months) {
@@ -43,8 +41,8 @@ export async function persistExpenseTx(parsed: ParsedExpenseTx, fileName: string
   return { ranges };
 }
 
-export async function persistSalesTx(parsed: ParsedSalesTx, fileName: string, fileBuffer: ArrayBuffer, userId: string): Promise<{ ranges: number }> {
-  const batchId = await newBatch('SALES', fileName, fileBuffer, userId, parsed.rows.length);
+export async function persistSalesTx(parsed: ParsedSalesTx, fileName: string, _fileBuffer: ArrayBuffer, userId: string): Promise<{ ranges: number }> {
+  const batchId = await newBatch('SALES', fileName, userId, parsed.rows.length);
 
   for (const ym of parsed.months) {
     await supabase.from('monthly_sales').delete().eq('year', ym.year).eq('month', ym.month);

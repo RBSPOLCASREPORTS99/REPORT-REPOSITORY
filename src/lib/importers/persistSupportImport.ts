@@ -21,7 +21,7 @@ export interface SupportPersistResult {
 }
 
 export async function persistSupportImport(args: SupportPersistArgs): Promise<SupportPersistResult> {
-  const { parsed, fileName, fileBuffer, userId } = args;
+  const { parsed, fileName, userId } = args;
   const { currentMonth, prevMonth } = parsed;
 
   // Resolve each support period to a report_range id.
@@ -41,13 +41,10 @@ export async function persistSupportImport(args: SupportPersistArgs): Promise<Su
   };
   const missingRanges = (Object.keys(rangeByPeriod) as SupportPeriod[]).filter((p) => !rangeByPeriod[p]);
 
-  // Upload the raw workbook and record the batch.
-  const storagePath = `support/${currentMonth.year}-${String(currentMonth.month).padStart(2, '0')}/${Date.now()}-${fileName}`;
-  await supabase.storage.from('imports').upload(storagePath, fileBuffer, {
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
+  // Audit record only — the raw workbook is not stored (data is extracted into
+  // support_sim below and covered by the weekly backup).
   const { data: batch } = await supabase.from('import_batches').insert({
-    source_report: 'SUPPORT', filename: fileName, storage_path: storagePath, uploaded_by: userId,
+    source_report: 'SUPPORT', filename: fileName, storage_path: null, uploaded_by: userId,
     row_count: parsed.values.length, status: 'pending', warnings: parsed.warnings,
   }).select('id').single();
   const batchId = batch!.id as string;
