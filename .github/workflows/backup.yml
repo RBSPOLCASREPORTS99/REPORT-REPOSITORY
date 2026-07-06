@@ -1,0 +1,41 @@
+name: Supabase backup
+
+# Weekly data snapshot of every table to backups/*.json (via the secret key),
+# committed to the repo. With the SQL in supabase/migrations, this is a full
+# restore point. Needs a repo secret SUPABASE_SECRET_KEY (the sb_secret_… key).
+on:
+  schedule:
+    - cron: '41 5 * * 0' # weekly, Sunday ~05:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: supabase-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dump tables
+        run: node scripts/backup.mjs
+        env:
+          SUPABASE_URL: https://gfbchmihslthtuesfurb.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      - name: Commit snapshot
+        run: |
+          git config user.name "backup-bot"
+          git config user.email "backup-bot@users.noreply.github.com"
+          git add backups/
+          if git diff --cached --quiet; then
+            echo "No data changes since last backup."
+          else
+            git commit -m "Data backup $(date -u +%F) [skip ci]"
+            git push
+          fi
