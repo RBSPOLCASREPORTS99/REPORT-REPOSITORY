@@ -15,7 +15,7 @@ export const FARM_INPUT_LINES: { key: string; label: string; farmHint?: string }
   { key: 'gross_sales', label: 'Gross Sales' },
   { key: 'cogs', label: 'Cost of Goods Sold' },
   { key: 'admin_expense', label: 'Admin Expense', farmHint: 'Fertilizer / Chemical' },
-  { key: 'discounting_expense', label: 'Discounting / Finance Expense', farmHint: 'Labor' },
+  { key: 'discounting_expense', label: 'Discounting Expense', farmHint: 'Labor' },
   { key: 'operations_expense', label: 'Operations Expense', farmHint: 'Other Ops' },
   { key: 'repairs_expense', label: 'Repairs & Maintenance', farmHint: 'Land Prep' },
   { key: 'salaries_expense', label: 'Salaries & Wages', farmHint: 'Planting' },

@@ -125,9 +125,10 @@ export default function BuDetail() {
         </div>
       </div>
 
-      {/* View toggle (P&L / Expenses / Sales) sits on the same line as the
-          YTD / QTR / Month comparison buttons. */}
+      {/* YTD / QTR / Month comparison buttons first, then the view toggle
+          (P&L / Expenses / Sales) on the same line. */}
       <div className="flex flex-wrap items-center gap-2">
+        <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
         {(expensesAvailable || salesAvailable) && (
           <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
             {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
@@ -143,7 +144,6 @@ export default function BuDetail() {
             })}
           </div>
         )}
-        <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
       </div>
 
       {view === 'pnl' && <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />}
