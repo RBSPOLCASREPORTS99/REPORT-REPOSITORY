@@ -10,6 +10,15 @@ const EXPENSE_SORT_KEYS = new Set([
   'repairs_expense', 'salaries_expense', 'trucking_expense',
 ]);
 
+// Expense/cost lines where an INCREASE is unfavorable → colour DIFF/%DIFF red
+// when higher, green when lower (opposite of income lines like Net Income).
+const COST_KEYS = new Set([
+  'cogs', 'admin_expense', 'discounting_expense', 'operations_expense',
+  'repairs_expense', 'salaries_expense', 'trucking_expense', 'total_expense',
+  'admin_allocated', 'cost_of_money_allocated', 'total_allocated_expense',
+  'support_finance', 'support_hr', 'support_management', 'total_support_centers',
+]);
+
 // Full comparison table mirroring the Excel layout:
 // LINE ITEM | PRIOR | % | CURRENT | % | DIFF | %DIFF
 export default function PnlTable({
@@ -56,6 +65,8 @@ export default function PnlTable({
             const bold = BOLD_KEYS.has(line.key);
             const peso = PESO_KEYS.has(line.key);
             const up = line.diff >= 0;
+            // Favourable = income up OR cost down; drives the DIFF/%DIFF colour.
+            const favorable = COST_KEYS.has(line.key) ? line.diff < 0 : line.diff >= 0;
             const rowCls = bold ? 'bg-slate-50/60 font-semibold dark:bg-slate-700/50' : '';
             const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
             return (
@@ -78,10 +89,10 @@ export default function PnlTable({
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(line.priorPct)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.current)}`}>{money(line.current, peso)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(line.currentPct)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${favorable ? 'text-green-600' : 'text-red-600'}`}>
                       {up ? '▲' : '▼'} {money(Math.abs(line.diff), peso)}
                     </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-green-600' : 'text-red-600'}`}>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${favorable ? 'text-green-600' : 'text-red-600'}`}>
                       {formatPercent(line.pctDiff)}
                     </td>
                   </>
