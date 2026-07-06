@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
-import { computeSide, type TruckingInputs } from '../lib/pnl/computeBuPnl';
+import { computeSide, extractPools, type TruckingInputs } from '../lib/pnl/computeBuPnl';
 import { BU_CONFIGS, TRUCKING_CODES, PULLS } from '../lib/pnl/buConfig';
 import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
 import { isSupportWorkbook, parseSupportWorkbook, type ParsedSupport } from '../lib/importers/parseSupportWorkbook';
@@ -39,6 +39,7 @@ export default function ImportWizard() {
   const [parseError, setParseError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false); // final double-check modal
 
   // On the monthly step, pre-fill this month's trucking if it was already
   // imported (so re-importing/updating a month keeps the trucking you entered).
@@ -157,6 +158,9 @@ export default function ImportWizard() {
       // allocations/trucking — a check against the source workbook.
       rawNI: cfg.memberColumns.reduce((s, col) => s + lookupValue(pivot, PULLS.netIncome.hierCol, PULLS.netIncome.label, col), 0) / 1000,
     }));
+    // Safety check: a wrong/empty file yields near-zero totals.
+    const companyGross = extractPools(pivot).company_gross_sales; // ₱'000
+    const suspicious = companyGross <= 0 || previews.every((p) => p.rawNI === 0);
     return (
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import monthly P&L</h1>
@@ -217,13 +221,57 @@ export default function ImportWizard() {
           </p>
         </div>
 
+        {suspicious && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            ⚠️ This file's totals look empty / near-zero (company Gross Sales = ₱{formatThousands(companyGross)}k).
+            Double-check you picked the correct file and sheet before importing — importing an empty file would overwrite {monthLabel(year, month)}.
+          </p>
+        )}
+
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
-          <button onClick={handleConfirmMonth} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
-            {confirming ? (monthExists ? 'Updating…' : 'Importing…') : `${monthExists ? 'Update' : 'Import'} ${monthLabel(year, month)}`}
+          <button onClick={() => setShowConfirm(true)} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {`${monthExists ? 'Update' : 'Import'} ${monthLabel(year, month)}`}
           </button>
         </div>
+
+        {/* Final double-check dialog */}
+        {showConfirm && (
+          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={() => !confirming && setShowConfirm(false)}>
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                {monthExists ? 'Update' : 'Import'} {monthLabel(year, month)}?
+              </h2>
+              <div className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                <p>File: <span className="font-medium">{fileName}</span></p>
+                <p>Sheet: <span className="font-medium">{pivot.sheetName}</span></p>
+                <p>Company Gross Sales: <span className="font-medium">₱{formatThousands(companyGross)}k</span> · {previews.length} BUs</p>
+                {monthExists && (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    This replaces the existing {monthLabel(year, month)} data (YTD/quarter recompute; publish state kept).
+                  </p>
+                )}
+                {suspicious && (
+                  <p className="font-medium text-red-600 dark:text-red-400">
+                    ⚠️ Totals look empty/near-zero — please make sure this is the right file.
+                  </p>
+                )}
+              </div>
+              {confirmError && <p className="mt-2 text-sm text-red-600">{confirmError}</p>}
+              <div className="mt-4 flex gap-3">
+                <button onClick={() => setShowConfirm(false)} disabled={confirming}
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
+                  Go back
+                </button>
+                <button onClick={handleConfirmMonth} disabled={confirming}
+                  className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+                  {confirming ? (monthExists ? 'Updating…' : 'Importing…') : `Yes, ${monthExists ? 'update' : 'import'}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
