@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import PnlTable from '../components/PnlTable';
-import TrendChart from '../components/TrendChart';
+// Charting (recharts) is heavy and only used here — load it on demand.
+const TrendChart = lazy(() => import('../components/TrendChart'));
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import ExpenseTable from '../components/ExpenseTable';
@@ -151,7 +152,9 @@ export default function BuDetail() {
       ) : (
         <>
           <PnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />
-          <TrendChart data={trend} />
+          <Suspense fallback={<div className="h-48 rounded-2xl bg-white shadow-sm dark:bg-slate-800" />}>
+            <TrendChart data={trend} />
+          </Suspense>
         </>
       )}
     </div>
