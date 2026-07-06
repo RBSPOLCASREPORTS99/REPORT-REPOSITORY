@@ -98,8 +98,9 @@ export default function BuNames() {
           </button>
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500">
-          Registers the unit and its name. To make it show computed P&L, its QuickBooks column
-          also has to be wired into the import — tell me the column name and I'll connect it.
+          Use the <span className="font-medium">same code it carries in QuickBooks</span> (e.g. <span className="font-medium">BU12</span>).
+          The next P&L import will automatically read this unit's figures from the matching
+          QuickBooks column — no further setup needed.
         </p>
       </form>
 

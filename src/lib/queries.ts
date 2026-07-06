@@ -441,9 +441,9 @@ export async function saveBuName(code: string, displayCode: string, name: string
   if (error) throw error;
 }
 
-// Add a new business unit (Finance). It appears in the names list and labels;
-// to pull P&L figures it also needs its QuickBooks column wired into the
-// compute config (a code change).
+// Add a new business unit (Finance). It's flagged `auto_compute` so the next
+// P&L import auto-reads its figures from the QuickBooks pivot by matching this
+// code to its column ("BUxx - Name" / "Total BUxx - Name") — no code change.
 export async function createBusinessUnit(code: string, displayCode: string, name: string): Promise<void> {
   const c = code.trim().toUpperCase().replace(/\s+/g, '');
   if (!c) throw new Error('Enter a code.');
@@ -452,7 +452,7 @@ export async function createBusinessUnit(code: string, displayCode: string, name
   const sortOrder = ((maxRow?.sort_order as number) ?? 0) + 10;
   const { error } = await supabase.from('business_units').insert({
     code: c, name: name.trim(), display_code: displayCode.trim() || null,
-    is_profit_center: true, sort_order: sortOrder,
+    is_profit_center: true, sort_order: sortOrder, auto_compute: true,
   });
   if (error) throw error.code === '23505' ? new Error(`Code "${c}" already exists.`) : error;
 }

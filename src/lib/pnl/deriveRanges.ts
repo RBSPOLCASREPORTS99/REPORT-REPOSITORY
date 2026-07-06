@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { BU_CONFIGS, TRUCKING_CODES } from './buConfig';
+import { TRUCKING_CODES, type BuConfig } from './buConfig';
+import { loadBuConfigs } from './loadBuConfigs';
 import { computeFromInputs, type BuInputs, type PoolInputs } from './computeBuPnl';
 import { PNL_LINE_ITEMS } from '../constants';
 import { monthLabel } from '../format';
@@ -83,6 +84,7 @@ function addPools(a: PoolInputs, b: PoolInputs): PoolInputs {
 // Sum a set of months and materialize a report_range + its computed_pnl.
 async function materializeRange(
   db: Db,
+  configs: BuConfig[],
   months: MonthData[],
   kind: 'month' | 'ytd' | 'quarter',
   label: string,
@@ -110,7 +112,7 @@ async function materializeRange(
   }
 
   const rows: Record<string, unknown>[] = [];
-  for (const cfg of BU_CONFIGS) {
+  for (const cfg of configs) {
     if (cfg.manualEntry) continue; // Lakatan Farm is entered separately, not derived
     const bu = months.reduce((acc, m) => addBu(acc, m.inputs.get(cfg.buCode) ?? ZERO_BU), { ...ZERO_BU });
     const truckNumer = cfg.truckingMembers.reduce((s, code) => s + (truckByCode[code] ?? 0), 0);
@@ -184,20 +186,23 @@ async function materializeSales(db: Db, rangeId: string, yms: Ym[]) {
 export async function deriveRanges(db: Db, year: number): Promise<{ ranges: number }> {
   const months = await loadYearMonths(db, year);
   if (months.length === 0) return { ranges: 0 };
+  // Hardcoded (validated) BUs + any user-added BUs flagged auto_compute. No pivot
+  // here — recompute works from the stored monthly inputs, not member columns.
+  const configs = await loadBuConfigs(db);
   let count = 0;
 
   const ymOf = (ms: MonthData[]): Ym[] => ms.map((m) => ({ year: m.year, month: m.month }));
 
   for (const m of months) {
     // month range
-    const monthId = await materializeRange(db, [m], 'month', monthLabel(m.year, m.month), firstDay(m.year, m.month), lastDay(m.year, m.month));
+    const monthId = await materializeRange(db, configs, [m], 'month', monthLabel(m.year, m.month), firstDay(m.year, m.month), lastDay(m.year, m.month));
     await materializeExpenses(db, monthId, ymOf([m]));
     await materializeSales(db, monthId, ymOf([m]));
     count++;
 
     // YTD ending at this month = Jan..m (labelled by its end month, e.g. "YTD May 2026")
     const ytdMonths = months.filter((x) => x.month <= m.month);
-    const ytdId = await materializeRange(db, ytdMonths, 'ytd', `YTD ${monthLabel(m.year, m.month)}`, firstDay(year, 1), lastDay(m.year, m.month));
+    const ytdId = await materializeRange(db, configs, ytdMonths, 'ytd', `YTD ${monthLabel(m.year, m.month)}`, firstDay(year, 1), lastDay(m.year, m.month));
     await materializeExpenses(db, ytdId, ymOf(ytdMonths));
     await materializeSales(db, ytdId, ymOf(ytdMonths));
     count++;
@@ -211,7 +216,7 @@ export async function deriveRanges(db: Db, year: number): Promise<{ ranges: numb
   for (const qd of quarters) {
     if (![qd.start, qd.start + 1, qd.end].every((mm) => present.has(mm))) continue;
     const qMonths = months.filter((m) => m.month >= qd.start && m.month <= qd.end);
-    const qId = await materializeRange(db, qMonths, 'quarter', `Q${qd.q} ${year}`, firstDay(year, qd.start), lastDay(year, qd.end));
+    const qId = await materializeRange(db, configs, qMonths, 'quarter', `Q${qd.q} ${year}`, firstDay(year, qd.start), lastDay(year, qd.end));
     await materializeExpenses(db, qId, ymOf(qMonths));
     await materializeSales(db, qId, ymOf(qMonths));
     count++;

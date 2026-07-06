@@ -4,7 +4,9 @@ import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
 import { computeSide, extractPools, type TruckingInputs } from '../lib/pnl/computeBuPnl';
-import { BU_CONFIGS, TRUCKING_CODES, PULLS } from '../lib/pnl/buConfig';
+import { BU_CONFIGS, TRUCKING_CODES, PULLS, type BuConfig } from '../lib/pnl/buConfig';
+import { loadBuConfigs } from '../lib/pnl/loadBuConfigs';
+import { supabase } from '../lib/supabaseClient';
 import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
 import { isSupportWorkbook, parseSupportWorkbook, type ParsedSupport } from '../lib/importers/parseSupportWorkbook';
 import { persistSupportImport } from '../lib/importers/persistSupportImport';
@@ -29,6 +31,8 @@ export default function ImportWizard() {
   const [fileName, setFileName] = useState('');
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [pivot, setPivot] = useState<ParsedPivot | null>(null);
+  // Hardcoded BUs + any user-added ones (auto-read from this pivot by code).
+  const [configs, setConfigs] = useState<BuConfig[]>(BU_CONFIGS);
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(1);
   const [trucking, setTrucking] = useState<TruckingInputs>({});
@@ -40,6 +44,17 @@ export default function ImportWizard() {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false); // final double-check modal
+
+  // When a P&L pivot is loaded, resolve the compute list: hardcoded BUs plus any
+  // user-added BUs, whose columns are matched from this pivot by their code.
+  useEffect(() => {
+    if (!pivot) { setConfigs(BU_CONFIGS); return; }
+    let cancelled = false;
+    loadBuConfigs(supabase, pivot)
+      .then((cs) => { if (!cancelled) setConfigs(cs); })
+      .catch(() => { if (!cancelled) setConfigs(BU_CONFIGS); });
+    return () => { cancelled = true; };
+  }, [pivot]);
 
   // On the monthly step, pre-fill this month's trucking if it was already
   // imported (so re-importing/updating a month keeps the trucking you entered).
@@ -151,7 +166,7 @@ export default function ImportWizard() {
 
   // ---- Monthly P&L: pick month + trucking + preview ----------------------
   if (step === 'month' && pivot) {
-    const previews = BU_CONFIGS.filter((c) => !c.manualEntry).map((cfg) => ({
+    const previews = configs.filter((c) => !c.manualEntry).map((cfg) => ({
       cfg,
       netIncome: computeSide(pivot, cfg, trucking).net_income,
       // Raw QuickBooks Net Income for the BU column(s), before any BR

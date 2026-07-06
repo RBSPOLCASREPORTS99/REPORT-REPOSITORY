@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import type { ParsedPivot } from './parsePivotTab';
-import { BU_CONFIGS, TRUCKING_CODES } from '../pnl/buConfig';
+import { TRUCKING_CODES } from '../pnl/buConfig';
+import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { extractBuInputs, extractPools, type TruckingInputs } from '../pnl/computeBuPnl';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
@@ -43,7 +44,8 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
 
   // 4. replace inputs / pools / trucking
   await supabase.from('monthly_pnl_inputs').delete().eq('month_id', monthId);
-  const inputRows = BU_CONFIGS.filter((c) => !c.manualEntry).map((cfg) => ({ month_id: monthId, bu_code: cfg.buCode, ...extractBuInputs(pivot, cfg) }));
+  const configs = await loadBuConfigs(supabase, pivot);
+  const inputRows = configs.filter((c) => !c.manualEntry).map((cfg) => ({ month_id: monthId, bu_code: cfg.buCode, ...extractBuInputs(pivot, cfg) }));
   const { error: inErr } = await supabase.from('monthly_pnl_inputs').insert(inputRows);
   if (inErr) throw inErr;
 
