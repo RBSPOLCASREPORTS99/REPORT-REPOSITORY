@@ -441,6 +441,22 @@ export async function saveBuName(code: string, displayCode: string, name: string
   if (error) throw error;
 }
 
+// Add a new business unit (Finance). It appears in the names list and labels;
+// to pull P&L figures it also needs its QuickBooks column wired into the
+// compute config (a code change).
+export async function createBusinessUnit(code: string, displayCode: string, name: string): Promise<void> {
+  const c = code.trim().toUpperCase().replace(/\s+/g, '');
+  if (!c) throw new Error('Enter a code.');
+  if (!name.trim()) throw new Error('Enter a name.');
+  const { data: maxRow } = await supabase.from('business_units').select('sort_order').order('sort_order', { ascending: false }).limit(1).maybeSingle();
+  const sortOrder = ((maxRow?.sort_order as number) ?? 0) + 10;
+  const { error } = await supabase.from('business_units').insert({
+    code: c, name: name.trim(), display_code: displayCode.trim() || null,
+    is_profit_center: true, sort_order: sortOrder,
+  });
+  if (error) throw error.code === '23505' ? new Error(`Code "${c}" already exists.`) : error;
+}
+
 // ---------------------------------------------------------------------------
 // User management (Finance-only; enforced by RLS on allowed_users / _bus).
 // ---------------------------------------------------------------------------
