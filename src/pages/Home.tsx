@@ -73,11 +73,13 @@ export default function Home() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Business Units</h1>
-        <SetMonthSelect ranges={ranges} />
+      <div className="flex items-center gap-2">
+        <h1 className="min-w-0 shrink truncate text-lg font-semibold text-slate-900 dark:text-slate-100">Business Units</h1>
+        <div className="flex flex-1 justify-center">
+          <SetMonthSelect ranges={ranges} />
+        </div>
         <button onClick={refresh} title="Reload data"
-          className="ml-auto rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
           ↻ Refresh
         </button>
       </div>
