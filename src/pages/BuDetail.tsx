@@ -131,7 +131,7 @@ export default function BuDetail() {
       <div className="flex flex-wrap items-center gap-2">
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
         {(expensesAvailable || salesAvailable) && (
-          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60 sm:ml-[9%]">
             {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
               if (v === 'expenses' && !expensesAvailable) return null;
               if (v === 'sales' && !salesAvailable) return null;
