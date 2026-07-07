@@ -127,8 +127,10 @@ export default function BuDetail() {
 
       {/* One controls row: YTD/QTR/Month comparison buttons, then the view
           toggle (P&L/Expenses/Sales), with Support allocation pinned far right
-          — keeps everything on a single line so the table gets more space. */}
-      <div className="flex flex-wrap items-center gap-2">
+          — keeps everything on a single line so the table gets more space.
+          Sticky so it stays frozen in view while the page scrolls (offset below
+          the mobile top bar on small screens). */}
+      <div className="sticky top-14 z-30 -mx-4 flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 lg:top-0 dark:border-slate-700 dark:bg-slate-900">
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
         {(expensesAvailable || salesAvailable) && (
           <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60 sm:ml-[9%]">
