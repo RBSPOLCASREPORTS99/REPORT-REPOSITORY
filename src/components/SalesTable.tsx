@@ -84,23 +84,23 @@ export default function SalesTable({
         )}
       </div>
 
-      <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm dark:bg-slate-800">
+      <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-0">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
-              <th className="sticky left-0 top-0 z-20 bg-white px-4 py-2 text-left dark:bg-slate-800">Item</th>
-              <th className="sticky top-0 z-10 bg-white px-2 py-2 text-left dark:bg-slate-800">U/M</th>
-              <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800">{priorLabel}</th>
-              <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800">{currentLabel}</th>
-              <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800">DIFF</th>
-              <th className="sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800">%DIFF</th>
+            <tr className="border-b border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
+              <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Item</th>
+              <th className="sticky top-0 z-10 bg-slate-100 px-2 py-2 text-left dark:bg-slate-900/80">U/M</th>
+              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">{priorLabel}</th>
+              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">{currentLabel}</th>
+              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">DIFF</th>
+              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">%DIFF</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((r, i) => {
               const up = r.diff >= 0;
               return (
-                <tr key={r.item + i} className="border-b border-slate-50 dark:border-slate-700/60">
+                <tr key={r.item + i} className="border-b border-slate-200 dark:border-slate-700/60">
                   <td className="sticky left-0 bg-white px-4 py-2.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{r.item}</td>
                   <td className="px-2 py-2.5 text-slate-400 dark:text-slate-500">{r.uom}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{qty(r.prior)}</td>

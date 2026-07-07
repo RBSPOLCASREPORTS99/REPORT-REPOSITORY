@@ -25,14 +25,14 @@ export default function ExpenseTable({
 
   const money = (v: number) => formatMoney(v, 'full', units);
   const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
-  const headCls = 'sticky top-0 z-10 bg-white px-3 py-2 text-right dark:bg-slate-800';
+  const headCls = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
 
   return (
-    <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm dark:bg-slate-800">
+    <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-0">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
-            <th className="sticky left-0 top-0 z-20 bg-white px-4 py-2 text-left dark:bg-slate-800">Account</th>
+          <tr className="border-b border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
+            <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Account</th>
             <th className={headCls}>{priorLabel}</th>
             <th className={`${headCls} px-2`}>%</th>
             <th className={headCls}>{currentLabel}</th>
@@ -44,8 +44,8 @@ export default function ExpenseTable({
         <tbody>
           {sections.map((sec) => (
             <Fragment key={sec.section}>
-              <tr className="bg-slate-50/80 font-semibold text-slate-900 dark:bg-slate-700/50 dark:text-slate-100">
-                <td className="sticky left-0 bg-slate-50 px-4 py-2 text-left uppercase dark:bg-slate-700">{SECTION_LABELS[sec.section]}</td>
+              <tr className="border-b border-slate-200 bg-slate-100/80 font-semibold text-slate-900 dark:border-slate-700/60 dark:bg-slate-700/50 dark:text-slate-100">
+                <td className="sticky left-0 bg-slate-100 px-4 py-2 text-left uppercase dark:bg-slate-700">{SECTION_LABELS[sec.section]}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{money(sec.priorTotal)}</td>
                 <td className="px-2 py-2" />
                 <td className="px-3 py-2 text-right tabular-nums">{money(sec.total)}</td>
@@ -58,7 +58,7 @@ export default function ExpenseTable({
               {sec.rows.map((row) => {
                 const up = row.diff >= 0;
                 return (
-                  <tr key={sec.section + row.account} className="border-b border-slate-50">
+                  <tr key={sec.section + row.account} className="border-b border-slate-200 dark:border-slate-700/60">
                     <td className="sticky left-0 bg-white dark:bg-slate-800 px-4 py-2.5 pl-6 text-left text-slate-600 dark:text-slate-300">{row.account}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.prior)}`}>{money(row.prior)}</td>
                     <td className="px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500">{formatPercent(row.priorPct)}</td>

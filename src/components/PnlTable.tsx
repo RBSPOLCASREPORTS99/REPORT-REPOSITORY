@@ -44,14 +44,14 @@ export default function PnlTable({
   expLines.sort((a, b) => Math.abs(b.current) - Math.abs(a.current));
   expSlots.forEach((slot, k) => { rows[slot] = expLines[k]; });
 
-  const headCls = 'sticky top-0 z-10 bg-white dark:bg-slate-800 px-3 py-2 text-right';
+  const headCls = 'sticky top-0 z-10 bg-slate-100 dark:bg-slate-900/80 px-3 py-2 text-right';
 
   return (
-    <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm dark:bg-slate-800">
+    <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-0">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
-            <th className="sticky left-0 top-0 z-20 bg-white px-4 py-2 text-left dark:bg-slate-800">Line item</th>
+          <tr className="border-b border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
+            <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Line item</th>
             <th className={headCls}>{priorLabel}</th>
             <th className={`${headCls} px-2`}>%</th>
             <th className={headCls}>{currentLabel}</th>
@@ -67,11 +67,11 @@ export default function PnlTable({
             const up = line.diff >= 0;
             // Favourable = income up OR cost down; drives the DIFF/%DIFF colour.
             const favorable = COST_KEYS.has(line.key) ? line.diff < 0 : line.diff >= 0;
-            const rowCls = bold ? 'bg-slate-50/60 font-semibold dark:bg-slate-700/50' : '';
+            const rowCls = bold ? 'bg-slate-100/80 font-semibold dark:bg-slate-700/50' : '';
             const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
             return (
-              <tr key={line.key} className={`border-b border-slate-50 dark:border-slate-700/60 ${rowCls}`}>
-                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${bold ? 'bg-slate-50 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+              <tr key={line.key} className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls}`}>
+                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${bold ? 'bg-slate-100 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
                   {line.label}
                 </td>
                 {line.isPct ? (
