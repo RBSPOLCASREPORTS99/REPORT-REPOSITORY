@@ -125,8 +125,9 @@ export default function BuDetail() {
         </div>
       </div>
 
-      {/* YTD / QTR / Month comparison buttons first, then the view toggle
-          (P&L / Expenses / Sales) on the same line. */}
+      {/* One controls row: YTD/QTR/Month comparison buttons, then the view
+          toggle (P&L/Expenses/Sales), with Support allocation pinned far right
+          — keeps everything on a single line so the table gets more space. */}
       <div className="flex flex-wrap items-center gap-2">
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
         {(expensesAvailable || salesAvailable) && (
@@ -144,9 +145,12 @@ export default function BuDetail() {
             })}
           </div>
         )}
+        {view === 'pnl' && (
+          <div className="ml-auto">
+            <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />
+          </div>
+        )}
       </div>
-
-      {view === 'pnl' && <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />}
 
       {loading ? (
         <p className="text-slate-400 dark:text-slate-500">Loading…</p>
