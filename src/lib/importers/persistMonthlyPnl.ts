@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import type { ParsedPivot } from './parsePivotTab';
 import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
+import { TRUCKS, truckPivotColumn } from '../pnl/truckConfig';
 import { extractBuInputs, extractPools, type TruckingInputs } from '../pnl/computeBuPnl';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
@@ -59,6 +60,19 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   if (truckRows.length) {
     const { error: tErr } = await supabase.from('monthly_trucking').insert(truckRows);
     if (tErr) throw tErr;
+  }
+
+  // 4b. per-truck raw P&L lines for the Simulated P&L per Truck — pulled from the
+  // QB per-truck columns ("BU10 - <plate> <code>"). Additive, separate table, so
+  // this never affects the validated per-BU compute above.
+  await supabase.from('monthly_truck_inputs').delete().eq('month_id', monthId);
+  const truckInputRows = TRUCKS
+    .map((t) => ({ truck: t, col: truckPivotColumn(pivot, t.plate) }))
+    .filter((x) => x.col)
+    .map((x) => ({ month_id: monthId, truck_code: x.truck.code, ...extractBuInputs(pivot, { memberColumns: [x.col as string] }) }));
+  if (truckInputRows.length) {
+    const { error: tiErr } = await supabase.from('monthly_truck_inputs').insert(truckInputRows);
+    if (tiErr) throw tiErr;
   }
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);

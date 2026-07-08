@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient';
 import { BUSINESS_UNITS, PNL_LINE_ITEMS } from './constants';
+import { monthLabel } from './format';
+import { TRUCKS } from './pnl/truckConfig';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
 const LINE_ORDER = new Map(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
@@ -533,4 +535,79 @@ export async function removeAllowedUser(email: string): Promise<void> {
   const del = await supabase.from('allowed_users').delete().eq('email', e);
   if (del.error) throw del.error;
   if (userId) await supabase.from('profile_bus').delete().eq('user_id', userId);
+}
+
+// ---------------------------------------------------------------------------
+// Simulated P&L per Truck (BU10). Income comes from the TRUCKING DASHBOARD
+// (monthly_truck_income); expenses from the QB per-truck columns
+// (monthly_truck_inputs). Shows the latest month with truck data vs the
+// previous month — all figures in ₱'000.
+// ---------------------------------------------------------------------------
+export interface TruckPnlRow {
+  code: string;
+  income: number;
+  expense: number;
+  net: number;
+  priorNet: number;
+  netChg: number; // fraction
+}
+export interface TruckPnlResult {
+  hasData: boolean;
+  currentLabel: string;
+  priorLabel: string;
+  rows: TruckPnlRow[];
+  totals: { income: number; expense: number; net: number; priorNet: number; netChg: number };
+}
+
+interface TruckInputRow {
+  month_id: string; truck_code: string;
+  cogs: number; admin_expense: number; discounting_expense: number;
+  operations_expense: number; repairs_expense: number; salaries_expense: number; other_income: number;
+}
+
+export async function fetchTruckPnl(): Promise<TruckPnlResult> {
+  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', rows: [], totals: { income: 0, expense: 0, net: 0, priorNet: 0, netChg: 0 } };
+  const { data: months } = await supabase.from('pnl_months').select('id, year, month');
+  if (!months || months.length === 0) return empty;
+  const sorted = [...months].sort((a, b) => a.year - b.year || a.month - b.month) as { id: string; year: number; month: number }[];
+
+  const { data: incomeAll } = await supabase.from('monthly_truck_income').select('month_id, truck_code, income');
+  const incomeRows = (incomeAll ?? []) as { month_id: string; truck_code: string; income: number }[];
+  const withData = new Set(incomeRows.map((r) => r.month_id));
+
+  let curIdx = -1;
+  for (let i = sorted.length - 1; i >= 0; i--) if (withData.has(sorted[i].id)) { curIdx = i; break; }
+  if (curIdx === -1) return empty;
+  const cur = sorted[curIdx];
+  const prior = curIdx > 0 ? sorted[curIdx - 1] : null;
+  const ids = prior ? [cur.id, prior.id] : [cur.id];
+
+  const { data: inputsAll } = await supabase.from('monthly_truck_inputs').select('*').in('month_id', ids);
+  const inputRows = (inputsAll ?? []) as TruckInputRow[];
+  const expenseOf = (r: TruckInputRow) => r.cogs + r.admin_expense + r.discounting_expense + r.operations_expense + r.repairs_expense + r.salaries_expense;
+  const cell = (monthId: string, code: string) => {
+    const inc = incomeRows.find((x) => x.month_id === monthId && x.truck_code === code)?.income ?? 0;
+    const inp = inputRows.find((x) => x.month_id === monthId && x.truck_code === code);
+    const exp = inp ? expenseOf(inp) : 0;
+    const oi = inp ? inp.other_income : 0;
+    return { income: inc, expense: exp, net: inc - exp + oi };
+  };
+
+  const rows: TruckPnlRow[] = TRUCKS.map(({ code }) => {
+    const c = cell(cur.id, code);
+    const p = prior ? cell(prior.id, code) : { income: 0, expense: 0, net: 0 };
+    return { code, income: c.income, expense: c.expense, net: c.net, priorNet: p.net, netChg: p.net !== 0 ? (c.net - p.net) / Math.abs(p.net) : 0 };
+  }).filter((r) => r.income !== 0 || r.expense !== 0 || r.priorNet !== 0);
+
+  const sum = (f: (r: TruckPnlRow) => number) => rows.reduce((s, r) => s + f(r), 0);
+  const totals = { income: sum((r) => r.income), expense: sum((r) => r.expense), net: sum((r) => r.net), priorNet: sum((r) => r.priorNet), netChg: 0 };
+  totals.netChg = totals.priorNet !== 0 ? (totals.net - totals.priorNet) / Math.abs(totals.priorNet) : 0;
+
+  return {
+    hasData: rows.length > 0,
+    currentLabel: monthLabel(cur.year, cur.month),
+    priorLabel: prior ? monthLabel(prior.year, prior.month) : '—',
+    rows,
+    totals,
+  };
 }

@@ -40,8 +40,9 @@ export interface PoolInputs {
   bu10_truck_total: number; // positive cost
 }
 
-// Pull one BU's additive raw lines out of a raw pivot.
-export function extractBuInputs(pivot: ParsedPivot, cfg: BuConfig): BuInputs {
+// Pull one BU's (or one truck's) additive raw lines out of a raw pivot. Only
+// the member columns are needed, so a truck can pass its single QB column here.
+export function extractBuInputs(pivot: ParsedPivot, cfg: { memberColumns: string[] }): BuInputs {
   const cols = cfg.memberColumns;
   return {
     gross_sales: sumMemberCols(pivot, cols, PULLS.grossSales.hierCol, PULLS.grossSales.label),

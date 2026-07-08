@@ -12,12 +12,14 @@ import { isSupportWorkbook, parseSupportWorkbook, type ParsedSupport } from '../
 import { persistSupportImport } from '../lib/importers/persistSupportImport';
 import { isExpenseTxWorkbook, parseExpenseTransactions, type ParsedExpenseTx } from '../lib/importers/parseExpenseTransactions';
 import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '../lib/importers/parseSalesTransactions';
+import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
+import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadTruckingByYearMonth } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
-type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'done';
+type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'done';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = [2024, 2025, 2026, 2027];
@@ -38,6 +40,7 @@ export default function ImportWizard() {
   const [trucking, setTrucking] = useState<TruckingInputs>({});
   const [monthExists, setMonthExists] = useState(false);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
+  const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
@@ -79,6 +82,15 @@ export default function ImportWizard() {
       setFileBuffer(buf);
       const wb = XLSX.read(buf, { type: 'array' });
 
+      if (isTruckingDashboard(wb)) {
+        const parsed = parseTruckingDashboard(buf);
+        if (parsed.months.length === 0) { setParseError('No dated month columns found in the TRUCKING DASHBOARD (Sales per Truck / Sales per BU).'); return; }
+        setDashboard(parsed);
+        setYear(parsed.months[0].year);
+        setMonth(parsed.months[0].month);
+        setStep('dashboard');
+        return;
+      }
       if (isSalesTxWorkbook(wb)) {
         const parsed = parseSalesTransactions(buf);
         if (parsed.months.length === 0) { setParseError('No dated sales transactions found in "QB Sales Data".'); return; }
@@ -140,6 +152,15 @@ export default function ImportWizard() {
     try {
       const res = await persistExpenseTx(expense, fileName, fileBuffer, user.id);
       if (res.ranges === 0) { setConfirmError('No matching periods found. Import the P&L for these months first.'); return; }
+      setStep('done');
+    } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
+  }
+  async function handleConfirmDashboard() {
+    if (!dashboard || !user) return;
+    setConfirming(true); setConfirmError('');
+    try {
+      const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
+      if (res.trucks === 0 && res.bus === 0) { setConfirmError(`No truck or BU data found for ${monthLabel(year, month)} in this dashboard.`); return; }
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -328,6 +349,48 @@ export default function ImportWizard() {
   }
   if (step === 'support' && support) {
     return secondaryPreview('Import support allocations', `Detected month: ${monthLabel(support.currentMonth.year, support.currentMonth.month)}`, `${support.buCodes.length} business units · ${support.values.length} allocation values (Finance, HR, Management).`, handleConfirmSupport, support.warnings);
+  }
+
+  // ---- TRUCKING DASHBOARD: per-truck income + per-BU allocation -----------
+  if (step === 'dashboard' && dashboard) {
+    const serial = excelSerial(year, month);
+    const truckInc = dashboard.truckIncome.get(serial) ?? {};
+    const buAlloc = dashboard.buAlloc.get(serial) ?? {};
+    const truckTotal = Object.values(truckInc).reduce((s, v) => s + v, 0); // full pesos
+    const buTotal = Object.values(buAlloc).reduce((s, v) => s + v, 0);     // ₱'000
+    const truckCount = Object.values(truckInc).filter((v) => v !== 0).length;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import TRUCKING DASHBOARD</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Reads per-truck income (<span className="font-medium">Sales per Truck</span>) and per-BU trucking
+          allocation (<span className="font-medium">Sales per BU</span>). The allocation auto-fills the P&amp;L
+          trucking for that month and recomputes YTD/quarter.
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
+          <select
+            value={`${year}-${month}`}
+            onChange={(e) => { const [y, m] = e.target.value.split('-').map(Number); setYear(y); setMonth(m); }}
+            className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+          >
+            {dashboard.months.map((m) => <option key={m.serial} value={`${m.year}-${m.month}`}>{monthLabel(m.year, m.month)}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1 rounded-2xl bg-white p-4 text-sm shadow-sm dark:bg-slate-800">
+          <p className="text-slate-700 dark:text-slate-200"><span className="font-medium">{truckCount}</span> trucks · income total <span className="font-medium">₱{formatThousands(truckTotal / 1000)}k</span></p>
+          <p className="text-slate-700 dark:text-slate-200">Per-BU trucking allocation total <span className="font-medium">{formatThousands(buTotal)}k</span> — auto-fills the P&amp;L trucking</p>
+          {truckCount === 0 && <p className="text-amber-700 dark:text-amber-400">No truck income found for this month — pick another month.</p>}
+        </div>
+        {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
+          <button onClick={handleConfirmDashboard} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {confirming ? 'Importing…' : `Import ${monthLabel(year, month)}`}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ---- Upload step --------------------------------------------------------

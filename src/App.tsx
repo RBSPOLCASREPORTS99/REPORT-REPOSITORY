@@ -17,6 +17,7 @@ const FarmEntry = lazy(() => import('./pages/FarmEntry'));
 const PublishManager = lazy(() => import('./pages/PublishManager'));
 const PresentMode = lazy(() => import('./pages/PresentMode'));
 const TruckingEntry = lazy(() => import('./pages/TruckingEntry'));
+const TruckPnl = lazy(() => import('./pages/TruckPnl'));
 const Users = lazy(() => import('./pages/Users'));
 const Account = lazy(() => import('./pages/Account'));
 const BuNames = lazy(() => import('./pages/BuNames'));
@@ -45,6 +46,7 @@ export default function App() {
                 <Route element={<RequireFinance />}>
                   <Route path="/import" element={<ImportWizard />} />
                   <Route path="/trucking" element={<TruckingEntry />} />
+                  <Route path="/truck-pnl" element={<TruckPnl />} />
                   <Route path="/farm" element={<FarmEntry />} />
                   <Route path="/publish" element={<PublishManager />} />
                   <Route path="/users" element={<Users />} />
