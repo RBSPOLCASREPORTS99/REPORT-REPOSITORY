@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { fetchTruckPnl, fetchRanges, type TruckPnlResult } from '../lib/queries';
 import { useUi } from '../contexts/UiContext';
 import { formatMoney, formatPercent } from '../lib/format';
+import { TableSkeleton } from '../components/Skeleton';
 
 // Simulated P&L per Truck (BU10). Income from the TRUCKING DASHBOARD, expenses
 // by account from the QuickBooks per-truck columns. Pick one truck (or Total)
@@ -58,7 +59,7 @@ export default function TruckPnl() {
       )}
 
       {loading ? (
-        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
+        <TableSkeleton />
       ) : !data?.hasData ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">
           No per-truck data yet. Import the TRUCKING DASHBOARD and that month's QuickBooks P&amp;L.

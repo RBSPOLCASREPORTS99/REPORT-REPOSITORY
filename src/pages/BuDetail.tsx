@@ -8,6 +8,7 @@ import SetMonthSelect from '../components/SetMonthSelect';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
+import { TableSkeleton } from '../components/Skeleton';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchTrend, fetchRanges, rangesWithSupport,
@@ -156,7 +157,7 @@ export default function BuDetail() {
       </div>
 
       {loading ? (
-        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
+        <TableSkeleton />
       ) : view === 'expenses' ? (
         <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'sales' ? (

@@ -3,6 +3,7 @@ import ComparisonControl, { type ComparisonState } from '../components/Compariso
 import SetMonthSelect from '../components/SetMonthSelect';
 import BuCard from '../components/BuCard';
 import TruckingCard from '../components/TruckingCard';
+import { BuCardsSkeleton } from '../components/Skeleton';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
@@ -109,7 +110,7 @@ export default function Home() {
       </div>
 
       {loading ? (
-        <p className="text-center text-slate-400 dark:text-slate-500">Loading…</p>
+        <BuCardsSkeleton />
       ) : ranges.length === 0 ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No published reports yet.</p>
       ) : cards.length === 0 && !truck?.hasData ? (
