@@ -240,7 +240,7 @@ export default function ImportWizard() {
         <div>
           <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Salaries and Wages per Truck (₱ '000)</p>
           <p className="mb-1 text-xs text-slate-400 dark:text-slate-500">QuickBooks posts BU10 salaries in total, so enter each truck's share here.</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3 sm:gap-x-10">
             {TRUCKS.map((t) => (
               <label key={t.code} className="flex items-center gap-2 text-sm">
                 <span className="w-14 shrink-0 text-slate-600 dark:text-slate-300">{t.code}</span>

@@ -62,7 +62,7 @@ export default function TruckingEntry() {
         </select>
       </label>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3 sm:gap-x-10">
         {TRUCKS.map((t) => (
           <label key={t.code} className="flex items-center gap-2 text-sm">
             <span className="w-14 shrink-0 text-slate-600 dark:text-slate-300">{t.code}</span>
