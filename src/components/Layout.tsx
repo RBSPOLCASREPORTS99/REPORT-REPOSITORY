@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { prefetchRoute } from '../lib/prefetch';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import Logo from './Logo';
@@ -114,6 +115,7 @@ export default function Layout() {
           {items.map((it) => (
             <NavLink key={it.to} to={it.to} end={it.end}
               title={sidebarCollapsed ? it.label : undefined}
+              onMouseEnter={() => prefetchRoute(it.to)} onFocus={() => prefetchRoute(it.to)}
               className={({ isActive }) => navLinkCls(isActive, sidebarCollapsed)}>
               <span className="text-base leading-none">{it.icon}</span>
               {!sidebarCollapsed && <span className="truncate">{it.label}</span>}
@@ -165,7 +167,8 @@ export default function Layout() {
               <button aria-hidden onClick={() => setOpen(false)} className="fixed inset-0 top-14 z-10 cursor-default" />
               <nav className="absolute right-2 top-full z-20 w-60 max-w-[calc(100vw-1rem)] space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-800">
                 {items.map((it) => (
-                  <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => navLinkCls(isActive)}>
+                  <NavLink key={it.to} to={it.to} end={it.end} onMouseEnter={() => prefetchRoute(it.to)} onFocus={() => prefetchRoute(it.to)}
+                    className={({ isActive }) => navLinkCls(isActive)}>
                     <span className="text-base leading-none">{it.icon}</span>
                     <span>{it.label}</span>
                   </NavLink>

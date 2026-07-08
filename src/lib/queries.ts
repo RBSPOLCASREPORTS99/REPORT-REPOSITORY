@@ -591,7 +591,7 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
   const prior = curIdx > 0 ? sorted[curIdx - 1] : null;
   const ids = prior ? [cur.id, prior.id] : [cur.id];
 
-  const { data: expAll } = await supabase.from('monthly_truck_expense').select('*').in('month_id', ids);
+  const { data: expAll } = await supabase.from('monthly_truck_expense').select('month_id, truck_code, section, account, amount').in('month_id', ids);
   const expRows = (expAll ?? []) as TruckExpenseRow[];
 
   const { data: salAll } = await supabase.from('monthly_truck_salary').select('month_id, truck_code, amount').in('month_id', ids);
