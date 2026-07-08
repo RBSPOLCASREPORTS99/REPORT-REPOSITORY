@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { TRUCKING_CODES } from './pnl/buConfig';
+import { TRUCKS } from './pnl/truckConfig';
 import { deriveRanges } from './pnl/deriveRanges';
 import type { TruckingInputs } from './pnl/computeBuPnl';
 
@@ -62,6 +63,23 @@ export async function truckIncomeExists(year: number, month: number): Promise<bo
   if (!pm) return false;
   const { count } = await supabase.from('monthly_truck_income').select('month_id', { count: 'exact', head: true }).eq('month_id', pm.id as string);
   return (count ?? 0) > 0;
+}
+
+// Per-truck Salaries & Wages for a month (edited on the Truck Salaries screen).
+export async function loadMonthSalaries(monthId: string): Promise<Record<string, number>> {
+  const { data } = await supabase.from('monthly_truck_salary').select('truck_code, amount').eq('month_id', monthId);
+  const out: Record<string, number> = {};
+  for (const r of data ?? []) out[r.truck_code as string] = r.amount as number;
+  return out;
+}
+
+export async function saveMonthSalaries(monthId: string, salaries: Record<string, number>): Promise<void> {
+  await supabase.from('monthly_truck_salary').delete().eq('month_id', monthId);
+  const rows = TRUCKS.map((t) => ({ month_id: monthId, truck_code: t.code, amount: salaries[t.code] ?? 0 })).filter((r) => r.amount !== 0);
+  if (rows.length) {
+    const { error } = await supabase.from('monthly_truck_salary').insert(rows);
+    if (error) throw error;
+  }
 }
 
 export async function saveMonthTrucking(monthId: string, year: number, trucking: TruckingInputs): Promise<void> {

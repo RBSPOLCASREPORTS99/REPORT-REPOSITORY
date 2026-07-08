@@ -27,7 +27,7 @@ export default function Layout() {
     ...(isFinance
       ? [
           { to: '/import', label: 'Import data', icon: '⬆️' },
-          { to: '/trucking', label: 'Trucking', icon: '🚚' },
+          { to: '/trucking', label: 'Truck Salaries', icon: '🚚' },
           { to: '/farm', label: 'Lakatan Farm', icon: '🌱' },
           { to: '/publish', label: 'Publish periods', icon: '📢' },
           { to: '/users', label: 'Users & access', icon: '👥' },
