@@ -86,7 +86,11 @@ export default function Home() {
 
       <div className="flex flex-wrap items-center gap-2">
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
-        <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />
+        {methodAvailable && (
+          <div className="ml-auto">
+            <AllocMethodToggle method={method} available={methodAvailable} onChange={setMethod} />
+          </div>
+        )}
       </div>
 
       {loading ? (
