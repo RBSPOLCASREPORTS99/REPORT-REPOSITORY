@@ -28,9 +28,10 @@ export default function TruckPnl() {
   }, [compSetMonthId]);
 
   const money = (v: number) => formatMoney(v, 'thousands', units);
-  const chgCls = (v: number) => (v >= 0 ? 'text-green-600' : 'text-red-600');
-
-  const headCls = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
+  // %Chg colour: for expense lines an increase is unfavourable (red); for
+  // income / profit lines an increase is favourable (green).
+  const chgCls = (v: number, cost?: boolean) => ((cost ? v <= 0 : v >= 0) ? 'text-green-600' : 'text-red-600');
+  const th = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
 
   return (
     <div className="space-y-4">
@@ -40,7 +41,7 @@ export default function TruckPnl() {
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           BU10 - Trucking. Income from the TRUCKING DASHBOARD (Sales per Truck); expenses from the
           QuickBooks per-truck columns of the monthly P&amp;L. Figures in ₱'000.
-          {data?.hasData && <> Showing <span className="font-medium">{data.currentLabel}</span> vs <span className="font-medium">{data.priorLabel}</span>.</>}
+          {data?.hasData && <> Showing <span className="font-medium">{data.currentLabel}</span>, %Chg vs <span className="font-medium">{data.priorLabel}</span>.</>}
         </p>
       </div>
 
@@ -57,33 +58,29 @@ export default function TruckPnl() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
-                <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Truck</th>
-                <th className={headCls}>Trucking Income</th>
-                <th className={headCls}>Total Expense</th>
-                <th className={headCls}>Net Income</th>
-                <th className={headCls}>Net %Chg</th>
+                <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Line item</th>
+                {data.truckCodes.map((c) => <th key={c} className={th}>{c}</th>)}
+                <th className={`${th} font-bold`}>Total</th>
+                <th className={th}>%Chg</th>
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.code} className="border-b border-slate-200 dark:border-slate-700/60">
-                  <td className="sticky left-0 bg-white px-4 py-2.5 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">{r.code}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-900 dark:text-slate-100">{money(r.income)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{money(r.expense)}</td>
-                  <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${r.net < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>{money(r.net)}</td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${chgCls(r.netChg)}`}>{formatPercent(r.netChg)}</td>
-                </tr>
-              ))}
+              {data.lines.map((line) => {
+                const rowCls = line.bold ? 'bg-slate-100/80 font-semibold dark:bg-slate-700/50' : '';
+                const stickyCls = line.bold ? 'bg-slate-100 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
+                return (
+                  <tr key={line.key} className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls}`}>
+                    <td className={`sticky left-0 px-4 py-2.5 text-left ${stickyCls}`}>{line.label}</td>
+                    {data.truckCodes.map((c) => (
+                      <td key={c} className={`px-3 py-2.5 text-right tabular-nums ${numCls(line.byTruck[c] ?? 0)}`}>{money(line.byTruck[c] ?? 0)}</td>
+                    ))}
+                    <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${numCls(line.total)}`}>{money(line.total)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${chgCls(line.chg, line.cost)}`}>{formatPercent(line.chg)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
-            <tfoot>
-              <tr className="sticky bottom-0 z-10 border-t-2 border-slate-300 bg-slate-100 font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
-                <td className="sticky left-0 bg-slate-100 px-4 py-2.5 uppercase dark:bg-slate-700">Total</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{money(data.totals.income)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{money(data.totals.expense)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${data.totals.net < 0 ? 'text-red-600' : ''}`}>{money(data.totals.net)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${chgCls(data.totals.netChg)}`}>{formatPercent(data.totals.netChg)}</td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}

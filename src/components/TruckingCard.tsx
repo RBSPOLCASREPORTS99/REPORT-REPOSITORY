@@ -7,8 +7,8 @@ import type { TruckPnlResult } from '../lib/queries';
 // Simulated P&L (/truck-pnl) instead of a BU detail page.
 export default function TruckingCard({ truck, index = 0 }: { truck: TruckPnlResult; index?: number }) {
   const { units } = useUi();
-  const net = truck.totals.net;
-  const diff = net - truck.totals.priorNet;
+  const net = truck.net;
+  const diff = net - truck.priorNet;
   const up = diff >= 0;
   const loss = net < 0;
   const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);

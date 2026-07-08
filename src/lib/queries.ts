@@ -543,20 +543,27 @@ export async function removeAllowedUser(email: string): Promise<void> {
 // (monthly_truck_inputs). Shows the latest month with truck data vs the
 // previous month — all figures in ₱'000.
 // ---------------------------------------------------------------------------
-export interface TruckPnlRow {
-  code: string;
-  income: number;
-  expense: number;
-  net: number;
-  priorNet: number;
-  netChg: number; // fraction
+// One P&L line across all trucks for the current month, plus its TOTAL and the
+// TOTAL's month-over-month change.
+export interface TruckPnlLine {
+  key: string;
+  label: string;
+  bold?: boolean;
+  cost?: boolean;                 // an expense line (increase is unfavourable)
+  byTruck: Record<string, number>; // truck_code -> current value
+  total: number;
+  priorTotal: number;
+  chg: number;                    // total %chg vs prior month (fraction)
 }
 export interface TruckPnlResult {
   hasData: boolean;
   currentLabel: string;
   priorLabel: string;
-  rows: TruckPnlRow[];
-  totals: { income: number; expense: number; net: number; priorNet: number; netChg: number };
+  truckCodes: string[];           // trucks present this month, in fleet order
+  lines: TruckPnlLine[];
+  net: number;                    // Net Income total (for the Home card)
+  priorNet: number;
+  netChg: number;
 }
 
 interface TruckInputRow {
@@ -564,11 +571,26 @@ interface TruckInputRow {
   cogs: number; admin_expense: number; discounting_expense: number;
   operations_expense: number; repairs_expense: number; salaries_expense: number; other_income: number;
 }
+interface Metrics { income: number; cogs: number; admin: number; operations: number; repairs: number; salaries: number; discounting: number; other: number }
+
+// Ordered P&L lines, matching the Excel SIM sheet. Total Expense excludes COGS
+// (which sits above Gross Profit); Net Income = Gross Profit − Total Expense.
+const TRUCK_LINE_DEFS: { key: string; label: string; bold?: boolean; cost?: boolean; calc: (m: Metrics) => number }[] = [
+  { key: 'trucking_income', label: 'Trucking Income', calc: (m) => m.income },
+  { key: 'cogs', label: 'Cost of Goods Sold', cost: true, calc: (m) => m.cogs },
+  { key: 'gross_profit', label: 'Gross Profit', bold: true, calc: (m) => m.income - m.cogs },
+  { key: 'admin', label: 'Admin Expenses', cost: true, calc: (m) => m.admin },
+  { key: 'operations', label: 'Operations Expenses', cost: true, calc: (m) => m.operations },
+  { key: 'repairs', label: 'Repairs / Maintenance', cost: true, calc: (m) => m.repairs },
+  { key: 'salaries', label: 'Salaries & Wages', cost: true, calc: (m) => m.salaries },
+  { key: 'total_expense', label: 'Total Expense', bold: true, cost: true, calc: (m) => m.admin + m.operations + m.repairs + m.salaries + m.discounting },
+  { key: 'net_income', label: 'Net Income', bold: true, calc: (m) => (m.income - m.cogs) - (m.admin + m.operations + m.repairs + m.salaries + m.discounting) + m.other },
+];
 
 // `target` picks the current month (prior = the previous imported month); when
-// omitted, uses the latest month that has truck income.
+// omitted, uses the latest month that has truck income. All figures in ₱'000.
 export async function fetchTruckPnl(target?: { year: number; month: number }): Promise<TruckPnlResult> {
-  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', rows: [], totals: { income: 0, expense: 0, net: 0, priorNet: 0, netChg: 0 } };
+  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', truckCodes: [], lines: [], net: 0, priorNet: 0, netChg: 0 };
   const { data: months } = await supabase.from('pnl_months').select('id, year, month');
   if (!months || months.length === 0) return empty;
   const sorted = [...months].sort((a, b) => a.year - b.year || a.month - b.month) as { id: string; year: number; month: number }[];
@@ -590,30 +612,40 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
 
   const { data: inputsAll } = await supabase.from('monthly_truck_inputs').select('*').in('month_id', ids);
   const inputRows = (inputsAll ?? []) as TruckInputRow[];
-  const expenseOf = (r: TruckInputRow) => r.cogs + r.admin_expense + r.discounting_expense + r.operations_expense + r.repairs_expense + r.salaries_expense;
-  const cell = (monthId: string, code: string) => {
+  const metricsFor = (monthId: string, code: string): Metrics => {
     const inc = incomeRows.find((x) => x.month_id === monthId && x.truck_code === code)?.income ?? 0;
-    const inp = inputRows.find((x) => x.month_id === monthId && x.truck_code === code);
-    const exp = inp ? expenseOf(inp) : 0;
-    const oi = inp ? inp.other_income : 0;
-    return { income: inc, expense: exp, net: inc - exp + oi };
+    const r = inputRows.find((x) => x.month_id === monthId && x.truck_code === code);
+    return {
+      income: inc, cogs: r?.cogs ?? 0, admin: r?.admin_expense ?? 0, operations: r?.operations_expense ?? 0,
+      repairs: r?.repairs_expense ?? 0, salaries: r?.salaries_expense ?? 0, discounting: r?.discounting_expense ?? 0, other: r?.other_income ?? 0,
+    };
   };
 
-  const rows: TruckPnlRow[] = TRUCKS.map(({ code }) => {
-    const c = cell(cur.id, code);
-    const p = prior ? cell(prior.id, code) : { income: 0, expense: 0, net: 0 };
-    return { code, income: c.income, expense: c.expense, net: c.net, priorNet: p.net, netChg: p.net !== 0 ? (c.net - p.net) / Math.abs(p.net) : 0 };
-  }).filter((r) => r.income !== 0 || r.expense !== 0 || r.priorNet !== 0);
+  const truckCodes = TRUCKS.map((t) => t.code).filter((code) => {
+    const m = metricsFor(cur.id, code);
+    return m.income || m.cogs || m.admin || m.operations || m.repairs || m.salaries;
+  });
+  if (truckCodes.length === 0) return { ...empty, currentLabel: monthLabel(cur.year, cur.month) };
 
-  const sum = (f: (r: TruckPnlRow) => number) => rows.reduce((s, r) => s + f(r), 0);
-  const totals = { income: sum((r) => r.income), expense: sum((r) => r.expense), net: sum((r) => r.net), priorNet: sum((r) => r.priorNet), netChg: 0 };
-  totals.netChg = totals.priorNet !== 0 ? (totals.net - totals.priorNet) / Math.abs(totals.priorNet) : 0;
+  const lines: TruckPnlLine[] = TRUCK_LINE_DEFS.map((def) => {
+    const byTruck: Record<string, number> = {};
+    let total = 0;
+    for (const code of truckCodes) { const v = def.calc(metricsFor(cur.id, code)); byTruck[code] = v; total += v; }
+    let priorTotal = 0;
+    if (prior) for (const code of truckCodes) priorTotal += def.calc(metricsFor(prior.id, code));
+    const chg = priorTotal !== 0 ? (total - priorTotal) / Math.abs(priorTotal) : 0;
+    return { key: def.key, label: def.label, bold: def.bold, cost: def.cost, byTruck, total, priorTotal, chg };
+  });
 
+  const netLine = lines.find((l) => l.key === 'net_income')!;
   return {
-    hasData: rows.length > 0,
+    hasData: true,
     currentLabel: monthLabel(cur.year, cur.month),
     priorLabel: prior ? monthLabel(prior.year, prior.month) : '—',
-    rows,
-    totals,
+    truckCodes,
+    lines,
+    net: netLine.total,
+    priorNet: netLine.priorTotal,
+    netChg: netLine.chg,
   };
 }
