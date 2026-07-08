@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchRanges, setRangePublished, type RangeRow } from '../lib/queries';
+import { ListSkeleton } from '../components/Skeleton';
 
 // Finance-only screen to control which periods BU Heads and the GM can see.
 export default function PublishManager() {
@@ -28,8 +29,6 @@ export default function PublishManager() {
     }
   }
 
-  if (loading) return <p className="text-slate-400 dark:text-slate-500">Loading…</p>;
-
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Publish periods</h1>
@@ -40,6 +39,7 @@ export default function PublishManager() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {loading ? <ListSkeleton /> : (
       <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         {ranges.length === 0 && <p className="px-4 py-6 text-slate-400 dark:text-slate-500">No periods imported yet.</p>}
         {ranges.map((r) => (
@@ -64,6 +64,7 @@ export default function PublishManager() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

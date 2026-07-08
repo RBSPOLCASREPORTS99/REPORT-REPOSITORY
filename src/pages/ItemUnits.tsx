@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchSalesItems, fetchItemUnits, saveItemUnit } from '../lib/queries';
+import { ListSkeleton } from '../components/Skeleton';
 
 interface Row { item: string; importedUom: string; uom: string; dirty?: boolean }
 
@@ -69,7 +70,7 @@ export default function ItemUnits() {
       />
 
       {loading ? (
-        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
+        <ListSkeleton />
       ) : rows.length === 0 ? (
         <p className="text-slate-400 dark:text-slate-500">No sales items imported yet.</p>
       ) : (

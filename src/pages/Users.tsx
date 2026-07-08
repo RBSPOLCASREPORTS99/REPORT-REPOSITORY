@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS } from '../lib/constants';
 import { fetchAllowedUsers, saveAllowedUser, removeAllowedUser } from '../lib/queries';
 import type { AllowedUser, UserRole } from '../lib/types';
+import { Skeleton } from '../components/Skeleton';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   finance: 'Finance (full access)',
@@ -170,7 +171,12 @@ export default function Users() {
       {/* Users list */}
       <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         {loading ? (
-          <p className="px-4 py-6 text-slate-400 dark:text-slate-500">Loading…</p>
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between px-4 py-3">
+              <div className="space-y-1.5"><Skeleton className="h-3 w-44" /><Skeleton className="h-2 w-24" /></div>
+              <Skeleton className="h-7 w-20" />
+            </div>
+          ))
         ) : users.length === 0 ? (
           <p className="px-4 py-6 text-slate-400 dark:text-slate-500">No users yet. Add the first one above.</p>
         ) : (

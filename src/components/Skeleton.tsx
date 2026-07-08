@@ -21,6 +21,34 @@ export function BuCardsSkeleton({ count = 10 }: { count?: number }) {
   );
 }
 
+// A stack of card rows (Users, Publish, BU Names, Item Units).
+export function ListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-800">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="mt-3 h-8 w-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// A labelled input grid (per-truck salaries, etc.).
+export function GridSkeleton({ cells = 9 }: { cells?: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-2xl bg-white p-3 shadow-sm dark:bg-slate-800 sm:grid-cols-3">
+      {Array.from({ length: cells }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-7 flex-1" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Mirrors a comparison / P&L table.
 export function TableSkeleton({ rows = 10 }: { rows?: number }) {
   return (

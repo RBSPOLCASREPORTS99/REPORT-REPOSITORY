@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchBuLabels, saveBuName, createBusinessUnit, type BuLabel } from '../lib/queries';
 import { useBuLabels } from '../contexts/BuLabelsContext';
+import { ListSkeleton } from '../components/Skeleton';
 
 interface Row extends BuLabel { dirty?: boolean }
 
@@ -105,7 +106,7 @@ export default function BuNames() {
       </form>
 
       {loading ? (
-        <p className="text-slate-400 dark:text-slate-500">Loading…</p>
+        <ListSkeleton />
       ) : (
         <div className="space-y-3">
           {rows.map((r) => (
