@@ -46,6 +46,17 @@ html.dark body {
   color: #e5eaf0;
 }
 
+/* Hide the up/down spinner arrows on number inputs across the app. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Staggered entrance for dashboard cards — a subtle premium lift-in. */
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }

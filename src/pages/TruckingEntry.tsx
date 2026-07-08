@@ -62,13 +62,13 @@ export default function TruckingEntry() {
         </select>
       </label>
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
         {TRUCKS.map((t) => (
-          <label key={t.code} className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-slate-600 dark:text-slate-300">{t.code}</span>
+          <label key={t.code} className="flex items-center gap-2 text-sm">
+            <span className="w-14 shrink-0 text-slate-600 dark:text-slate-300">{t.code}</span>
             <input type="number" inputMode="decimal" value={salaries[t.code] || ''}
               onChange={(e) => { setSalaries((s) => ({ ...s, [t.code]: e.target.value === '' ? 0 : Number(e.target.value) })); setSaved(false); }}
-              className="w-24 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
+              className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
           </label>
         ))}
       </div>
