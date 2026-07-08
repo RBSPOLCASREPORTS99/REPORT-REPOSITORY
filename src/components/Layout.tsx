@@ -28,7 +28,6 @@ export default function Layout() {
       ? [
           { to: '/import', label: 'Import data', icon: '⬆️' },
           { to: '/trucking', label: 'Trucking', icon: '🚚' },
-          { to: '/truck-pnl', label: 'Truck P&L', icon: '🚛' },
           { to: '/farm', label: 'Lakatan Farm', icon: '🌱' },
           { to: '/publish', label: 'Publish periods', icon: '📢' },
           { to: '/users', label: 'Users & access', icon: '👥' },

@@ -2,7 +2,7 @@ import { supabase } from '../supabaseClient';
 import type { ParsedPivot } from './parsePivotTab';
 import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
-import { TRUCKS, truckPivotColumn } from '../pnl/truckConfig';
+import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
 import { extractBuInputs, extractPools, type TruckingInputs } from '../pnl/computeBuPnl';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
@@ -66,13 +66,23 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   // QB per-truck columns ("BU10 - <plate> <code>"). Additive, separate table, so
   // this never affects the validated per-BU compute above.
   await supabase.from('monthly_truck_inputs').delete().eq('month_id', monthId);
-  const truckInputRows = TRUCKS
+  const presentTrucks = TRUCKS
     .map((t) => ({ truck: t, col: truckPivotColumn(pivot, t.plate) }))
-    .filter((x) => x.col)
-    .map((x) => ({ month_id: monthId, truck_code: x.truck.code, ...extractBuInputs(pivot, { memberColumns: [x.col as string] }) }));
+    .filter((x): x is { truck: typeof TRUCKS[number]; col: string } => !!x.col);
+  const truckInputRows = presentTrucks.map((x) => ({ month_id: monthId, truck_code: x.truck.code, ...extractBuInputs(pivot, { memberColumns: [x.col] }) }));
   if (truckInputRows.length) {
     const { error: tiErr } = await supabase.from('monthly_truck_inputs').insert(truckInputRows);
     if (tiErr) throw tiErr;
+  }
+
+  // 4c. per-truck expenses BY ACCOUNT (leaf accounts under each section).
+  await supabase.from('monthly_truck_expense').delete().eq('month_id', monthId);
+  const truckExpenseRows = presentTrucks.flatMap((x) =>
+    extractTruckAccounts(pivot, x.col).map((a) => ({ month_id: monthId, truck_code: x.truck.code, section: a.section, account: a.account, amount: a.amount })),
+  );
+  for (let i = 0; i < truckExpenseRows.length; i += 500) {
+    const { error: teErr } = await supabase.from('monthly_truck_expense').insert(truckExpenseRows.slice(i, i + 500));
+    if (teErr) throw teErr;
   }
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
