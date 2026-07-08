@@ -50,6 +50,13 @@ export default function TruckPnl() {
 
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40">{error}</p>}
 
+      {data?.expensesMissing && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          ⚠️ This month has truck income but no per-truck expenses yet. Re-import this month's
+          QuickBooks P&amp;L (in Import data) to load per-truck expenses by account.
+        </p>
+      )}
+
       {loading ? (
         <p className="text-slate-400 dark:text-slate-500">Loading…</p>
       ) : !data?.hasData ? (

@@ -562,6 +562,7 @@ export interface TruckPnlResult {
   net: number;                         // fleet Net Income (for the Home card)
   priorNet: number;
   netChg: number;
+  expensesMissing: boolean;            // income imported but no per-truck expenses yet
 }
 
 interface TruckExpenseRow { month_id: string; truck_code: string; section: string; account: string; amount: number }
@@ -573,7 +574,7 @@ const chgOf = (cur: number, prior: number) => (prior !== 0 ? (cur - prior) / Mat
 // `target` picks the current month (prior = the previous imported month); when
 // omitted, uses the latest month that has truck income. All figures in ₱'000.
 export async function fetchTruckPnl(target?: { year: number; month: number }): Promise<TruckPnlResult> {
-  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0 };
+  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0, expensesMissing: false };
   const { data: months } = await supabase.from('pnl_months').select('id, year, month');
   if (!months || months.length === 0) return empty;
   const sorted = [...months].sort((a, b) => a.year - b.year || a.month - b.month) as { id: string; year: number; month: number }[];
@@ -669,5 +670,6 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
     net: netLine.current,
     priorNet: netLine.prior,
     netChg: netLine.chg,
+    expensesMissing: !expRows.some((r) => r.month_id === cur.id),
   };
 }
