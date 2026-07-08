@@ -5,10 +5,12 @@ import { deriveRanges } from '../pnl/deriveRanges';
 import { excelSerial, type ParsedDashboard } from './parseTruckingDashboard';
 import { monthLabel } from '../format';
 
-// Persist one month from the TRUCKING DASHBOARD:
-//  - per-truck income  -> monthly_truck_income
-//  - per-BU allocation -> monthly_trucking (auto-fills what used to be typed by
-//    hand), then re-derive ranges so the main P&L's trucking updates.
+// Persist the TRUCKING DASHBOARD:
+//  - "Sales per BU": the WHOLE month history is stored in monthly_bu_alloc for
+//    future reference, so per-month P&L files imported later auto-pick up their
+//    trucking allocation. Any already-imported P&L month is refreshed now.
+//  - "Sales per Truck": only the SELECTED month's per-truck income is stored
+//    (monthly_truck_income); re-importing the same month updates it.
 export interface DashboardPersistArgs {
   year: number;
   month: number;
@@ -17,33 +19,41 @@ export interface DashboardPersistArgs {
   userId: string;
 }
 
-export async function persistTruckingDashboard(args: DashboardPersistArgs): Promise<{ trucks: number; bus: number }> {
+export async function persistTruckingDashboard(args: DashboardPersistArgs): Promise<{ trucks: number; allocMonths: number; refreshed: number }> {
   const { year, month, parsed, fileName, userId } = args;
   const serial = excelSerial(year, month);
   const income = parsed.truckIncome.get(serial) ?? {};
-  const alloc = parsed.buAlloc.get(serial) ?? {};
 
-  const { data: batch } = await supabase.from('import_batches').insert({
+  await supabase.from('import_batches').insert({
     source_report: 'BR', filename: fileName, storage_path: null, uploaded_by: userId, row_count: 0, status: 'confirmed',
-  }).select('id').single();
+  });
 
-  // Ensure the month exists (the dashboard may be imported before that month's P&L).
+  // 1. Store the FULL Sales-per-BU allocation history (all months) for reference.
+  const allocRows: { year: number; month: number; bu_code: string; amount: number }[] = [];
+  for (const m of parsed.months) {
+    const alloc = parsed.buAlloc.get(m.serial) ?? {};
+    for (const code of TRUCKING_CODES) {
+      const amt = alloc[code] ?? 0;
+      if (amt !== 0) allocRows.push({ year: m.year, month: m.month, bu_code: code, amount: amt });
+    }
+  }
+  for (let i = 0; i < allocRows.length; i += 500) {
+    const { error } = await supabase.from('monthly_bu_alloc').upsert(allocRows.slice(i, i + 500), { onConflict: 'year,month,bu_code' });
+    if (error) throw error;
+  }
+
+  // 2. Selected month's per-truck income (₱ full pesos → ₱'000, matching the P&L).
   const { data: existing } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
   let monthId: string;
   if (existing) {
-    monthId = existing.id;
+    monthId = existing.id as string;
   } else {
     const { data: created, error } = await supabase.from('pnl_months').insert({
-      year, month, label: monthLabel(year, month), import_batch_id: batch?.id ?? null, uploaded_by: userId,
+      year, month, label: monthLabel(year, month), uploaded_by: userId,
     }).select('id').single();
     if (error) throw error;
-    monthId = created.id;
+    monthId = created.id as string;
   }
-
-  // Per-truck income (authoritative trip-based income). "Sales per Truck" is in
-  // full pesos; the app stores everything in ₱'000 to match the per-truck
-  // expenses (which come from the QB pivot ÷ 1000). "Sales per BU" is already in
-  // ₱'000, and only its ratio matters for the allocation, so it's stored as-is.
   await supabase.from('monthly_truck_income').delete().eq('month_id', monthId);
   const truckRows = TRUCKS
     .filter((t) => income[t.code] != null)
@@ -53,18 +63,21 @@ export async function persistTruckingDashboard(args: DashboardPersistArgs): Prom
     if (error) throw error;
   }
 
-  // Auto-fill the per-BU trucking allocation (replaces manual entry for the month).
-  await supabase.from('monthly_trucking').delete().eq('month_id', monthId);
-  const buRows = TRUCKING_CODES
-    .map((code) => ({ month_id: monthId, trucking_code: code, amount: alloc[code] ?? 0 }))
-    .filter((r) => r.amount !== 0);
-  if (buRows.length) {
-    const { error } = await supabase.from('monthly_trucking').insert(buRows);
-    if (error) throw error;
+  // 3. Refresh trucking allocation for every already-imported P&L month that the
+  // dashboard covers, then re-derive those years.
+  const { data: pmonths } = await supabase.from('pnl_months').select('id, year, month');
+  const affectedYears = new Set<number>();
+  let refreshed = 0;
+  for (const pm of pmonths ?? []) {
+    const alloc = parsed.buAlloc.get(excelSerial(pm.year as number, pm.month as number));
+    if (!alloc) continue;
+    await supabase.from('monthly_trucking').delete().eq('month_id', pm.id as string);
+    const rows = TRUCKING_CODES.map((code) => ({ month_id: pm.id as string, trucking_code: code, amount: alloc[code] ?? 0 })).filter((r) => r.amount !== 0);
+    if (rows.length) await supabase.from('monthly_trucking').insert(rows);
+    affectedYears.add(pm.year as number);
+    refreshed++;
   }
+  for (const y of affectedYears) await deriveRanges(supabase, y);
 
-  // Refresh the derived ranges so the main P&L trucking allocation updates.
-  await deriveRanges(supabase, year);
-
-  return { trucks: truckRows.length, bus: buRows.length };
+  return { trucks: truckRows.length, allocMonths: parsed.months.length, refreshed };
 }

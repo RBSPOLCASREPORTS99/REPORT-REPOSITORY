@@ -594,6 +594,10 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
   const { data: expAll } = await supabase.from('monthly_truck_expense').select('*').in('month_id', ids);
   const expRows = (expAll ?? []) as TruckExpenseRow[];
 
+  const { data: salAll } = await supabase.from('monthly_truck_salary').select('month_id, truck_code, amount').in('month_id', ids);
+  const salRows = (salAll ?? []) as { month_id: string; truck_code: string; amount: number }[];
+  const salaryOf = (monthId: string, code: string) => salRows.find((x) => x.month_id === monthId && x.truck_code === code)?.amount;
+
   const income = (monthId: string, code: string) => incomeRows.find((x) => x.month_id === monthId && x.truck_code === code)?.income ?? 0;
   // code|section -> account -> amount, for one month.
   const acctMap = (monthId: string) => {
@@ -644,6 +648,18 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
 
     let expC = 0, expP = 0;
     for (const section of EXPENSE_SECTIONS) {
+      // Salaries and Wages: manual per-truck entry overrides the QB salaries.
+      if (section === 'Salaries and Wages') {
+        const hasManual = codes.some((c) => salaryOf(cur.id, c) != null || (prior != null && salaryOf(prior.id, c) != null));
+        if (hasManual) {
+          const manC = codes.reduce((s, c) => s + (salaryOf(cur.id, c) ?? 0), 0);
+          const manP = prior ? codes.reduce((s, c) => s + (salaryOf(prior.id, c) ?? 0), 0) : 0;
+          lines.push({ label: 'Salaries and Wages', kind: 'account', current: manC, prior: manP, chg: chgOf(manC, manP), cost: true });
+          lines.push({ label: 'Total Salaries and Wages', kind: 'subtotal', current: manC, prior: manP, chg: chgOf(manC, manP), cost: true });
+          expC += manC; expP += manP;
+          continue;
+        }
+      }
       const accts = sectionAccounts(codes, section);
       const secC = accts.reduce((s, a) => s + a.current, 0), secP = accts.reduce((s, a) => s + a.prior, 0);
       if (!accts.length) continue;

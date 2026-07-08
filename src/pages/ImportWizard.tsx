@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
 import { computeSide, extractPools, type TruckingInputs } from '../lib/pnl/computeBuPnl';
-import { BU_CONFIGS, TRUCKING_CODES, PULLS, type BuConfig } from '../lib/pnl/buConfig';
+import { BU_CONFIGS, PULLS, type BuConfig } from '../lib/pnl/buConfig';
+import { TRUCKS } from '../lib/pnl/truckConfig';
 import { loadBuConfigs } from '../lib/pnl/loadBuConfigs';
 import { supabase } from '../lib/supabaseClient';
 import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
@@ -15,7 +16,7 @@ import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '.
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
-import { loadTruckingByYearMonth } from '../lib/truckingRecompute';
+import { loadStoredAlloc, loadTruckSalaries, truckIncomeExists } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -37,10 +38,12 @@ export default function ImportWizard() {
   const [configs, setConfigs] = useState<BuConfig[]>(BU_CONFIGS);
   const [year, setYear] = useState(2025);
   const [month, setMonth] = useState(1);
-  const [trucking, setTrucking] = useState<TruckingInputs>({});
+  const [alloc, setAlloc] = useState<TruckingInputs>({}); // stored per-BU trucking allocation (preview)
+  const [truckSalaries, setTruckSalaries] = useState<Record<string, number>>({}); // manual per-truck Salaries & Wages
   const [monthExists, setMonthExists] = useState(false);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
+  const [dashMonthExists, setDashMonthExists] = useState(false);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
@@ -59,18 +62,28 @@ export default function ImportWizard() {
     return () => { cancelled = true; };
   }, [pivot]);
 
-  // On the monthly step, pre-fill this month's trucking if it was already
-  // imported (so re-importing/updating a month keeps the trucking you entered).
+  // On the monthly step, load the stored trucking allocation (for the preview),
+  // pre-fill the manual per-truck salaries, and flag whether the month exists.
   useEffect(() => {
     if (step !== 'month') return;
     let cancelled = false;
-    loadTruckingByYearMonth(year, month)
-      .then((existing) => {
-        if (cancelled) return;
-        setTrucking(existing ?? {});
-        setMonthExists(!!existing);
-      })
-      .catch(() => {});
+    (async () => {
+      const [a, s] = await Promise.all([loadStoredAlloc(year, month), loadTruckSalaries(year, month)]);
+      const { data: pm } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
+      if (cancelled) return;
+      setAlloc(a);
+      setTruckSalaries(s);
+      setMonthExists(!!pm);
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, [step, year, month]);
+
+  // On the dashboard step, flag if the selected month's per-truck income already
+  // exists (so we can warn but still allow an update).
+  useEffect(() => {
+    if (step !== 'dashboard') return;
+    let cancelled = false;
+    truckIncomeExists(year, month).then((e) => { if (!cancelled) setDashMonthExists(e); }).catch(() => {});
     return () => { cancelled = true; };
   }, [step, year, month]);
 
@@ -116,7 +129,7 @@ export default function ImportWizard() {
       setPivot(found);
       const detected = detectMonthFromName(found.sheetName);
       if (detected) { setYear(detected.year); setMonth(detected.month); }
-      setTrucking({});
+      setAlloc({}); setTruckSalaries({});
       setStep('month');
     } catch (e) {
       setParseError(e instanceof Error ? e.message : 'Failed to read the file.');
@@ -128,7 +141,7 @@ export default function ImportWizard() {
     setConfirming(true);
     setConfirmError('');
     try {
-      await persistMonthlyPnl({ year, month, pivot, trucking, fileName, fileBuffer, userId: user.id });
+      await persistMonthlyPnl({ year, month, pivot, truckSalaries, fileName, fileBuffer, userId: user.id });
       setStep('done');
     } catch (e) {
       setConfirmError(e instanceof Error ? e.message : 'Import failed.');
@@ -160,7 +173,7 @@ export default function ImportWizard() {
     setConfirming(true); setConfirmError('');
     try {
       const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
-      if (res.trucks === 0 && res.bus === 0) { setConfirmError(`No truck or BU data found for ${monthLabel(year, month)} in this dashboard.`); return; }
+      if (res.trucks === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -189,7 +202,7 @@ export default function ImportWizard() {
   if (step === 'month' && pivot) {
     const previews = configs.filter((c) => !c.manualEntry).map((cfg) => ({
       cfg,
-      netIncome: computeSide(pivot, cfg, trucking).net_income,
+      netIncome: computeSide(pivot, cfg, alloc).net_income,
       // Raw QuickBooks Net Income for the BU column(s), before any BR
       // allocations/trucking — a check against the source workbook.
       rawNI: cfg.memberColumns.reduce((s, col) => s + lookupValue(pivot, PULLS.netIncome.hierCol, PULLS.netIncome.label, col), 0) / 1000,
@@ -201,8 +214,9 @@ export default function ImportWizard() {
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import monthly P&L</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          One QuickBooks "P&L by Class" export. Confirm the month, enter that month's trucking cost per
-          BU, then import — YTD and quarter figures are rebuilt automatically from your months.
+          One QuickBooks "P&L by Class" export. Confirm the month, enter each truck's Salaries and Wages,
+          then import — YTD and quarter figures are rebuilt automatically. Trucking allocation is taken
+          from the imported TRUCKING DASHBOARD (Sales per BU).
         </p>
 
         <div className="flex items-center gap-2">
@@ -219,18 +233,19 @@ export default function ImportWizard() {
         {monthExists && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
             {monthLabel(year, month)} is already imported — importing will <span className="font-medium">update</span> it
-            (YTD/quarter recompute, publish state kept). Trucking below is pre-filled from the last import; edit if it changed.
+            (YTD/quarter recompute, publish state kept). Salaries below are pre-filled from the last import; edit if they changed.
           </p>
         )}
 
         <div>
-          <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Trucking cost per BU (₱ '000)</p>
+          <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">Salaries and Wages per Truck (₱ '000)</p>
+          <p className="mb-1 text-xs text-slate-400 dark:text-slate-500">QuickBooks posts BU10 salaries in total, so enter each truck's share here.</p>
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm sm:grid-cols-3">
-            {TRUCKING_CODES.map((code) => (
-              <label key={code} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-slate-600 dark:text-slate-300">{code}</span>
-                <input type="number" inputMode="decimal" value={trucking[code] || ''}
-                  onChange={(e) => setTrucking((t) => ({ ...t, [code]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+            {TRUCKS.map((t) => (
+              <label key={t.code} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-slate-600 dark:text-slate-300">{t.code}</span>
+                <input type="number" inputMode="decimal" value={truckSalaries[t.code] || ''}
+                  onChange={(e) => setTruckSalaries((s) => ({ ...s, [t.code]: e.target.value === '' ? 0 : Number(e.target.value) }))}
                   className="w-24 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
               </label>
             ))}
@@ -363,9 +378,9 @@ export default function ImportWizard() {
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import TRUCKING DASHBOARD</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Reads per-truck income (<span className="font-medium">Sales per Truck</span>) and per-BU trucking
-          allocation (<span className="font-medium">Sales per BU</span>). The allocation auto-fills the P&amp;L
-          trucking for that month and recomputes YTD/quarter.
+          The <span className="font-medium">whole Sales per BU history</span> ({dashboard.months.length} months) is stored for
+          the trucking allocation of every P&amp;L month. <span className="font-medium">Per-truck income</span> is read only for
+          the <span className="font-medium">selected month</span> below.
         </p>
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
@@ -377,6 +392,11 @@ export default function ImportWizard() {
             {dashboard.months.map((m) => <option key={m.serial} value={`${m.year}-${m.month}`}>{monthLabel(m.year, m.month)}</option>)}
           </select>
         </div>
+        {dashMonthExists && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            {monthLabel(year, month)} per-truck income is already stored — importing will <span className="font-medium">update</span> it.
+          </p>
+        )}
         <div className="space-y-1 rounded-2xl bg-white p-4 text-sm shadow-sm dark:bg-slate-800">
           <p className="text-slate-700 dark:text-slate-200"><span className="font-medium">{truckCount}</span> trucks · income total <span className="font-medium">₱{formatThousands(truckTotal / 1000)}k</span></p>
           <p className="text-slate-700 dark:text-slate-200">Per-BU trucking allocation total <span className="font-medium">{formatThousands(buTotal)}k</span> — auto-fills the P&amp;L trucking</p>

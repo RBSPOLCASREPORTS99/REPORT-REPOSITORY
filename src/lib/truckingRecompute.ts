@@ -37,6 +37,33 @@ export async function loadMonthTrucking(monthId: string): Promise<TruckingInputs
   return out;
 }
 
+// The per-BU trucking allocation stored for a calendar month (from the TRUCKING
+// DASHBOARD "Sales per BU" history) — used to preview the P&L on import.
+export async function loadStoredAlloc(year: number, month: number): Promise<TruckingInputs> {
+  const { data } = await supabase.from('monthly_bu_alloc').select('bu_code, amount').eq('year', year).eq('month', month);
+  const out: TruckingInputs = {};
+  for (const r of data ?? []) out[r.bu_code as string] = r.amount as number;
+  return out;
+}
+
+// Existing manual per-truck Salaries & Wages for a month, to pre-fill the grid.
+export async function loadTruckSalaries(year: number, month: number): Promise<Record<string, number>> {
+  const { data: pm } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
+  if (!pm) return {};
+  const { data } = await supabase.from('monthly_truck_salary').select('truck_code, amount').eq('month_id', pm.id as string);
+  const out: Record<string, number> = {};
+  for (const r of data ?? []) out[r.truck_code as string] = r.amount as number;
+  return out;
+}
+
+// Whether per-truck income has already been imported for a month (dashboard notif).
+export async function truckIncomeExists(year: number, month: number): Promise<boolean> {
+  const { data: pm } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
+  if (!pm) return false;
+  const { count } = await supabase.from('monthly_truck_income').select('month_id', { count: 'exact', head: true }).eq('month_id', pm.id as string);
+  return (count ?? 0) > 0;
+}
+
 export async function saveMonthTrucking(monthId: string, year: number, trucking: TruckingInputs): Promise<void> {
   await supabase.from('monthly_trucking').delete().eq('month_id', monthId);
   const rows = TRUCKING_CODES.map((code) => ({ month_id: monthId, trucking_code: code, amount: trucking[code] ?? 0 })).filter((r) => r.amount !== 0);
