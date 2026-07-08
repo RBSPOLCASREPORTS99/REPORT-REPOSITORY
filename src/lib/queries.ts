@@ -565,7 +565,9 @@ interface TruckInputRow {
   operations_expense: number; repairs_expense: number; salaries_expense: number; other_income: number;
 }
 
-export async function fetchTruckPnl(): Promise<TruckPnlResult> {
+// `target` picks the current month (prior = the previous imported month); when
+// omitted, uses the latest month that has truck income.
+export async function fetchTruckPnl(target?: { year: number; month: number }): Promise<TruckPnlResult> {
   const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', rows: [], totals: { income: 0, expense: 0, net: 0, priorNet: 0, netChg: 0 } };
   const { data: months } = await supabase.from('pnl_months').select('id, year, month');
   if (!months || months.length === 0) return empty;
@@ -576,7 +578,11 @@ export async function fetchTruckPnl(): Promise<TruckPnlResult> {
   const withData = new Set(incomeRows.map((r) => r.month_id));
 
   let curIdx = -1;
-  for (let i = sorted.length - 1; i >= 0; i--) if (withData.has(sorted[i].id)) { curIdx = i; break; }
+  if (target) {
+    curIdx = sorted.findIndex((m) => m.year === target.year && m.month === target.month);
+  } else {
+    for (let i = sorted.length - 1; i >= 0; i--) if (withData.has(sorted[i].id)) { curIdx = i; break; }
+  }
   if (curIdx === -1) return empty;
   const cur = sorted[curIdx];
   const prior = curIdx > 0 ? sorted[curIdx - 1] : null;

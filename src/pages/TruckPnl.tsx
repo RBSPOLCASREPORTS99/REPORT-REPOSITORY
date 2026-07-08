@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchTruckPnl, type TruckPnlResult } from '../lib/queries';
+import { fetchTruckPnl, fetchRanges, type TruckPnlResult } from '../lib/queries';
 import { useUi } from '../contexts/UiContext';
 import { formatMoney, formatPercent } from '../lib/format';
 
 // Simulated P&L per Truck (BU10). Trucking Income from the TRUCKING DASHBOARD,
-// expenses from the QuickBooks per-truck columns. Latest month vs the previous.
+// expenses from the QuickBooks per-truck columns. Follows the shared set month
+// (the same one chosen on Home); falls back to the latest month with data.
 export default function TruckPnl() {
-  const { units } = useUi();
+  const { units, compSetMonthId } = useUi();
   const [data, setData] = useState<TruckPnlResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchTruckPnl().then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const ranges = await fetchRanges();
+      const r = ranges.find((x) => x.id === compSetMonthId);
+      const target = r ? { year: Number(r.period_start.slice(0, 4)), month: Number(r.period_start.slice(5, 7)) } : undefined;
+      const t = await fetchTruckPnl(target);
+      if (!cancelled) setData(t);
+    })().catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [compSetMonthId]);
 
   const money = (v: number) => formatMoney(v, 'thousands', units);
   const chgCls = (v: number) => (v >= 0 ? 'text-green-600' : 'text-red-600');

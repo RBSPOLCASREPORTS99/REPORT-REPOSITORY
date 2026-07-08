@@ -2,15 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
 import BuCard from '../components/BuCard';
+import TruckingCard from '../components/TruckingCard';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
-import { fetchBuCards, fetchRanges, rangesWithSupport, type BuCardData, type RangeRow, type AllocMethod } from '../lib/queries';
+import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
 
 export default function Home() {
   const { refresh: refreshLabels } = useBuLabels();
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [cards, setCards] = useState<BuCardData[]>([]);
+  const [truck, setTruck] = useState<TruckPnlResult | null>(null);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
   const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,19 @@ export default function Home() {
       .finally(() => { if (myReq === reqRef.current) setLoading(false); });
   }, [cmp?.currentId, cmp?.priorId, method, tick]);
 
+  // BU10 - TRUCKING card: per-truck P&L (finance-only data). Follows the chosen
+  // set month; hidden when there's no truck data (or the viewer can't read it).
+  useEffect(() => {
+    const setRange = ranges.find((r) => r.id === cmp?.setMonthId);
+    if (!setRange) { setTruck(null); return; }
+    const target = { year: Number(setRange.period_start.slice(0, 4)), month: Number(setRange.period_start.slice(5, 7)) };
+    let cancelled = false;
+    fetchTruckPnl(target)
+      .then((t) => { if (!cancelled) setTruck(t.hasData ? t : null); })
+      .catch(() => { if (!cancelled) setTruck(null); });
+    return () => { cancelled = true; };
+  }, [cmp?.setMonthId, ranges, tick]);
+
   const refresh = useCallback(() => {
     setError('');
     refreshLabels();
@@ -97,13 +112,14 @@ export default function Home() {
         <p className="text-center text-slate-400 dark:text-slate-500">Loading…</p>
       ) : ranges.length === 0 ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No published reports yet.</p>
-      ) : cards.length === 0 ? (
+      ) : cards.length === 0 && !truck?.hasData ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No data for this comparison. Try ↻ Refresh.</p>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {cards.map((bu, i) => (
             <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={i} />
           ))}
+          {truck?.hasData && <TruckingCard truck={truck} index={cards.length} />}
         </div>
       )}
     </div>
