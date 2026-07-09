@@ -124,7 +124,9 @@ export default function ImportWizard() {
         return;
       }
       setPivot(found);
-      const detected = detectMonthFromName(found.sheetName);
+      // Detect the month/year from the file name first (e.g. "Jan 2025 P&L.xlsx"),
+      // then the sheet name — QB single-month exports often use a generic sheet.
+      const detected = detectMonthFromName(file.name) ?? detectMonthFromName(found.sheetName);
       if (detected) { setYear(detected.year); setMonth(detected.month); }
       setTrucking({});
       setStep('month');
