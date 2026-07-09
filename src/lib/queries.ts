@@ -65,9 +65,9 @@ async function supportByBu(rangeId: string, method: AllocMethod): Promise<Map<st
 
 // Which report_ranges have any imported support allocations (→ toggle enabled).
 export async function rangesWithSupport(): Promise<Set<string>> {
-  const { data, error } = await supabase.from('support_sim').select('range_id');
+  const { data, error } = await supabase.rpc('ranges_with_support');
   if (error) throw error;
-  return new Set((data ?? []).map((r) => r.range_id as string));
+  return new Set((data ?? []).map((r: { range_id: string }) => r.range_id));
 }
 
 async function netIncomeByBu(rangeId: string, method: AllocMethod = 'gross_sales'): Promise<Map<string, number>> {
@@ -300,9 +300,9 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
 
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
 export async function rangesWithExpenses(): Promise<Set<string>> {
-  const { data, error } = await supabase.from('expense_lines').select('range_id');
+  const { data, error } = await supabase.rpc('ranges_with_expenses');
   if (error) throw error;
-  return new Set((data ?? []).map((r) => r.range_id as string));
+  return new Set((data ?? []).map((r: { range_id: string }) => r.range_id));
 }
 
 export interface SalesItemRow {
@@ -372,9 +372,9 @@ export async function saveItemUnit(item: string, uom: string): Promise<void> {
 
 // Which ranges have imported sales-quantity detail (→ Sales tab enabled).
 export async function rangesWithSales(): Promise<Set<string>> {
-  const { data, error } = await supabase.from('sales_qty_lines').select('range_id');
+  const { data, error } = await supabase.rpc('ranges_with_sales');
   if (error) throw error;
-  return new Set((data ?? []).map((r) => r.range_id as string));
+  return new Set((data ?? []).map((r: { range_id: string }) => r.range_id));
 }
 
 export interface TrendPoint {

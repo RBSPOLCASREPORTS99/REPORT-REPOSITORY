@@ -134,13 +134,28 @@ async function materializeRange(
 
 interface Ym { year: number; month: number }
 
+// Fetch every row of a table for the given years, paging past the API row cap
+// so a large year (>1000 rows) isn't silently truncated.
+async function fetchAllByYears(db: Db, table: string, years: number[]): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await db.from(table).select('*').in('year', years).range(from, from + page - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as Record<string, unknown>[];
+    out.push(...rows);
+    if (rows.length < page) break;
+  }
+  return out;
+}
+
 // Materialize expense_lines for a range by summing monthly_expense over its
 // months (imported from the raw QB Exp Data). No-op if no expense data yet.
 async function materializeExpenses(db: Db, rangeId: string, yms: Ym[]) {
   const years = [...new Set(yms.map((y) => y.year))];
   const ymSet = new Set(yms.map((y) => `${y.year}-${y.month}`));
-  const { data } = await db.from('monthly_expense').select('*').in('year', years);
-  const src = (data ?? []).filter((r) => ymSet.has(`${r.year}-${r.month}`));
+  const data = await fetchAllByYears(db, 'monthly_expense', years) as any[];
+  const src = data.filter((r) => ymSet.has(`${r.year}-${r.month}`));
   await db.from('expense_lines').delete().eq('range_id', rangeId);
   if (src.length === 0) return;
 
@@ -163,8 +178,8 @@ async function materializeExpenses(db: Db, rangeId: string, yms: Ym[]) {
 async function materializeSales(db: Db, rangeId: string, yms: Ym[]) {
   const years = [...new Set(yms.map((y) => y.year))];
   const ymSet = new Set(yms.map((y) => `${y.year}-${y.month}`));
-  const { data } = await db.from('monthly_sales').select('*').in('year', years);
-  const src = (data ?? []).filter((r) => ymSet.has(`${r.year}-${r.month}`));
+  const data = await fetchAllByYears(db, 'monthly_sales', years) as any[];
+  const src = data.filter((r) => ymSet.has(`${r.year}-${r.month}`));
   await db.from('sales_qty_lines').delete().eq('range_id', rangeId);
   if (src.length === 0) return;
 
