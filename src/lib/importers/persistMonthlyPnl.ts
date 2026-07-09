@@ -1,26 +1,28 @@
 import { supabase } from '../supabaseClient';
 import type { ParsedPivot } from './parsePivotTab';
+import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
-import { extractBuInputs, extractPools } from '../pnl/computeBuPnl';
+import { extractBuInputs, extractPools, type TruckingInputs } from '../pnl/computeBuPnl';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
 
-// Persist one month's P&L: store the compact additive inputs + pools, apply the
-// stored trucking allocation, then re-derive all ranges for that year.
-// Re-importing a month replaces it.
+// Persist one month's P&L: store the compact additive inputs + pools + trucking,
+// then re-derive all ranges for that year. Re-importing a month replaces it.
+// Per-truck Salaries & Wages are NOT touched here — they're edited on the
+// separate Truck Salaries screen so they survive P&L re-imports.
 export interface MonthlyPersistArgs {
   year: number;
   month: number;
   pivot: ParsedPivot;
-  truckSalaries: Record<string, number>; // manual per-truck Salaries & Wages (₱ '000)
+  trucking: TruckingInputs; // per-BU trucking cost (₱ '000), pre-filled from the dashboard
   fileName: string;
   fileBuffer: ArrayBuffer;
   userId: string;
 }
 
 export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ monthId: string; ranges: number }> {
-  const { year, month, pivot, truckSalaries, fileName, userId } = args;
+  const { year, month, pivot, trucking, fileName, userId } = args;
 
   // 1. audit record only — the raw file is NOT stored (its data is fully
   // extracted into the DB below and captured by the weekly backup).
@@ -55,17 +57,13 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   const { error: poolErr } = await supabase.from('monthly_pnl_pools').insert({ month_id: monthId, ...pools });
   if (poolErr) throw poolErr;
 
-  // Trucking allocation comes from the stored dashboard "Sales per BU" history
-  // (monthly_bu_alloc) for this month. Left untouched if the dashboard hasn't
-  // been imported for this month yet, so an existing allocation isn't wiped.
-  const { data: alloc } = await supabase.from('monthly_bu_alloc').select('bu_code, amount').eq('year', year).eq('month', month);
-  if (alloc && alloc.length) {
-    await supabase.from('monthly_trucking').delete().eq('month_id', monthId);
-    const truckRows = alloc.filter((a) => a.amount !== 0).map((a) => ({ month_id: monthId, trucking_code: a.bu_code as string, amount: a.amount as number }));
-    if (truckRows.length) {
-      const { error: tErr } = await supabase.from('monthly_trucking').insert(truckRows);
-      if (tErr) throw tErr;
-    }
+  // Per-BU trucking cost from the import grid (pre-filled from the dashboard's
+  // Sales per BU, editable). Drives each BU's trucking allocation.
+  await supabase.from('monthly_trucking').delete().eq('month_id', monthId);
+  const truckRows = TRUCKING_CODES.map((code) => ({ month_id: monthId, trucking_code: code, amount: trucking[code] ?? 0 })).filter((r) => r.amount !== 0);
+  if (truckRows.length) {
+    const { error: tErr } = await supabase.from('monthly_trucking').insert(truckRows);
+    if (tErr) throw tErr;
   }
 
   // 4b. per-truck raw P&L lines for the Simulated P&L per Truck — pulled from the
@@ -89,15 +87,6 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   for (let i = 0; i < truckExpenseRows.length; i += 500) {
     const { error: teErr } = await supabase.from('monthly_truck_expense').insert(truckExpenseRows.slice(i, i + 500));
     if (teErr) throw teErr;
-  }
-
-  // 4d. manual per-truck Salaries & Wages — overrides the QB salaries in the
-  // per-truck P&L (QuickBooks posts BU10 salaries in total, not per truck).
-  await supabase.from('monthly_truck_salary').delete().eq('month_id', monthId);
-  const salaryRows = TRUCKS.map((t) => ({ month_id: monthId, truck_code: t.code, amount: truckSalaries[t.code] ?? 0 })).filter((r) => r.amount !== 0);
-  if (salaryRows.length) {
-    const { error: sErr } = await supabase.from('monthly_truck_salary').insert(salaryRows);
-    if (sErr) throw sErr;
   }
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
