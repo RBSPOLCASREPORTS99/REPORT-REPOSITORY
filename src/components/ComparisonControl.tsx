@@ -3,7 +3,7 @@ import type { RangeRow } from '../lib/queries';
 import { useUi } from '../contexts/UiContext';
 import {
   COMP_LABELS, availableComps, resolveComparison,
-  type CompType, type QtrBasis, type ResolvedComparison,
+  type CompType, type QtrBasis, type MonthBasis, type ResolvedComparison,
 } from '../lib/comparison';
 
 export interface ComparisonState extends ResolvedComparison {
@@ -27,7 +27,7 @@ export default function ComparisonControl({
   // The month + comparison selection is shared across Home / BU detail / Present
   // via the UI context (and persisted), so choosing a month anywhere applies
   // everywhere.
-  const { compSetMonthId, setCompSetMonthId, compType, setCompType, compQtrBasis, setCompQtrBasis } = useUi();
+  const { compSetMonthId, setCompSetMonthId, compType, setCompType, compQtrBasis, setCompQtrBasis, compMonthBasis, setCompMonthBasis } = useUi();
   const monthRanges = ranges.filter((r) => r.kind === 'month');
   const setMonthId = compSetMonthId;
   const setSetMonthId = setCompSetMonthId;
@@ -35,6 +35,8 @@ export default function ComparisonControl({
   const setComp = (c: CompType) => setCompType(c);
   const qtrBasis = compQtrBasis as QtrBasis;
   const setQtrBasis = (b: QtrBasis) => setCompQtrBasis(b);
+  const monthBasis = compMonthBasis as MonthBasis;
+  const setMonthBasis = (b: MonthBasis) => setCompMonthBasis(b);
 
   // Default (or repair) the set month to the latest when the stored one isn't
   // among the available months.
@@ -60,10 +62,10 @@ export default function ComparisonControl({
   // Emit the resolved comparison whenever inputs change.
   useEffect(() => {
     if (!setMonth) return;
-    const resolved = resolveComparison(ranges, setMonth, comp, qtrBasis);
+    const resolved = resolveComparison(ranges, setMonth, comp, qtrBasis, monthBasis);
     onChange({ ...resolved, setMonthId, comp });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setMonthId, comp, qtrBasis, ranges]);
+  }, [setMonthId, comp, qtrBasis, monthBasis, ranges]);
 
   if (monthRanges.length === 0) return null;
 
@@ -110,6 +112,20 @@ export default function ComparisonControl({
               className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${qtrBasis === b ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400'}`}
             >
               {b === 'yoy' ? 'vs Last Year' : 'vs Prior Qtr'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {comp === 'month' && (
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+          {(['yoy', 'mom'] as MonthBasis[]).map((b) => (
+            <button
+              key={b}
+              onClick={() => setMonthBasis(b)}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${monthBasis === b ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400'}`}
+            >
+              {b === 'yoy' ? 'vs Last Year' : 'vs Prior Month'}
             </button>
           ))}
         </div>

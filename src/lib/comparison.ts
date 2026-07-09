@@ -4,6 +4,9 @@ import type { RangeRow } from './queries';
 // selected month, each comparison type resolves to a current + prior range.
 export type CompType = 'ytd' | 'qtr' | 'month';
 export type QtrBasis = 'yoy' | 'qoq';
+export type MonthBasis = 'yoy' | 'mom'; // same month last year, or prior month
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export const COMP_LABELS: Record<CompType, string> = {
   ytd: 'YTD Comp',
@@ -40,6 +43,7 @@ export function resolveComparison(
   setMonth: RangeRow,
   comp: CompType,
   qtrBasis: QtrBasis = 'yoy',
+  monthBasis: MonthBasis = 'yoy',
 ): ResolvedComparison {
   const { year: y, month: m } = ymOf(setMonth);
   const findMonth = (yy: number, mm: number) => ranges.find((r) => r.kind === 'month' && r.period_end === lastDay(yy, mm));
@@ -47,9 +51,14 @@ export function resolveComparison(
   const findQtr = (yy: number, mm: number) => ranges.find((r) => r.kind === 'quarter' && r.period_end === lastDay(yy, mm));
 
   if (comp === 'month') {
-    const pm = m === 1 ? { year: y - 1, month: 12 } : { year: y, month: m - 1 };
+    // Like YTD/QTR: same month last year (default) or the prior month. The
+    // current month always exists; the prior is optional (blank until imported).
+    const pm = monthBasis === 'yoy'
+      ? { year: y - 1, month: m }
+      : (m === 1 ? { year: y - 1, month: 12 } : { year: y, month: m - 1 });
     const prior = findMonth(pm.year, pm.month);
-    return { currentId: setMonth.id, priorId: prior?.id, currentLabel: setMonth.label, priorLabel: prior?.label ?? '', available: !!prior };
+    const priorFallback = `${MONTH_NAMES[pm.month - 1]} ${pm.year}`;
+    return { currentId: setMonth.id, priorId: prior?.id, currentLabel: setMonth.label, priorLabel: prior?.label ?? priorFallback, available: true };
   }
 
   if (comp === 'ytd') {

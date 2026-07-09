@@ -19,6 +19,8 @@ interface UiState {
   setCompType: (c: string) => void;
   compQtrBasis: string; // 'yoy' | 'qoq'
   setCompQtrBasis: (b: string) => void;
+  compMonthBasis: string; // 'yoy' | 'mom'
+  setCompMonthBasis: (b: string) => void;
 }
 
 const UiContext = createContext<UiState | null>(null);
@@ -43,6 +45,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [compSetMonthId, setCompSetMonthId] = useState<string>(() => localStorage.getItem('ui.setMonth') || '');
   const [compType, setCompType] = useState<string>(() => localStorage.getItem('ui.comp') || 'ytd');
   const [compQtrBasis, setCompQtrBasis] = useState<string>(() => localStorage.getItem('ui.qtrBasis') || 'yoy');
+  const [compMonthBasis, setCompMonthBasis] = useState<string>(() => localStorage.getItem('ui.monthBasis') || 'yoy');
 
   useEffect(() => {
     const root = document.documentElement;
@@ -57,6 +60,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
   useEffect(() => { localStorage.setItem('ui.setMonth', compSetMonthId); }, [compSetMonthId]);
   useEffect(() => { localStorage.setItem('ui.comp', compType); }, [compType]);
   useEffect(() => { localStorage.setItem('ui.qtrBasis', compQtrBasis); }, [compQtrBasis]);
+  useEffect(() => { localStorage.setItem('ui.monthBasis', compMonthBasis); }, [compMonthBasis]);
 
   const value: UiState = {
     dark,
@@ -75,6 +79,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
     setCompType,
     compQtrBasis,
     setCompQtrBasis,
+    compMonthBasis,
+    setCompMonthBasis,
   };
 
   return <UiContext.Provider value={value}>{children}</UiContext.Provider>;
