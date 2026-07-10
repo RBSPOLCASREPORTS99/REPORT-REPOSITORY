@@ -18,10 +18,14 @@ export default function ExpenseTable({
   sections,
   priorLabel,
   currentLabel,
+  canEdit = false,
+  onReclassify,
 }: {
   sections: ExpenseSection[];
   priorLabel: string;
   currentLabel: string;
+  canEdit?: boolean;
+  onReclassify?: (account: string, section: 'controllable' | 'uncontrollable') => void;
 }) {
   const { units } = useUi();
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['controllable', 'uncontrollable']));
@@ -75,9 +79,27 @@ export default function ExpenseTable({
                 </tr>
                 {open && sec.rows.map((row) => {
                   const up = row.diff >= 0;
+                  // Finance can move an account between Controllable/Non-controllable
+                  // (not Salaries — that group is fixed). The override applies to
+                  // every BU and is remembered.
+                  const editable = canEdit && !!onReclassify && sec.section !== 'salaries';
+                  const target: 'controllable' | 'uncontrollable' = sec.section === 'controllable' ? 'uncontrollable' : 'controllable';
                   return (
                     <tr key={sec.section + row.account} className="border-b border-slate-200 dark:border-slate-700/60">
-                      <td className={`sticky left-0 bg-white dark:bg-slate-800 px-4 py-2.5 pl-6 text-left text-slate-600 dark:text-slate-300 ${cellCls(0)}`}>{row.account}</td>
+                      <td className={`sticky left-0 bg-white dark:bg-slate-800 px-4 py-2.5 pl-6 text-left text-slate-600 dark:text-slate-300 ${cellCls(0)}`}>
+                        <span className="flex items-center gap-2">
+                          <span className="truncate">{row.account}</span>
+                          {editable && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onReclassify!(row.account, target); }}
+                              title={`Move to ${target === 'controllable' ? 'Controllable' : 'Non-controllable'}`}
+                              className="shrink-0 rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700"
+                            >
+                              → {target === 'controllable' ? 'Ctrl' : 'Non-ctrl'}
+                            </button>
+                          )}
+                        </span>
+                      </td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.prior)} ${cellCls(1)}`}>{money(row.prior)}</td>
                       <td className={`px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(2)}`}>{formatPercent(row.priorPct)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.current)} ${cellCls(3)}`}>{money(row.current)}</td>

@@ -13,10 +13,12 @@ import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
   fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
+  saveExpenseSection,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
   type SalesItemRow,
 } from '../lib/queries';
 import { COMBINE_SEP } from '../contexts/CombineContext';
+import { useAuth } from '../contexts/AuthContext';
 
 type View = 'pnl' | 'expenses' | 'sales';
 
@@ -39,6 +41,7 @@ export default function BuDetail() {
   const [error, setError] = useState('');
 
   const { labelFor } = useBuLabels();
+  const { profile } = useAuth();
   const reqRef = useRef(0); // guards against out-of-order responses
   // A combined box arrives as "BU01+BU05"; split into member codes.
   const codes = code ? code.split(COMBINE_SEP) : [];
@@ -166,7 +169,12 @@ export default function BuDetail() {
       {loading ? (
         <TableSkeleton />
       ) : view === 'expenses' ? (
-        <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
+          canEdit={profile?.role === 'finance'}
+          onReclassify={async (account, section) => {
+            try { await saveExpenseSection(account, section); setTick((t) => t + 1); }
+            catch (e) { setError((e as Error).message); }
+          }} />
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
       ) : lines.length === 0 ? (

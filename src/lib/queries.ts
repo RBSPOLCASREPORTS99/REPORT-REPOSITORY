@@ -278,9 +278,23 @@ function mergeExpMaps(maps: ExpMap[]): ExpMap {
   return out;
 }
 
+// Finance-set overrides of each account's Controllable/Non-controllable class.
+export async function fetchExpenseSectionOverrides(): Promise<Map<string, 'controllable' | 'uncontrollable'>> {
+  const { data, error } = await supabase.from('expense_account_sections').select('account, section');
+  if (error) return new Map();
+  return new Map((data ?? []).map((r) => [r.account as string, r.section as 'controllable' | 'uncontrollable']));
+}
+
+export async function saveExpenseSection(account: string, section: 'controllable' | 'uncontrollable'): Promise<void> {
+  const { error } = await supabase.from('expense_account_sections')
+    .upsert({ account, section, updated_at: new Date().toISOString() }, { onConflict: 'account' });
+  if (error) throw error;
+}
+
 // Build the three expense sections (Salaries / Controllable / Non-controllable)
-// from already-fetched current & prior account maps + gross sales.
-function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossPri: number): ExpenseSection[] {
+// from already-fetched current & prior account maps + gross sales. Finance
+// overrides (account → section) win over the section carried by the import.
+function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossPri: number, overrides: Map<string, 'controllable' | 'uncontrollable'>): ExpenseSection[] {
   const accounts = new Set([...cur.keys(), ...pri.keys()]);
   const rows: ExpenseRow[] = [...accounts].map((account) => {
     const c = cur.get(account);
@@ -289,7 +303,7 @@ function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossP
     const prior = p?.amount ?? 0;
     return {
       account,
-      section: c?.section ?? p?.section ?? 'controllable',
+      section: overrides.get(account) ?? c?.section ?? p?.section ?? 'controllable',
       groupName: c?.groupName ?? p?.groupName ?? '',
       current,
       prior,
@@ -323,25 +337,27 @@ function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossP
 // grouped by section and sorted largest-first. The % column is each account as
 // a share of that period's GROSS SALES (expense ÷ gross sales).
 export async function fetchBuExpenses(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<ExpenseSection[]> {
-  const [cur, pri, grossCur, grossPri] = await Promise.all([
+  const [cur, pri, grossCur, grossPri, overrides] = await Promise.all([
     expensesByAccount(currentRangeId, buCode),
     priorRangeId ? expensesByAccount(priorRangeId, buCode) : Promise.resolve(new Map() as ExpMap),
     grossSalesFull(currentRangeId, buCode),
     priorRangeId ? grossSalesFull(priorRangeId, buCode) : Promise.resolve(0),
+    fetchExpenseSectionOverrides(),
   ]);
-  return buildExpenseSections(cur, pri, grossCur, grossPri);
+  return buildExpenseSections(cur, pri, grossCur, grossPri, overrides);
 }
 
 // Same, summed across several BUs (a combined box).
 export async function fetchExpensesCombined(currentRangeId: string, priorRangeId: string | undefined, codes: string[]): Promise<ExpenseSection[]> {
   const sumGross = (a: number[]) => a.reduce((s, v) => s + v, 0);
-  const [cur, pri, grossCur, grossPri] = await Promise.all([
+  const [cur, pri, grossCur, grossPri, overrides] = await Promise.all([
     Promise.all(codes.map((c) => expensesByAccount(currentRangeId, c))).then(mergeExpMaps),
     priorRangeId ? Promise.all(codes.map((c) => expensesByAccount(priorRangeId, c))).then(mergeExpMaps) : Promise.resolve(new Map() as ExpMap),
     Promise.all(codes.map((c) => grossSalesFull(currentRangeId, c))).then(sumGross),
     priorRangeId ? Promise.all(codes.map((c) => grossSalesFull(priorRangeId, c))).then(sumGross) : Promise.resolve(0),
+    fetchExpenseSectionOverrides(),
   ]);
-  return buildExpenseSections(cur, pri, grossCur, grossPri);
+  return buildExpenseSections(cur, pri, grossCur, grossPri, overrides);
 }
 
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
