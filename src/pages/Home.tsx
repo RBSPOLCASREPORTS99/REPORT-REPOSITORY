@@ -5,8 +5,10 @@ import BuCard, { type CardDnd } from '../components/BuCard';
 import CombinedCard, { type CombinedCardData } from '../components/CombinedCard';
 import TruckingCard from '../components/TruckingCard';
 import GffcCard from '../components/GffcCard';
+import CompanyCard from '../components/CompanyCard';
 import { BuCardsSkeleton } from '../components/Skeleton';
 import { fetchGffcPnl, type GffcPnlResult } from '../lib/gffc/gffcQueries';
+import { fetchCompanyPnl } from '../lib/companyQueries';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import { useCombine } from '../contexts/CombineContext';
@@ -22,6 +24,7 @@ export default function Home() {
   const [cards, setCards] = useState<BuCardData[]>([]);
   const [truck, setTruck] = useState<TruckPnlResult | null>(null);
   const [gffc, setGffc] = useState<GffcPnlResult | null>(null);
+  const [company, setCompany] = useState<{ net: number; priorNet: number } | null>(null);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
   const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -101,6 +104,22 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [cmp?.currentId, cmp?.priorId, ranges, tick]);
 
+  // Company-wide Total P&L card (POLCAS AGRI TRADE CORP.) — finance-only; hidden
+  // for others / when there's no company data.
+  useEffect(() => {
+    const curR = ranges.find((r) => r.id === cmp?.currentId);
+    if (!curR) { setCompany(null); return; }
+    const priR = ranges.find((r) => r.id === cmp?.priorId);
+    let cancelled = false;
+    fetchCompanyPnl(
+      { start: curR.period_start, end: curR.period_end },
+      priR ? { start: priR.period_start, end: priR.period_end } : undefined,
+    )
+      .then((c) => { if (!cancelled) setCompany(c.hasData ? { net: c.net, priorNet: c.priorNet } : null); })
+      .catch(() => { if (!cancelled) setCompany(null); });
+    return () => { cancelled = true; };
+  }, [cmp?.currentId, cmp?.priorId, ranges, tick]);
+
   const refresh = useCallback(() => {
     setError('');
     refreshLabels();
@@ -169,12 +188,13 @@ export default function Home() {
         <BuCardsSkeleton />
       ) : ranges.length === 0 ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No published reports yet.</p>
-      ) : cards.length === 0 && !truck?.hasData && !gffc?.hasData ? (
+      ) : cards.length === 0 && !truck?.hasData && !gffc?.hasData && !company ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No data for this comparison. Try ↻ Refresh.</p>
       ) : (
         <>
         <p className="text-[11px] text-slate-400 dark:text-slate-500">Tip: drag a BU box onto another to combine their P&amp;L, Expenses &amp; Sales. Uncheck a combined box to split it.</p>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {company && <CompanyCard net={company.net} priorNet={company.priorNet} priorLabel={cmp?.priorLabel} index={0} />}
           {groupCards.map((gc, i) => (
             <CombinedCard key={gc.key} data={gc.data} priorLabel={cmp?.priorLabel} index={i}
               onUncombine={() => uncombine(gc.data.codes[0])} dnd={dndFor(gc.data.codes[0])} />

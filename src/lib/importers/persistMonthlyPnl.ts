@@ -4,6 +4,7 @@ import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
 import { extractBuInputs, extractPools, extractBu10Salaries, type TruckingInputs } from '../pnl/computeBuPnl';
+import { COLS } from '../pnl/buConfig';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
 
@@ -95,6 +96,12 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   const bu10Salaries = extractBu10Salaries(pivot);
   await supabase.from('monthly_bu10_salary').delete().eq('month_id', monthId);
   await supabase.from('monthly_bu10_salary').insert({ month_id: monthId, amount: bu10Salaries });
+
+  // 4e. Company-wide Total P&L (POLCAS AGRI TRADE CORP.) — the QuickBooks
+  // grand-total ("TOTAL") column, no allocations. Additive across months.
+  const company = extractBuInputs(pivot, { memberColumns: [COLS.companyTotal] });
+  await supabase.from('monthly_company_pnl').delete().eq('month_id', monthId);
+  await supabase.from('monthly_company_pnl').insert({ month_id: monthId, ...company });
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
 

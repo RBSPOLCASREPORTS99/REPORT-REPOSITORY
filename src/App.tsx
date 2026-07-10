@@ -20,6 +20,7 @@ const PresentMode = lazy(() => import('./pages/PresentMode'));
 const TruckingEntry = lazy(() => import('./pages/TruckingEntry'));
 const TruckPnl = lazy(() => import('./pages/TruckPnl'));
 const GffcDetail = lazy(() => import('./pages/GffcDetail'));
+const CompanyPnl = lazy(() => import('./pages/CompanyPnl'));
 const Users = lazy(() => import('./pages/Users'));
 const Account = lazy(() => import('./pages/Account'));
 const BuNames = lazy(() => import('./pages/BuNames'));
@@ -47,6 +48,7 @@ export default function App() {
                 <Route path="/account" element={<Account />} />
                 <Route path="/bu/:code" element={<BuDetail />} />
                 <Route path="/gffc" element={<GffcDetail />} />
+                <Route path="/company" element={<CompanyPnl />} />
                 <Route element={<RequireFinance />}>
                   <Route path="/import" element={<ImportWizard />} />
                   <Route path="/trucking" element={<TruckingEntry />} />
