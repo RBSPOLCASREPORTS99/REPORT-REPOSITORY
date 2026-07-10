@@ -5,7 +5,7 @@ import type { TruckPnlResult } from '../lib/queries';
 
 // Home-grid card for BU10 - TRUCKING. Mirrors BuCard, but opens the per-truck
 // Simulated P&L (/truck-pnl) instead of a BU detail page.
-export default function TruckingCard({ truck, index = 0 }: { truck: TruckPnlResult; index?: number }) {
+export default function TruckingCard({ truck, priorLabel, index = 0 }: { truck: TruckPnlResult; priorLabel?: string; index?: number }) {
   const { units } = useUi();
   const net = truck.net;
   const diff = net - truck.priorNet;
@@ -19,7 +19,7 @@ export default function TruckingCard({ truck, index = 0 }: { truck: TruckPnlResu
       className="group animate-rise flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-indigo-100/80 bg-gradient-to-br from-white to-indigo-50/70 p-3.5 shadow-sm ring-1 ring-transparent transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-indigo-200 active:translate-y-0 dark:border-slate-700 dark:from-slate-800 dark:to-indigo-950/30 dark:hover:ring-indigo-500/40"
     >
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">BU10 - TRUCKING</span>
-      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Net income</span>
+      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Simulated Net Income</span>
       <span
         className={`text-xl font-bold tabular-nums ${
           loss
@@ -39,7 +39,7 @@ export default function TruckingCard({ truck, index = 0 }: { truck: TruckPnlResu
         >
           {up ? '▲' : '▼'} {money(Math.abs(diff))}
         </span>
-        <span className="truncate text-[10px] text-slate-400 dark:text-slate-500">vs {truck.priorLabel}</span>
+        <span className="truncate text-[10px] text-slate-400 dark:text-slate-500">vs {priorLabel ?? 'prior'}</span>
       </div>
     </Link>
   );

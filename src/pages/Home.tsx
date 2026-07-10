@@ -64,18 +64,21 @@ export default function Home() {
       .finally(() => { if (myReq === reqRef.current) setLoading(false); });
   }, [cmp?.currentId, cmp?.priorId, method, tick]);
 
-  // BU10 - TRUCKING card: per-truck P&L (finance-only data). Follows the chosen
-  // set month; hidden when there's no truck data (or the viewer can't read it).
+  // BU10 - TRUCKING card: Simulated per-truck P&L for the current comparison
+  // (finance-only). Hidden when there's no truck data / the viewer can't read it.
   useEffect(() => {
-    const setRange = ranges.find((r) => r.id === cmp?.setMonthId);
-    if (!setRange) { setTruck(null); return; }
-    const target = { year: Number(setRange.period_start.slice(0, 4)), month: Number(setRange.period_start.slice(5, 7)) };
+    const curR = ranges.find((r) => r.id === cmp?.currentId);
+    if (!curR) { setTruck(null); return; }
+    const priR = ranges.find((r) => r.id === cmp?.priorId);
     let cancelled = false;
-    fetchTruckPnl(target)
+    fetchTruckPnl(
+      { start: curR.period_start, end: curR.period_end },
+      priR ? { start: priR.period_start, end: priR.period_end } : undefined,
+    )
       .then((t) => { if (!cancelled) setTruck(t.hasData ? t : null); })
       .catch(() => { if (!cancelled) setTruck(null); });
     return () => { cancelled = true; };
-  }, [cmp?.setMonthId, ranges, tick]);
+  }, [cmp?.currentId, cmp?.priorId, ranges, tick]);
 
   // GFFC - Chickboy Meating Place card: company Net Income for the current
   // comparison (finance-only data; hidden for others / when empty).
@@ -139,7 +142,7 @@ export default function Home() {
           {cards.map((bu, i) => (
             <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={i} />
           ))}
-          {truck?.hasData && <TruckingCard truck={truck} index={cards.length} />}
+          {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} index={cards.length} />}
           {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
         </div>
       )}

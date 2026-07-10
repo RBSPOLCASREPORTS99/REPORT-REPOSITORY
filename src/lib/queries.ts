@@ -1,6 +1,5 @@
 import { supabase } from './supabaseClient';
 import { BUSINESS_UNITS, PNL_LINE_ITEMS } from './constants';
-import { monthLabel } from './format';
 import { TRUCKS } from './pnl/truckConfig';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
@@ -555,11 +554,9 @@ export interface TruckPnlLine {
 }
 export interface TruckPnlResult {
   hasData: boolean;
-  currentLabel: string;
-  priorLabel: string;
   trucks: string[];                    // truck codes present (selector); '' excluded
   pnl: Record<string, TruckPnlLine[]>; // truck_code | 'TOTAL' -> ordered lines
-  net: number;                         // fleet Net Income (for the Home card)
+  net: number;                         // fleet Simulated Net Income (for the Home card)
   priorNet: number;
   netChg: number;
   expensesMissing: boolean;            // income imported but no per-truck expenses yet
@@ -571,38 +568,44 @@ interface TruckExpenseRow { month_id: string; truck_code: string; section: strin
 const EXPENSE_SECTIONS = ['Admin Expenses', 'Finance Expenses', 'Operations Expenses', 'Repairs/Maintenance', 'Salaries and Wages'];
 const chgOf = (cur: number, prior: number) => (prior !== 0 ? (cur - prior) / Math.abs(prior) : 0);
 
-// `target` picks the current month (prior = the previous imported month); when
-// omitted, uses the latest month that has truck income. All figures in ₱'000.
-export async function fetchTruckPnl(target?: { year: number; month: number }): Promise<TruckPnlResult> {
-  const empty: TruckPnlResult = { hasData: false, currentLabel: '', priorLabel: '', trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0, expensesMissing: false };
+export interface TruckPeriod { start: string; end: string } // 'YYYY-MM-DD'
+function truckMonths(start: string, end: string): { year: number; month: number }[] {
+  const [sy, sm] = start.split('-').map(Number);
+  const [ey, em] = end.split('-').map(Number);
+  const out: { year: number; month: number }[] = [];
+  let y = sy, m = sm;
+  while (y < ey || (y === ey && m <= em)) { out.push({ year: y, month: m }); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+
+// Simulated P&L per Truck for a current period vs an optional prior period
+// (same YTD/QTR/Month comparisons as the BUs). All figures in ₱'000.
+export async function fetchTruckPnl(current: TruckPeriod, prior?: TruckPeriod): Promise<TruckPnlResult> {
+  const empty: TruckPnlResult = { hasData: false, trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0, expensesMissing: false };
   const { data: months } = await supabase.from('pnl_months').select('id, year, month');
   if (!months || months.length === 0) return empty;
-  const sorted = [...months].sort((a, b) => a.year - b.year || a.month - b.month) as { id: string; year: number; month: number }[];
+  const idByYm = new Map((months as { id: string; year: number; month: number }[]).map((m) => [`${m.year}-${m.month}`, m.id]));
+  const idsFor = (p: TruckPeriod) => truckMonths(p.start, p.end).map((x) => idByYm.get(`${x.year}-${x.month}`)).filter((x): x is string => !!x);
+  const curIds = new Set(idsFor(current));
+  const priIds = new Set(prior ? idsFor(prior) : []);
+  if (curIds.size === 0) return empty;
+  const allIds = [...new Set([...curIds, ...priIds])];
 
-  const { data: incomeAll } = await supabase.from('monthly_truck_income').select('month_id, truck_code, income');
+  const { data: incomeAll } = await supabase.from('monthly_truck_income').select('month_id, truck_code, income').in('month_id', allIds);
   const incomeRows = (incomeAll ?? []) as { month_id: string; truck_code: string; income: number }[];
-  const withData = new Set(incomeRows.map((r) => r.month_id));
-
-  let curIdx = -1;
-  if (target) curIdx = sorted.findIndex((m) => m.year === target.year && m.month === target.month);
-  else for (let i = sorted.length - 1; i >= 0; i--) if (withData.has(sorted[i].id)) { curIdx = i; break; }
-  if (curIdx === -1) return empty;
-  const cur = sorted[curIdx];
-  const prior = curIdx > 0 ? sorted[curIdx - 1] : null;
-  const ids = prior ? [cur.id, prior.id] : [cur.id];
-
-  const { data: expAll } = await supabase.from('monthly_truck_expense').select('month_id, truck_code, section, account, amount').in('month_id', ids);
+  const { data: expAll } = await supabase.from('monthly_truck_expense').select('month_id, truck_code, section, account, amount').in('month_id', allIds);
   const expRows = (expAll ?? []) as TruckExpenseRow[];
-
-  const { data: salAll } = await supabase.from('monthly_truck_salary').select('month_id, truck_code, amount').in('month_id', ids);
+  const { data: salAll } = await supabase.from('monthly_truck_salary').select('month_id, truck_code, amount').in('month_id', allIds);
   const salRows = (salAll ?? []) as { month_id: string; truck_code: string; amount: number }[];
-  const salaryOf = (monthId: string, code: string) => salRows.find((x) => x.month_id === monthId && x.truck_code === code)?.amount;
 
-  const income = (monthId: string, code: string) => incomeRows.find((x) => x.month_id === monthId && x.truck_code === code)?.income ?? 0;
-  // code|section -> account -> amount, for one month.
-  const acctMap = (monthId: string) => {
+  const incomeSum = (ids: Set<string>, code: string) => incomeRows.reduce((s, r) => s + (ids.has(r.month_id) && r.truck_code === code ? r.income : 0), 0);
+  const salarySum = (ids: Set<string>, code: string) => salRows.reduce((s, r) => s + (ids.has(r.month_id) && r.truck_code === code ? r.amount : 0), 0);
+  const hasSalary = (ids: Set<string>, code: string) => salRows.some((r) => ids.has(r.month_id) && r.truck_code === code);
+  // code|section -> account -> amount, summed over a set of months.
+  const acctMap = (ids: Set<string>) => {
     const m = new Map<string, Map<string, number>>();
-    for (const r of expRows.filter((x) => x.month_id === monthId)) {
+    for (const r of expRows) {
+      if (!ids.has(r.month_id)) continue;
       const key = `${r.truck_code}|${r.section}`;
       if (!m.has(key)) m.set(key, new Map());
       const inner = m.get(key)!;
@@ -610,16 +613,12 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
     }
     return m;
   };
-  const curAcc = acctMap(cur.id);
-  const priAcc = prior ? acctMap(prior.id) : new Map<string, Map<string, number>>();
+  const curAcc = acctMap(curIds), priAcc = acctMap(priIds);
 
-  const truckCodes = TRUCKS.map((t) => t.code).filter((code) => {
-    if (income(cur.id, code)) return true;
-    return expRows.some((r) => r.month_id === cur.id && r.truck_code === code);
-  });
-  if (truckCodes.length === 0) return { ...empty, currentLabel: monthLabel(cur.year, cur.month) };
+  const truckCodes = TRUCKS.map((t) => t.code).filter((code) =>
+    incomeSum(curIds, code) !== 0 || expRows.some((r) => curIds.has(r.month_id) && r.truck_code === code));
+  if (truckCodes.length === 0) return empty;
 
-  // Accounts of a section summed across the given codes: [{account, current, prior}] biggest first.
   const sectionAccounts = (codes: string[], section: string) => {
     const cur2 = new Map<string, number>(), pri2 = new Map<string, number>();
     for (const c of codes) {
@@ -633,8 +632,8 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
 
   const buildLines = (codes: string[]): TruckPnlLine[] => {
     const lines: TruckPnlLine[] = [];
-    const incC = codes.reduce((s, c) => s + income(cur.id, c), 0);
-    const incP = prior ? codes.reduce((s, c) => s + income(prior.id, c), 0) : 0;
+    const incC = codes.reduce((s, c) => s + incomeSum(curIds, c), 0);
+    const incP = codes.reduce((s, c) => s + incomeSum(priIds, c), 0);
     lines.push({ label: 'Trucking Income', kind: 'income', current: incC, prior: incP, chg: chgOf(incC, incP) });
 
     const cogs = sectionAccounts(codes, 'Cost of Goods Sold');
@@ -650,10 +649,10 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
     for (const section of EXPENSE_SECTIONS) {
       // Salaries and Wages: manual per-truck entry overrides the QB salaries.
       if (section === 'Salaries and Wages') {
-        const hasManual = codes.some((c) => salaryOf(cur.id, c) != null || (prior != null && salaryOf(prior.id, c) != null));
+        const hasManual = codes.some((c) => hasSalary(curIds, c) || hasSalary(priIds, c));
         if (hasManual) {
-          const manC = codes.reduce((s, c) => s + (salaryOf(cur.id, c) ?? 0), 0);
-          const manP = prior ? codes.reduce((s, c) => s + (salaryOf(prior.id, c) ?? 0), 0) : 0;
+          const manC = codes.reduce((s, c) => s + salarySum(curIds, c), 0);
+          const manP = codes.reduce((s, c) => s + salarySum(priIds, c), 0);
           lines.push({ label: 'Salaries and Wages', kind: 'account', current: manC, prior: manP, chg: chgOf(manC, manP), cost: true });
           lines.push({ label: 'Total Salaries and Wages', kind: 'subtotal', current: manC, prior: manP, chg: chgOf(manC, manP), cost: true });
           expC += manC; expP += manP;
@@ -669,7 +668,7 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
     }
     lines.push({ label: 'Total Expense', kind: 'total', current: expC, prior: expP, chg: chgOf(expC, expP), cost: true });
     const netC = grossC - expC, netP = grossP - expP;
-    lines.push({ label: 'Net Income', kind: 'net', current: netC, prior: netP, chg: chgOf(netC, netP) });
+    lines.push({ label: 'Simulated Net Income', kind: 'net', current: netC, prior: netP, chg: chgOf(netC, netP) });
     return lines;
   };
 
@@ -679,13 +678,11 @@ export async function fetchTruckPnl(target?: { year: number; month: number }): P
   const netLine = pnl.TOTAL.find((l) => l.kind === 'net')!;
   return {
     hasData: true,
-    currentLabel: monthLabel(cur.year, cur.month),
-    priorLabel: prior ? monthLabel(prior.year, prior.month) : '—',
     trucks: truckCodes,
     pnl,
     net: netLine.current,
     priorNet: netLine.prior,
     netChg: netLine.chg,
-    expensesMissing: !expRows.some((r) => r.month_id === cur.id),
+    expensesMissing: truckCodes.some((c) => incomeSum(curIds, c) !== 0) && !expRows.some((r) => curIds.has(r.month_id)),
   };
 }
