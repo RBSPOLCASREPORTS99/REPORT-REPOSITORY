@@ -15,7 +15,9 @@ import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '.
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
+import { parseGffcExpense, parseGffcSales, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
+import { persistGffcExpense, persistGffcSales } from '../lib/importers/persistGffcData';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
@@ -45,6 +47,8 @@ export default function ImportWizard() {
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [dashMonthExists, setDashMonthExists] = useState(false);
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
+  const [gffcExpense, setGffcExpense] = useState<GffcExpenseRow[]>([]);
+  const [gffcSales, setGffcSales] = useState<GffcSalesRow[]>([]);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
@@ -97,8 +101,15 @@ export default function ImportWizard() {
 
       if (isGffcWorkbook(wb)) {
         const months = parseGffcPnl(buf);
-        if (months.length === 0) { setParseError('No month columns found in the GFFC "P&L 2025" / "P&L 2026" sheets.'); return; }
-        setGffcMonths(months);
+        const exp = parseGffcExpense(wb);
+        const sal = parseGffcSales(wb);
+        if (months.length === 0 && exp.length === 0 && sal.length === 0) {
+          setParseError('No GFFC P&L / Expense / Sales data found in this workbook.');
+          return;
+        }
+        setGffcMonths(months.length ? months : null);
+        setGffcExpense(exp);
+        setGffcSales(sal);
         setStep('gffc');
         return;
       }
@@ -187,10 +198,12 @@ export default function ImportWizard() {
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
   async function handleConfirmGffc() {
-    if (!gffcMonths || !user) return;
+    if (!user) return;
     setConfirming(true); setConfirmError('');
     try {
-      await persistGffcPnl(gffcMonths, fileName, user.id);
+      if (gffcMonths?.length) await persistGffcPnl(gffcMonths, fileName, user.id);
+      await persistGffcExpense(gffcExpense);
+      await persistGffcSales(gffcSales);
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -430,27 +443,33 @@ export default function ImportWizard() {
     );
   }
 
-  // ---- GFFC - Chickboy Meating Place: company Total P&L -------------------
-  if (step === 'gffc' && gffcMonths) {
-    const sorted = [...gffcMonths].sort((a, b) => a.year - b.year || a.month - b.month);
-    const first = sorted[0], last = sorted[sorted.length - 1];
+  // ---- GFFC - Chickboy Meating Place: Total P&L + Expenses + Sales --------
+  if (step === 'gffc') {
+    const pnlRange = () => {
+      if (!gffcMonths?.length) return null;
+      const s = [...gffcMonths].sort((a, b) => a.year - b.year || a.month - b.month);
+      return `${monthLabel(s[0].year, s[0].month)} – ${monthLabel(s[s.length - 1].year, s[s.length - 1].month)} (${gffcMonths.length})`;
+    };
+    const expMonths = new Set(gffcExpense.map((r) => `${r.year}-${r.month}`)).size;
+    const salesItems = new Set(gffcSales.map((r) => r.item)).size;
+    const salesMonths = new Set(gffcSales.map((r) => `${r.year}-${r.month}`)).size;
     return (
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import GFFC - Chickboy Meating Place</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Company Total P&amp;L from the QuickBooks <span className="font-medium">P&amp;L 2025 / P&amp;L 2026</span> sheets.
-          YTD and quarter figures are summed automatically from the months. Re-importing replaces the months present.
+          Reads whichever GFFC QuickBooks sheets are present. YTD/quarter figures are summed automatically.
+          Re-importing replaces the months present (no duplicates).
         </p>
-        <div className="rounded-2xl bg-white p-4 text-sm shadow-sm dark:bg-slate-800">
-          <p className="text-slate-700 dark:text-slate-200">
-            Detected months: <span className="font-medium">{monthLabel(first.year, first.month)} – {monthLabel(last.year, last.month)}</span> ({gffcMonths.length})
-          </p>
+        <div className="space-y-1 rounded-2xl bg-white p-4 text-sm text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
+          {pnlRange() && <p>Total P&amp;L (P&amp;L 2025 / 2026): <span className="font-medium">{pnlRange()}</span></p>}
+          {gffcExpense.length > 0 && <p>Expense Report (QB Exp Details): <span className="font-medium">{gffcExpense.length} account-months</span> across {expMonths} months</p>}
+          {gffcSales.length > 0 && <p>Sales by Qty: <span className="font-medium">{salesItems} items</span> across {salesMonths} months</p>}
         </div>
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
           <button onClick={handleConfirmGffc} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
-            {confirming ? 'Importing…' : 'Import GFFC P&L'}
+            {confirming ? 'Importing…' : 'Import GFFC data'}
           </button>
         </div>
       </div>

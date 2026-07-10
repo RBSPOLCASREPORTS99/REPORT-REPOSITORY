@@ -79,12 +79,11 @@ function parseSheet(ws: XLSX.WorkSheet): GffcMonthInputs[] {
   });
 }
 
-// The GFFC QuickBooks export is identified by its "P&L 2025" / "P&L 2026"
-// sheets (the monthly P&L for last / this year). POLCAS exports never use those
-// names, so this is unambiguous.
+// The GFFC QuickBooks export is identified by its distinctive sheet names
+// (monthly P&L, expense details, sales-by-qty). POLCAS exports never use these.
 export function isGffcWorkbook(wb: XLSX.WorkBook): boolean {
   const n = wb.SheetNames;
-  return n.includes('P&L 2026') || n.includes('P&L 2025') || n.includes('GFFC TOTAL P&L');
+  return ['P&L 2026', 'P&L 2025', 'GFFC TOTAL P&L', 'QB Exp Details', 'Sales by QTY'].some((s) => n.includes(s));
 }
 
 // Parse all months from P&L 2025 + P&L 2026 (overlaps deduped by the caller's

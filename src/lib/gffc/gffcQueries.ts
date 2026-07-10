@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { GFFC_CATEGORIES, GFFC_GROUPS, GFFC_EXPENSE_KEYS } from './gffcConfig';
+import type { ExpenseSection, ExpenseRow, SalesItemRow } from '../queries';
 
 // A date period (from a resolved comparison range) → the GFFC P&L summed over
 // its months. GFFC values are full pesos.
@@ -72,4 +73,81 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
   ];
 
   return { hasData: c.hasData, lines, net: net(cur), priorNet: net(pri) };
+}
+
+function periodMonths(p: Period) {
+  return { months: monthsInPeriod(p.start, p.end), years: [...new Set(monthsInPeriod(p.start, p.end).map((x) => x.year))] };
+}
+
+// ---- Expense Report (grouped controllable / uncontrollable) -----------------
+interface ExpRow { year: number; month: number; account: string; section: string; controllable: boolean; amount: number }
+
+export async function fetchGffcExpenses(current: Period, prior?: Period): Promise<{ hasData: boolean; sections: ExpenseSection[] }> {
+  const { years } = periodMonths(current);
+  const py = prior ? periodMonths(prior).years : [];
+  const { data } = await supabase.from('gffc_monthly_expense').select('year, month, account, section, controllable, amount').in('year', [...new Set([...years, ...py])]);
+  const rows = (data ?? []) as ExpRow[];
+  const inSet = (p?: Period) => new Set(p ? monthsInPeriod(p.start, p.end).map((x) => `${x.year}-${x.month}`) : []);
+  const curSet = inSet(current), priSet = inSet(prior);
+
+  // account -> {section, controllable, current, prior}
+  const acc = new Map<string, { section: string; controllable: boolean; current: number; prior: number }>();
+  for (const r of rows) {
+    const key = r.account;
+    if (!acc.has(key)) acc.set(key, { section: r.section, controllable: r.controllable, current: 0, prior: 0 });
+    const e = acc.get(key)!;
+    if (curSet.has(`${r.year}-${r.month}`)) e.current += Number(r.amount);
+    if (priSet.has(`${r.year}-${r.month}`)) e.prior += Number(r.amount);
+  }
+  const all = [...acc.entries()].filter(([, v]) => v.current !== 0 || v.prior !== 0);
+  const curTotal = all.reduce((s, [, v]) => s + v.current, 0);
+  const priTotal = all.reduce((s, [, v]) => s + v.prior, 0);
+
+  const build = (controllable: boolean): ExpenseSection => {
+    const sectionKey: ExpenseSection['section'] = controllable ? 'controllable' : 'uncontrollable';
+    const rowsOut: ExpenseRow[] = all
+      .filter(([, v]) => v.controllable === controllable)
+      .map(([account, v]) => ({
+        account, section: sectionKey, groupName: v.section,
+        current: v.current, prior: v.prior,
+        currentPct: curTotal ? v.current / curTotal : 0, priorPct: priTotal ? v.prior / priTotal : 0,
+        diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0,
+      }))
+      .sort((a, b) => Math.abs(b.current) - Math.abs(a.current));
+    return {
+      section: sectionKey,
+      total: rowsOut.reduce((s, r) => s + r.current, 0),
+      priorTotal: rowsOut.reduce((s, r) => s + r.prior, 0),
+      rows: rowsOut,
+    };
+  };
+
+  const sections = [build(true), build(false)].filter((s) => s.rows.length > 0);
+  return { hasData: sections.length > 0, sections };
+}
+
+// ---- Sales by Qty -----------------------------------------------------------
+interface SaleRow { year: number; month: number; item: string; uom: string; qty: number }
+
+export async function fetchGffcSales(current: Period, prior?: Period): Promise<{ hasData: boolean; rows: SalesItemRow[] }> {
+  const { years } = periodMonths(current);
+  const py = prior ? periodMonths(prior).years : [];
+  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, item, uom, qty').in('year', [...new Set([...years, ...py])]);
+  const rows = (data ?? []) as SaleRow[];
+  const curSet = new Set(monthsInPeriod(current.start, current.end).map((x) => `${x.year}-${x.month}`));
+  const priSet = new Set(prior ? monthsInPeriod(prior.start, prior.end).map((x) => `${x.year}-${x.month}`) : []);
+
+  const items = new Map<string, { uom: string; current: number; prior: number }>();
+  for (const r of rows) {
+    if (!items.has(r.item)) items.set(r.item, { uom: r.uom, current: 0, prior: 0 });
+    const e = items.get(r.item)!;
+    if (r.uom && !e.uom) e.uom = r.uom;
+    if (curSet.has(`${r.year}-${r.month}`)) e.current += Number(r.qty);
+    if (priSet.has(`${r.year}-${r.month}`)) e.prior += Number(r.qty);
+  }
+  const out: SalesItemRow[] = [...items.entries()]
+    .map(([item, v]) => ({ item, uom: v.uom, prior: v.prior, current: v.current, diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0 }))
+    .filter((r) => r.current !== 0 || r.prior !== 0)
+    .sort((a, b) => b.current - a.current);
+  return { hasData: out.length > 0, rows: out };
 }
