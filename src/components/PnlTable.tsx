@@ -4,7 +4,7 @@ import { useUi } from '../contexts/UiContext';
 import { useColHighlight } from '../lib/useColHighlight';
 import type { ComparisonLine } from '../lib/queries';
 
-const BOLD_KEYS = new Set(['gross_income', 'total_expense', 'net_income_ops', 'net_income']);
+const BOLD_KEYS = new Set(['gross_income', 'total_expense', 'total_allocated_expense', 'total_support_centers', 'net_income_ops', 'net_income']);
 
 // Operating-expense lines that get auto-sorted biggest-first within their block.
 const EXPENSE_SORT_KEYS = new Set([
