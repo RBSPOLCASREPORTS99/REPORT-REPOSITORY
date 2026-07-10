@@ -29,6 +29,10 @@ type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' |
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = [2024, 2025, 2026, 2027];
 
+// Per-BU trucking cost is limited to 5 decimal places (both the pre-filled
+// dashboard values and manual edits).
+const round5 = (v: number) => Math.round(v * 1e5) / 1e5;
+
 export default function ImportWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -77,7 +81,7 @@ export default function ImportWizard() {
       const a = await loadStoredAlloc(year, month);
       const { data: pm } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
       if (cancelled) return;
-      setTrucking(a);
+      setTrucking(Object.fromEntries(Object.entries(a).map(([k, v]) => [k, round5(v as number)])));
       setMonthExists(!!pm);
     })().catch(() => {});
     return () => { cancelled = true; };
@@ -275,8 +279,8 @@ export default function ImportWizard() {
             {TRUCKING_CODES.map((code) => (
               <label key={code} className="flex items-center gap-2 text-sm">
                 <span className="w-14 shrink-0 text-slate-600 dark:text-slate-300">{code}</span>
-                <input type="number" inputMode="decimal" value={trucking[code] || ''}
-                  onChange={(e) => setTrucking((t) => ({ ...t, [code]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                <input type="number" inputMode="decimal" step="0.00001" value={trucking[code] || ''}
+                  onChange={(e) => setTrucking((t) => ({ ...t, [code]: e.target.value === '' ? 0 : round5(Number(e.target.value)) }))}
                   className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" placeholder="0" />
               </label>
             ))}
