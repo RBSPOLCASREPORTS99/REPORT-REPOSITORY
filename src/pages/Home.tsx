@@ -3,7 +3,9 @@ import ComparisonControl, { type ComparisonState } from '../components/Compariso
 import SetMonthSelect from '../components/SetMonthSelect';
 import BuCard from '../components/BuCard';
 import TruckingCard from '../components/TruckingCard';
+import GffcCard from '../components/GffcCard';
 import { BuCardsSkeleton } from '../components/Skeleton';
+import { fetchGffcPnl, type GffcPnlResult } from '../lib/gffc/gffcQueries';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
@@ -14,6 +16,7 @@ export default function Home() {
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [cards, setCards] = useState<BuCardData[]>([]);
   const [truck, setTruck] = useState<TruckPnlResult | null>(null);
+  const [gffc, setGffc] = useState<GffcPnlResult | null>(null);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
   const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -74,6 +77,22 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [cmp?.setMonthId, ranges, tick]);
 
+  // GFFC - Chickboy Meating Place card: company Net Income for the current
+  // comparison (finance-only data; hidden for others / when empty).
+  useEffect(() => {
+    const curR = ranges.find((r) => r.id === cmp?.currentId);
+    if (!curR) { setGffc(null); return; }
+    const priR = ranges.find((r) => r.id === cmp?.priorId);
+    let cancelled = false;
+    fetchGffcPnl(
+      { start: curR.period_start, end: curR.period_end },
+      priR ? { start: priR.period_start, end: priR.period_end } : undefined,
+    )
+      .then((g) => { if (!cancelled) setGffc(g.hasData ? g : null); })
+      .catch(() => { if (!cancelled) setGffc(null); });
+    return () => { cancelled = true; };
+  }, [cmp?.currentId, cmp?.priorId, ranges, tick]);
+
   const refresh = useCallback(() => {
     setError('');
     refreshLabels();
@@ -113,7 +132,7 @@ export default function Home() {
         <BuCardsSkeleton />
       ) : ranges.length === 0 ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No published reports yet.</p>
-      ) : cards.length === 0 && !truck?.hasData ? (
+      ) : cards.length === 0 && !truck?.hasData && !gffc?.hasData ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No data for this comparison. Try ↻ Refresh.</p>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -121,6 +140,7 @@ export default function Home() {
             <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={i} />
           ))}
           {truck?.hasData && <TruckingCard truck={truck} index={cards.length} />}
+          {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
         </div>
       )}
     </div>

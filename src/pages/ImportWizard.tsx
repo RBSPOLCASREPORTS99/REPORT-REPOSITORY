@@ -14,12 +14,14 @@ import { isExpenseTxWorkbook, parseExpenseTransactions, type ParsedExpenseTx } f
 import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '../lib/importers/parseSalesTransactions';
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
+import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
+import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
-type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'done';
+type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'done';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = [2024, 2025, 2026, 2027];
@@ -42,6 +44,7 @@ export default function ImportWizard() {
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [dashMonthExists, setDashMonthExists] = useState(false);
+  const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
@@ -92,6 +95,13 @@ export default function ImportWizard() {
       setFileBuffer(buf);
       const wb = XLSX.read(buf, { type: 'array' });
 
+      if (isGffcWorkbook(wb)) {
+        const months = parseGffcPnl(buf);
+        if (months.length === 0) { setParseError('No month columns found in the GFFC "P&L 2025" / "P&L 2026" sheets.'); return; }
+        setGffcMonths(months);
+        setStep('gffc');
+        return;
+      }
       if (isTruckingDashboard(wb)) {
         const parsed = parseTruckingDashboard(buf);
         if (parsed.months.length === 0) { setParseError('No dated month columns found in the TRUCKING DASHBOARD (Sales per Truck / Sales per BU).'); return; }
@@ -173,6 +183,14 @@ export default function ImportWizard() {
     try {
       const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
       if (res.trucks === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
+      setStep('done');
+    } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
+  }
+  async function handleConfirmGffc() {
+    if (!gffcMonths || !user) return;
+    setConfirming(true); setConfirmError('');
+    try {
+      await persistGffcPnl(gffcMonths, fileName, user.id);
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -406,6 +424,33 @@ export default function ImportWizard() {
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
           <button onClick={handleConfirmDashboard} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
             {confirming ? 'Importing…' : `Import ${monthLabel(year, month)}`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- GFFC - Chickboy Meating Place: company Total P&L -------------------
+  if (step === 'gffc' && gffcMonths) {
+    const sorted = [...gffcMonths].sort((a, b) => a.year - b.year || a.month - b.month);
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    return (
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import GFFC - Chickboy Meating Place</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Company Total P&amp;L from the QuickBooks <span className="font-medium">P&amp;L 2025 / P&amp;L 2026</span> sheets.
+          YTD and quarter figures are summed automatically from the months. Re-importing replaces the months present.
+        </p>
+        <div className="rounded-2xl bg-white p-4 text-sm shadow-sm dark:bg-slate-800">
+          <p className="text-slate-700 dark:text-slate-200">
+            Detected months: <span className="font-medium">{monthLabel(first.year, first.month)} – {monthLabel(last.year, last.month)}</span> ({gffcMonths.length})
+          </p>
+        </div>
+        {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
+          <button onClick={handleConfirmGffc} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {confirming ? 'Importing…' : 'Import GFFC P&L'}
           </button>
         </div>
       </div>

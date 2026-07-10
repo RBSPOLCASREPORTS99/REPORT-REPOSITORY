@@ -7,6 +7,7 @@ const loaders: Record<string, () => Promise<unknown>> = {
   '/import': () => import('../pages/ImportWizard'),
   '/trucking': () => import('../pages/TruckingEntry'),
   '/truck-pnl': () => import('../pages/TruckPnl'),
+  '/gffc': () => import('../pages/GffcDetail'),
   '/farm': () => import('../pages/FarmEntry'),
   '/publish': () => import('../pages/PublishManager'),
   '/users': () => import('../pages/Users'),
