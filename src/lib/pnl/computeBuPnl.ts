@@ -72,6 +72,13 @@ export function extractPools(pivot: ParsedPivot): PoolInputs {
   };
 }
 
+// QB "Total BU10 - TRUCK" -> Total Salaries and Wages (₱ '000). QuickBooks posts
+// BU10 driver salaries at the class level, so this is the authoritative total
+// that Finance's per-truck split is reconciled against.
+export function extractBu10Salaries(pivot: ParsedPivot): number {
+  return lookupValue(pivot, PULLS.salaries.hierCol, PULLS.salaries.label, COLS.truckTotal) / 1000;
+}
+
 // The single source of truth for the P&L math. Works from already-summed
 // inputs, so it serves both a single month (from a pivot) and any range (sum of
 // months). `truckNumer` = this BU's trucking cost, `truckDenom` = all BUs' total.

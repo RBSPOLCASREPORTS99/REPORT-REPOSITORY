@@ -3,7 +3,7 @@ import type { ParsedPivot } from './parsePivotTab';
 import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
-import { extractBuInputs, extractPools, type TruckingInputs } from '../pnl/computeBuPnl';
+import { extractBuInputs, extractPools, extractBu10Salaries, type TruckingInputs } from '../pnl/computeBuPnl';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
 
@@ -88,6 +88,13 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
     const { error: teErr } = await supabase.from('monthly_truck_expense').insert(truckExpenseRows.slice(i, i + 500));
     if (teErr) throw teErr;
   }
+
+  // 4d. QB "Total BU10 - TRUCK" total Salaries and Wages — the authoritative BU10
+  // driver-salary total, reconciled against the manual per-truck split on the
+  // Salaries screen (variance prorated by each truck's Gross Income).
+  const bu10Salaries = extractBu10Salaries(pivot);
+  await supabase.from('monthly_bu10_salary').delete().eq('month_id', monthId);
+  await supabase.from('monthly_bu10_salary').insert({ month_id: monthId, amount: bu10Salaries });
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
 

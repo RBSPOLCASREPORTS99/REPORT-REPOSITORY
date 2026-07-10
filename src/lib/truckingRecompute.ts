@@ -73,6 +73,29 @@ export async function loadMonthSalaries(monthId: string): Promise<Record<string,
   return out;
 }
 
+// Data for reconciling the manual per-truck salaries to the QuickBooks BU10
+// total: the authoritative "Total BU10 - TRUCK" Salaries and Wages for the month
+// (null when the month was imported before this was captured — re-import to fill)
+// plus each truck's Gross Income (Trucking Income − COGS, ₱ '000) used as the
+// proration weight for the variance.
+export interface TruckReconcile {
+  bu10Total: number | null;
+  grossByTruck: Record<string, number>;
+}
+
+export async function loadTruckReconcile(monthId: string): Promise<TruckReconcile> {
+  const [salRes, incRes, inpRes] = await Promise.all([
+    supabase.from('monthly_bu10_salary').select('amount').eq('month_id', monthId).maybeSingle(),
+    supabase.from('monthly_truck_income').select('truck_code, income').eq('month_id', monthId),
+    supabase.from('monthly_truck_inputs').select('truck_code, cogs').eq('month_id', monthId),
+  ]);
+  const bu10Total = salRes.data ? Number(salRes.data.amount) : null;
+  const gross: Record<string, number> = {};
+  for (const r of incRes.data ?? []) gross[r.truck_code as string] = (gross[r.truck_code as string] ?? 0) + Number(r.income);
+  for (const r of inpRes.data ?? []) gross[r.truck_code as string] = (gross[r.truck_code as string] ?? 0) - Number(r.cogs);
+  return { bu10Total, grossByTruck: gross };
+}
+
 export async function saveMonthSalaries(monthId: string, salaries: Record<string, number>): Promise<void> {
   await supabase.from('monthly_truck_salary').delete().eq('month_id', monthId);
   const rows = TRUCKS.map((t) => ({ month_id: monthId, truck_code: t.code, amount: salaries[t.code] ?? 0 })).filter((r) => r.amount !== 0);
