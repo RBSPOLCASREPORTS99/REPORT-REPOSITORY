@@ -239,6 +239,8 @@ export interface ExpenseSection {
   section: ExpenseSectionKey;
   total: number;      // current section total
   priorTotal: number;
+  pct?: number;        // current section total ÷ current gross sales (omitted = no % shown)
+  priorPct?: number;   // prior section total ÷ prior gross sales
   rows: ExpenseRow[];
 }
 
@@ -319,10 +321,14 @@ function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossP
   const isSal = (r: ExpenseRow) => /salar|wage/i.test(r.groupName);
   const build = (section: ExpenseSectionKey, filter: (r: ExpenseRow) => boolean): ExpenseSection => {
     const secRows = rows.filter(filter).sort((a, b) => b.current - a.current);
+    const total = secRows.reduce((s, r) => s + r.current, 0);
+    const priorTotal = secRows.reduce((s, r) => s + r.prior, 0);
     return {
       section,
-      total: secRows.reduce((s, r) => s + r.current, 0),
-      priorTotal: secRows.reduce((s, r) => s + r.prior, 0),
+      total,
+      priorTotal,
+      pct: grossCur !== 0 ? total / grossCur : 0,
+      priorPct: grossPri !== 0 ? priorTotal / grossPri : 0,
       rows: secRows,
     };
   };

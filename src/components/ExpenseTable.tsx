@@ -71,9 +71,9 @@ export default function ExpenseTable({
                     {SECTION_LABELS[sec.section]}
                   </td>
                   <td className={`px-3 py-2 text-right tabular-nums ${cellCls(1)}`}>{money(sec.priorTotal)}</td>
-                  <td className={`px-2 py-2 ${cellCls(2)}`} />
+                  <td className={`px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(2)}`}>{sec.priorPct != null ? formatPercent(sec.priorPct) : ''}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${cellCls(3)}`}>{money(sec.total)}</td>
-                  <td className={`px-2 py-2 ${cellCls(4)}`} />
+                  <td className={`px-2 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(4)}`}>{sec.pct != null ? formatPercent(sec.pct) : ''}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${secDiff >= 0 ? 'text-red-600' : 'text-green-600'} ${cellCls(5)}`}>
                     {money(Math.abs(secDiff))}
                   </td>
