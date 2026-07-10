@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
 import { computeSide, extractPools, type TruckingInputs } from '../lib/pnl/computeBuPnl';
-import { BU_CONFIGS, TRUCKING_CODES, PULLS, type BuConfig } from '../lib/pnl/buConfig';
+import { BU_CONFIGS, TRUCKING_CODES, PULLS, COLS, type BuConfig } from '../lib/pnl/buConfig';
 import { loadBuConfigs } from '../lib/pnl/loadBuConfigs';
 import { supabase } from '../lib/supabaseClient';
 import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
@@ -242,6 +242,11 @@ export default function ImportWizard() {
       // allocations/trucking — a check against the source workbook.
       rawNI: cfg.memberColumns.reduce((s, col) => s + lookupValue(pivot, PULLS.netIncome.hierCol, PULLS.netIncome.label, col), 0) / 1000,
     }));
+    // Company total Net Income from the QuickBooks grand-total column (the last
+    // column with data) — the ground-truth check against which the sum of the
+    // allocated per-BU Net Income should reconcile.
+    const totalRawNI = lookupValue(pivot, PULLS.netIncome.hierCol, PULLS.netIncome.label, COLS.companyTotal) / 1000;
+    const totalNetIncome = previews.reduce((s, p) => s + p.netIncome, 0);
     // Safety check: a wrong/empty file yields near-zero totals.
     const companyGross = extractPools(pivot).company_gross_sales; // ₱'000
     const suspicious = companyGross <= 0 || previews.every((p) => p.rawNI === 0);
@@ -300,10 +305,17 @@ export default function ImportWizard() {
               <span className={`text-right text-sm font-medium tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(netIncome)}k</span>
             </div>
           ))}
+          <div className="grid grid-cols-[1fr_7rem_7rem] items-center gap-x-3 border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Total</span>
+            <span className={`text-right text-sm font-semibold tabular-nums ${totalRawNI < 0 ? 'text-red-600' : 'text-slate-700 dark:text-slate-200'}`}>₱{formatThousands(totalRawNI)}k</span>
+            <span className={`text-right text-sm font-semibold tabular-nums ${totalNetIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(totalNetIncome)}k</span>
+          </div>
           <p className="px-4 py-2 text-[11px] text-slate-400 dark:text-slate-500">
             <span className="font-medium">Raw NI in Excel</span> = the BU's own Net Income from the QuickBooks
             sheet (before Admin / Cost-of-Money / support allocations and trucking) — for checking only.
             <span className="font-medium"> Net Income</span> is the final figure after allocations.
+            <span className="font-medium"> Total Raw NI</span> is the company grand-total column in the QuickBooks
+            sheet; the allocated <span className="font-medium">Total Net Income</span> should reconcile to it.
           </p>
         </div>
 
