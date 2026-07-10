@@ -72,6 +72,13 @@ export function extractPools(pivot: ParsedPivot): PoolInputs {
   };
 }
 
+// "Reclass or Adjusted Variance" — a leaf under the COGS section (already inside
+// Total COGS), summed over a BU's member columns (₱ '000). Broken out below COGS
+// for BU07 / BU08PH / BU09.
+export function extractCogsVariance(pivot: ParsedPivot, cfg: { memberColumns: string[] }): number {
+  return sumMemberCols(pivot, cfg.memberColumns, 4, 'Reclass or Adjusted Variance');
+}
+
 // QB "Total BU10 - TRUCK" -> Total Salaries and Wages (₱ '000). QuickBooks posts
 // BU10 driver salaries at the class level, so this is the authoritative total
 // that Finance's per-truck split is reconciled against.

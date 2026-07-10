@@ -78,3 +78,11 @@ export const PNL_LINE_ITEMS: PnlLineItemDef[] = [
 // (FINANCE / HUMAN RESOURCE / MANAGEMENT) once seen, to avoid false matches
 // against unrelated cells earlier in the sheet.
 export const SUPPORT_CENTERS_HEADER_MATCH = 'SUPPORT CENTERS';
+
+// BUs whose P&L breaks the COGS leaf "Reclass or Adjusted Variance" out below
+// Cost of Goods Sold (with a Total), and the label each uses for that line.
+export const COGS_VARIANCE_LABELS: Record<string, string> = {
+  BU07: 'Live Hogs Price Adjustment',
+  BU09: 'Hog Feeds Price Adjustment',
+  BU08PH: 'Reclass or Adjusted Variance',
+};

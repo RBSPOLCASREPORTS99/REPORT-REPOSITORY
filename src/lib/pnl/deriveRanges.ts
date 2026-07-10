@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TRUCKING_CODES, type BuConfig } from './buConfig';
 import { loadBuConfigs } from './loadBuConfigs';
 import { computeFromInputs, type BuInputs, type PoolInputs } from './computeBuPnl';
-import { PNL_LINE_ITEMS } from '../constants';
+import { PNL_LINE_ITEMS, COGS_VARIANCE_LABELS } from '../constants';
 import { monthLabel } from '../format';
 
 // deriveRanges takes the Supabase client explicitly so both the app (anon +
@@ -19,9 +19,11 @@ interface MonthData {
   year: number;
   month: number;
   inputs: Map<string, BuInputs>; // bu_code -> raw lines
+  variance: Map<string, number>; // bu_code -> COGS "Reclass or Adjusted Variance" (₱ '000)
   pools: PoolInputs;
   trucking: Record<string, number>; // code -> amount
 }
+
 
 const ZERO_BU: BuInputs = {
   gross_sales: 0, cogs: 0, admin_expense: 0, discounting_expense: 0,
@@ -44,17 +46,19 @@ async function loadYearMonths(db: Db, year: number): Promise<MonthData[]> {
       db.from('monthly_trucking').select('trucking_code, amount').eq('month_id', m.id),
     ]);
     const inputMap = new Map<string, BuInputs>();
+    const varMap = new Map<string, number>();
     for (const r of inputs ?? []) {
       inputMap.set(r.bu_code as string, {
         gross_sales: r.gross_sales, cogs: r.cogs, admin_expense: r.admin_expense,
         discounting_expense: r.discounting_expense, operations_expense: r.operations_expense,
         repairs_expense: r.repairs_expense, salaries_expense: r.salaries_expense, other_income: r.other_income,
       });
+      varMap.set(r.bu_code as string, (r.cogs_variance as number) ?? 0);
     }
     const trucking: Record<string, number> = {};
     for (const t of truck ?? []) trucking[t.trucking_code as string] = t.amount as number;
     out.push({
-      year: m.year, month: m.month, inputs: inputMap,
+      year: m.year, month: m.month, inputs: inputMap, variance: varMap,
       pools: pool ? {
         company_gross_sales: pool.company_gross_sales, admin_pool: pool.admin_pool, cost_money_pool: pool.cost_money_pool,
         finance_pool: pool.finance_pool, hr_pool: pool.hr_pool, mancom_pool: pool.mancom_pool, bu10_truck_total: pool.bu10_truck_total,
@@ -118,9 +122,21 @@ async function materializeRange(
     const truckNumer = cfg.truckingMembers.reduce((s, code) => s + (truckByCode[code] ?? 0), 0);
     const side = computeFromInputs(bu, pools, cfg, truckNumer, truckDenom);
     const gs = side.gross_sales || 0;
+    const pctOf = (key: string, amount: number) => (PCT_KEYS.has(key) || gs === 0 ? 0 : amount / gs);
+    const push = (key: string, amount: number) => rows.push({ range_id: rangeId, bu_code: cfg.buCode, line_item: key, amount, pct_of_sales: pctOf(key, amount) });
+    const variance = months.reduce((s, m) => s + (m.variance.get(cfg.buCode) ?? 0), 0);
     for (const item of PNL_LINE_ITEMS) {
       const amount = side[item.key] ?? 0;
-      rows.push({ range_id: rangeId, bu_code: cfg.buCode, line_item: item.key, amount, pct_of_sales: PCT_KEYS.has(item.key) || gs === 0 ? 0 : amount / gs });
+      // For the variance BUs, split COGS: Cost of Goods Sold (= Total − variance),
+      // the variance line, then Total Cost of Goods Sold (= Total COGS). Gross
+      // Income is unchanged (still Gross Sales − Total COGS).
+      if (item.key === 'cogs' && cfg.buCode in COGS_VARIANCE_LABELS && variance !== 0) {
+        push('cogs', amount - variance);
+        push('cogs_variance', variance);
+        push('cogs_total', amount);
+      } else {
+        push(item.key, amount);
+      }
     }
     await db.from('computed_pnl').delete().eq('range_id', rangeId).eq('bu_code', cfg.buCode);
   }

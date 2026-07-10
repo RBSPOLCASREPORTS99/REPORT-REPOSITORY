@@ -14,7 +14,7 @@ export default function CompanyCard({ net, priorNet, priorLabel, index = 0 }: { 
     <Link
       to="/company"
       style={{ animationDelay: `${Math.min(index, 15) * 40}ms` }}
-      className="group animate-rise col-span-2 flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-teal-50/70 p-3.5 shadow-sm ring-1 ring-transparent transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/10 hover:ring-emerald-300 active:translate-y-0 dark:border-emerald-800/60 dark:from-emerald-950/30 dark:to-teal-950/30 dark:hover:ring-emerald-500/40"
+      className="group animate-rise col-span-3! flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-teal-50/70 p-3.5 shadow-sm ring-1 ring-transparent transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/10 hover:ring-emerald-300 active:translate-y-0 dark:border-emerald-800/60 dark:from-emerald-950/30 dark:to-teal-950/30 dark:hover:ring-emerald-500/40"
     >
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">POLCAS AGRI TRADE CORP. · Total P&amp;L</span>
       <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Company net income</span>

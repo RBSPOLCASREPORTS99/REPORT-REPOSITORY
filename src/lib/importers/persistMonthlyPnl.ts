@@ -3,7 +3,7 @@ import type { ParsedPivot } from './parsePivotTab';
 import { TRUCKING_CODES } from '../pnl/buConfig';
 import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
-import { extractBuInputs, extractPools, extractBu10Salaries, type TruckingInputs } from '../pnl/computeBuPnl';
+import { extractBuInputs, extractPools, extractBu10Salaries, extractCogsVariance, type TruckingInputs } from '../pnl/computeBuPnl';
 import { COLS } from '../pnl/buConfig';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
@@ -49,7 +49,7 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   // 4. replace inputs / pools / trucking
   await supabase.from('monthly_pnl_inputs').delete().eq('month_id', monthId);
   const configs = await loadBuConfigs(supabase, pivot);
-  const inputRows = configs.filter((c) => !c.manualEntry).map((cfg) => ({ month_id: monthId, bu_code: cfg.buCode, ...extractBuInputs(pivot, cfg) }));
+  const inputRows = configs.filter((c) => !c.manualEntry).map((cfg) => ({ month_id: monthId, bu_code: cfg.buCode, ...extractBuInputs(pivot, cfg), cogs_variance: extractCogsVariance(pivot, cfg) }));
   const { error: inErr } = await supabase.from('monthly_pnl_inputs').insert(inputRows);
   if (inErr) throw inErr;
 

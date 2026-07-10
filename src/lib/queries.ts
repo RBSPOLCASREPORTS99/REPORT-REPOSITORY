@@ -1,10 +1,16 @@
 import { supabase } from './supabaseClient';
-import { BUSINESS_UNITS, PNL_LINE_ITEMS } from './constants';
+import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS } from './constants';
 import { TRUCKS } from './pnl/truckConfig';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
-const LINE_ORDER = new Map(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
+const LINE_ORDER = new Map<string, number>(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
 const LINE_LABEL = new Map(PNL_LINE_ITEMS.map((item) => [item.key, item.label]));
+// The broken-out COGS lines (BU07 / BU08PH / BU09) sit between cogs (1) and
+// gross_income (2). Not in PNL_LINE_ITEMS so the compute is unaffected.
+LINE_ORDER.set('cogs_variance', 1.3);
+LINE_ORDER.set('cogs_total', 1.6);
+LINE_LABEL.set('cogs_variance', 'Reclass or Adjusted Variance');
+LINE_LABEL.set('cogs_total', 'Total Cost of Goods Sold');
 const PCT_KEYS = new Set(['net_income_ops_pct', 'net_income_pct']);
 
 export interface RangeRow {
@@ -209,7 +215,11 @@ export async function fetchBuComparison(currentRangeId: string, priorRangeId: st
     sideByLine(currentRangeId, buCode, method),
     priorRangeId ? sideByLine(priorRangeId, buCode, method) : Promise.resolve(new Map() as SideMap),
   ]);
-  return buildComparisonLines(cur, pri);
+  const lines = buildComparisonLines(cur, pri);
+  // BU-specific label for the broken-out COGS variance line.
+  const vLabel = COGS_VARIANCE_LABELS[buCode];
+  if (vLabel) { const l = lines.find((x) => x.key === 'cogs_variance'); if (l) l.label = vLabel; }
+  return lines;
 }
 
 // Same, but summed across several BUs (a combined box on Home).

@@ -4,7 +4,7 @@ import { useUi } from '../contexts/UiContext';
 import { useColHighlight } from '../lib/useColHighlight';
 import type { ComparisonLine } from '../lib/queries';
 
-const BOLD_KEYS = new Set(['gross_income', 'total_expense', 'total_allocated_expense', 'total_support_centers', 'net_income_ops', 'net_income']);
+const BOLD_KEYS = new Set(['gross_income', 'cogs_total', 'total_expense', 'total_allocated_expense', 'total_support_centers', 'net_income_ops', 'net_income']);
 
 // Operating-expense lines that get auto-sorted biggest-first within their block.
 const EXPENSE_SORT_KEYS = new Set([
@@ -15,7 +15,7 @@ const EXPENSE_SORT_KEYS = new Set([
 // Expense/cost lines where an INCREASE is unfavorable → colour DIFF/%DIFF red
 // when higher, green when lower (opposite of income lines like Net Income).
 const COST_KEYS = new Set([
-  'cogs', 'admin_expense', 'discounting_expense', 'operations_expense',
+  'cogs', 'cogs_variance', 'cogs_total', 'admin_expense', 'discounting_expense', 'operations_expense',
   'repairs_expense', 'salaries_expense', 'trucking_expense', 'total_expense',
   'admin_allocated', 'cost_of_money_allocated', 'total_allocated_expense',
   'support_finance', 'support_hr', 'support_management', 'total_support_centers',
