@@ -18,6 +18,7 @@ import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/impor
 import { parseGffcExpense, parseGffcSales, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
 import { persistGffcExpense, persistGffcSales } from '../lib/importers/persistGffcData';
+import { GFFC_CATEGORIES, GFFC_EXPENSE_KEYS } from '../lib/gffc/gffcConfig';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
 import { monthLabel, formatThousands } from '../lib/format';
@@ -453,6 +454,16 @@ export default function ImportWizard() {
     const expMonths = new Set(gffcExpense.map((r) => `${r.year}-${r.month}`)).size;
     const salesItems = new Set(gffcSales.map((r) => r.item)).size;
     const salesMonths = new Set(gffcSales.map((r) => `${r.year}-${r.month}`)).size;
+    const catKeys = GFFC_CATEGORIES.map((c) => c.key);
+    // Per-month preview to check the parsed P&L (₱'000).
+    const pnlPreview = (gffcMonths ?? []).slice().sort((a, b) => a.year - b.year || a.month - b.month).map((m) => {
+      const gross = catKeys.reduce((s, k) => s + (m.lines[k] ?? 0), 0);
+      const totalExp = GFFC_EXPENSE_KEYS.reduce((s, k) => s + (m.lines[k] ?? 0), 0);
+      const net = gross - (m.lines.cogs ?? 0) - totalExp;
+      const exp = gffcExpense.filter((r) => r.year === m.year && r.month === m.month).reduce((s, r) => s + r.amount, 0);
+      return { label: monthLabel(m.year, m.month), gross, net, exp };
+    });
+    const suspicious = pnlPreview.length > 0 && pnlPreview.every((p) => p.gross === 0);
     return (
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import GFFC - Chickboy Meating Place</h1>
@@ -465,6 +476,31 @@ export default function ImportWizard() {
           {gffcExpense.length > 0 && <p>Expense Report (QB Exp Details): <span className="font-medium">{gffcExpense.length} account-months</span> across {expMonths} months</p>}
           {gffcSales.length > 0 && <p>Sales by Qty: <span className="font-medium">{salesItems} items</span> across {salesMonths} months</p>}
         </div>
+
+        {pnlPreview.length > 0 && (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
+            <div className="grid grid-cols-[1fr_7rem_7rem_7rem] gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+              <span>Month · ₱'000</span>
+              <span className="text-right">Gross Sales</span>
+              <span className="text-right">Net Income</span>
+              <span className="text-right">Expenses</span>
+            </div>
+            {pnlPreview.map((p) => (
+              <div key={p.label} className="grid grid-cols-[1fr_7rem_7rem_7rem] items-center gap-x-3 px-4 py-2">
+                <span className="text-sm text-slate-900 dark:text-slate-100">{p.label}</span>
+                <span className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-300">₱{formatThousands(p.gross / 1000)}k</span>
+                <span className={`text-right text-sm font-medium tabular-nums ${p.net < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(p.net / 1000)}k</span>
+                <span className="text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">{p.exp ? `₱${formatThousands(p.exp / 1000)}k` : '—'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {suspicious && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            ⚠️ All months show ₱0 Gross Sales — double-check this is the GFFC QuickBooks export before importing.
+          </p>
+        )}
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
           <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
