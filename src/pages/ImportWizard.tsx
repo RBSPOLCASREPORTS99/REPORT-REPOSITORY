@@ -455,13 +455,13 @@ export default function ImportWizard() {
     const salesItems = new Set(gffcSales.map((r) => r.item)).size;
     const salesMonths = new Set(gffcSales.map((r) => `${r.year}-${r.month}`)).size;
     const catKeys = GFFC_CATEGORIES.map((c) => c.key);
-    // Per-month preview to check the parsed P&L (₱'000).
+    // Per-month preview to check the parsed P&L (full pesos). Total Expense =
+    // sum of the 5 expense groups from the P&L (the "Total Expense" row).
     const pnlPreview = (gffcMonths ?? []).slice().sort((a, b) => a.year - b.year || a.month - b.month).map((m) => {
       const gross = catKeys.reduce((s, k) => s + (m.lines[k] ?? 0), 0);
       const totalExp = GFFC_EXPENSE_KEYS.reduce((s, k) => s + (m.lines[k] ?? 0), 0);
       const net = gross - (m.lines.cogs ?? 0) - totalExp;
-      const exp = gffcExpense.filter((r) => r.year === m.year && r.month === m.month).reduce((s, r) => s + r.amount, 0);
-      return { label: monthLabel(m.year, m.month), gross, net, exp };
+      return { label: monthLabel(m.year, m.month), gross, net, totalExp };
     });
     const suspicious = pnlPreview.length > 0 && pnlPreview.every((p) => p.gross === 0);
     return (
@@ -479,18 +479,18 @@ export default function ImportWizard() {
 
         {pnlPreview.length > 0 && (
           <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
-            <div className="grid grid-cols-[1fr_7rem_7rem_7rem] gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
-              <span>Month · ₱'000</span>
+            <div className="grid grid-cols-[1fr_9rem_8rem_9rem] gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+              <span>Month · ₱</span>
               <span className="text-right">Gross Sales</span>
               <span className="text-right">Net Income</span>
-              <span className="text-right">Expenses</span>
+              <span className="text-right">Total Expense</span>
             </div>
             {pnlPreview.map((p) => (
-              <div key={p.label} className="grid grid-cols-[1fr_7rem_7rem_7rem] items-center gap-x-3 px-4 py-2">
+              <div key={p.label} className="grid grid-cols-[1fr_9rem_8rem_9rem] items-center gap-x-3 px-4 py-2">
                 <span className="text-sm text-slate-900 dark:text-slate-100">{p.label}</span>
-                <span className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-300">₱{formatThousands(p.gross / 1000)}k</span>
-                <span className={`text-right text-sm font-medium tabular-nums ${p.net < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(p.net / 1000)}k</span>
-                <span className="text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">{p.exp ? `₱${formatThousands(p.exp / 1000)}k` : '—'}</span>
+                <span className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-300">₱{formatThousands(p.gross)}</span>
+                <span className={`text-right text-sm font-medium tabular-nums ${p.net < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(p.net)}</span>
+                <span className="text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">₱{formatThousands(p.totalExp)}</span>
               </div>
             ))}
           </div>
