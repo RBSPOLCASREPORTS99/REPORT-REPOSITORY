@@ -6,8 +6,8 @@ export default function TrendChart({ data }: { data: TrendPoint[] }) {
   const chartData = data.map((p) => ({
     label: p.label,
     'Gross Sales': Math.round(p.grossSales),
-    'Gross Income': Math.round(p.grossIncome),
-    'Net Income': Math.round(p.netIncome),
+    'Expense': Math.round(p.totalExpense),
+    'Net Income from Operations': Math.round(p.netIncomeOps),
   }));
 
   return (
@@ -19,8 +19,8 @@ export default function TrendChart({ data }: { data: TrendPoint[] }) {
           <YAxis tick={{ fontSize: 11 }} />
           <Tooltip formatter={(v) => (typeof v === 'number' ? v.toLocaleString() : v)} />
           <Line type="monotone" dataKey="Gross Sales" stroke="#94a3b8" strokeWidth={2} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="Gross Income" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} />
-          <Line type="monotone" dataKey="Net Income" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="Expense" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="Net Income from Operations" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

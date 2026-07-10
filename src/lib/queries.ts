@@ -484,17 +484,18 @@ export interface TrendPoint {
   label: string;
   periodEnd: string;
   grossSales: number;
-  grossIncome: number;
-  netIncome: number;
+  totalExpense: number;
+  netIncomeOps: number;
 }
 
-// Trend across month ranges (standalone monthly figures) for a BU.
+// Trend across month ranges (standalone monthly figures) for a BU:
+// Gross Sales, Total Expense, and Net Income from Operations.
 export async function fetchTrend(buCode: string, limit = 12): Promise<TrendPoint[]> {
   const { data, error } = await supabase
     .from('computed_pnl')
     .select('amount, line_item, report_ranges!inner(label, kind, period_end)')
     .eq('bu_code', buCode)
-    .in('line_item', ['gross_sales', 'gross_income', 'net_income']);
+    .in('line_item', ['gross_sales', 'total_expense', 'net_income_ops']);
   if (error) throw error;
 
   const byRange = new Map<string, TrendPoint>();
@@ -502,12 +503,12 @@ export async function fetchTrend(buCode: string, limit = 12): Promise<TrendPoint
     if (row.report_ranges.kind !== 'month') continue;
     const k = row.report_ranges.period_end;
     if (!byRange.has(k)) {
-      byRange.set(k, { label: row.report_ranges.label, periodEnd: k, grossSales: 0, grossIncome: 0, netIncome: 0 });
+      byRange.set(k, { label: row.report_ranges.label, periodEnd: k, grossSales: 0, totalExpense: 0, netIncomeOps: 0 });
     }
     const pt = byRange.get(k)!;
     if (row.line_item === 'gross_sales') pt.grossSales = row.amount;
-    if (row.line_item === 'gross_income') pt.grossIncome = row.amount;
-    if (row.line_item === 'net_income') pt.netIncome = row.amount;
+    if (row.line_item === 'total_expense') pt.totalExpense = row.amount;
+    if (row.line_item === 'net_income_ops') pt.netIncomeOps = row.amount;
   }
   return [...byRange.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd)).slice(-limit);
 }

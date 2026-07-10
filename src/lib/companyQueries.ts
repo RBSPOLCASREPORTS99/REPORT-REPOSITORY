@@ -11,6 +11,8 @@ export interface CompanyPeriod { start: string; end: string } // 'YYYY-MM-DD'
 export const PCAC_LABEL = 'POLCAS AGRI TRADE CORP.';
 
 const LABEL = new Map(PNL_LINE_ITEMS.map((i) => [i.key, i.label]));
+// The company Total P&L follows the PCAC sheet, which labels this "Finance Expense".
+LABEL.set('discounting_expense', 'Finance Expense');
 
 interface CompanyInputs {
   gross_sales: number; cogs: number;
