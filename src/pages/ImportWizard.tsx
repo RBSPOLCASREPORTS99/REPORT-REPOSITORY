@@ -194,7 +194,7 @@ export default function ImportWizard() {
     setConfirming(true); setConfirmError('');
     try {
       const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
-      if (res.trucks === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
+      if (res.truckMonths === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -409,9 +409,9 @@ export default function ImportWizard() {
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import TRUCKING DASHBOARD</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          The <span className="font-medium">whole Sales per BU history</span> ({dashboard.months.length} months) is stored for
-          the trucking allocation of every P&amp;L month. <span className="font-medium">Per-truck income</span> is read only for
-          the <span className="font-medium">selected month</span> below.
+          One-time upload of the <span className="font-medium">whole history</span> ({dashboard.months.length} months):
+          per-truck income and per-BU trucking allocation are stored for <span className="font-medium">every imported P&amp;L month</span>,
+          then YTD/quarter figures recompute. The month picker below is just for the summary shown.
         </p>
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-500 dark:text-slate-400">Month</span>
