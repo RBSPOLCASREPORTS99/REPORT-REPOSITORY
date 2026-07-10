@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatPercent } from '../lib/format';
+import { useColHighlight } from '../lib/useColHighlight';
 import type { SalesItemRow } from '../lib/queries';
 
 function qty(v: number) {
@@ -24,6 +25,7 @@ export default function SalesTable({
   const storageKey = `sales.hidden.${buCode ?? 'all'}`;
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
+  const { tableProps, cellCls } = useColHighlight();
 
   // Load (and reload when the BU changes) the saved hidden-item list.
   useEffect(() => {
@@ -85,15 +87,15 @@ export default function SalesTable({
       </div>
 
       <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-0">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm" {...tableProps}>
           <thead>
             <tr className="border-b border-slate-300 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
-              <th className="sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Item</th>
-              <th className="sticky top-0 z-10 bg-slate-100 px-2 py-2 text-left dark:bg-slate-900/80">U/M</th>
-              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">{priorLabel}</th>
-              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">{currentLabel}</th>
-              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">DIFF</th>
-              <th className="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80">%DIFF</th>
+              <th className={`sticky left-0 top-0 z-20 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80 ${cellCls(0)}`}>Item</th>
+              <th className={`sticky top-0 z-10 bg-slate-100 px-2 py-2 text-left dark:bg-slate-900/80 ${cellCls(1)}`}>U/M</th>
+              <th className={`sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80 ${cellCls(2)}`}>{priorLabel}</th>
+              <th className={`sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80 ${cellCls(3)}`}>{currentLabel}</th>
+              <th className={`sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80 ${cellCls(4)}`}>DIFF</th>
+              <th className={`sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80 ${cellCls(5)}`}>%DIFF</th>
             </tr>
           </thead>
           <tbody>
@@ -101,14 +103,14 @@ export default function SalesTable({
               const up = r.diff >= 0;
               return (
                 <tr key={r.item + i} className="border-b border-slate-200 dark:border-slate-700/60">
-                  <td className="sticky left-0 bg-white px-4 py-2.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{r.item}</td>
-                  <td className="px-2 py-2.5 text-slate-400 dark:text-slate-500">{r.uom}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{qty(r.prior)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100">{qty(r.current)}</td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-green-600' : 'text-red-600'}`}>
+                  <td className={`sticky left-0 bg-white px-4 py-2.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${cellCls(0)}`}>{r.item}</td>
+                  <td className={`px-2 py-2.5 text-slate-400 dark:text-slate-500 ${cellCls(1)}`}>{r.uom}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(2)}`}>{qty(r.prior)}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 ${cellCls(3)}`}>{qty(r.current)}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${up ? 'text-green-600' : 'text-red-600'} ${cellCls(4)}`}>
                     {up ? '▲' : '▼'} {qty(Math.abs(r.diff))}
                   </td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-green-600' : 'text-red-600'}`}>
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${up ? 'text-green-600' : 'text-red-600'} ${cellCls(5)}`}>
                     {formatPercent(r.pctDiff)}
                   </td>
                 </tr>
@@ -117,14 +119,14 @@ export default function SalesTable({
           </tbody>
           <tfoot>
             <tr className="sticky bottom-0 z-10 border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
-              <td className="sticky left-0 bg-slate-50 px-4 py-2.5 uppercase dark:bg-slate-700">Total</td>
-              <td className="bg-slate-50 px-2 py-2.5 dark:bg-slate-700" />
-              <td className="px-3 py-2.5 text-right tabular-nums">{qty(totalPrior)}</td>
-              <td className="px-3 py-2.5 text-right tabular-nums">{qty(totalCurrent)}</td>
-              <td className={`px-3 py-2.5 text-right tabular-nums ${totalUp ? 'text-green-600' : 'text-red-600'}`}>
+              <td className={`sticky left-0 bg-slate-50 px-4 py-2.5 uppercase dark:bg-slate-700 ${cellCls(0)}`}>Total</td>
+              <td className={`bg-slate-50 px-2 py-2.5 dark:bg-slate-700 ${cellCls(1)}`} />
+              <td className={`px-3 py-2.5 text-right tabular-nums ${cellCls(2)}`}>{qty(totalPrior)}</td>
+              <td className={`px-3 py-2.5 text-right tabular-nums ${cellCls(3)}`}>{qty(totalCurrent)}</td>
+              <td className={`px-3 py-2.5 text-right tabular-nums ${totalUp ? 'text-green-600' : 'text-red-600'} ${cellCls(4)}`}>
                 {totalUp ? '▲' : '▼'} {qty(Math.abs(totalDiff))}
               </td>
-              <td className={`px-3 py-2.5 text-right tabular-nums ${totalUp ? 'text-green-600' : 'text-red-600'}`}>
+              <td className={`px-3 py-2.5 text-right tabular-nums ${totalUp ? 'text-green-600' : 'text-red-600'} ${cellCls(5)}`}>
                 {formatPercent(totalPct)}
               </td>
             </tr>

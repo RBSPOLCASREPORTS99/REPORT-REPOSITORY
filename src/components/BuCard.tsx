@@ -4,7 +4,18 @@ import { useUi } from '../contexts/UiContext';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import type { BuCardData } from '../lib/queries';
 
-export default function BuCard({ bu, priorLabel, index = 0 }: { bu: BuCardData; priorLabel?: string; index?: number }) {
+// Drag-and-drop hooks so a BU box can be dragged onto another to combine them.
+export interface CardDnd {
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: () => void;
+  isOver: boolean;
+  isDragging: boolean;
+}
+
+export default function BuCard({ bu, priorLabel, index = 0, dnd }: { bu: BuCardData; priorLabel?: string; index?: number; dnd?: CardDnd }) {
   const { units } = useUi();
   const { labelFor } = useBuLabels();
   const up = bu.diff >= 0;
@@ -13,8 +24,16 @@ export default function BuCard({ bu, priorLabel, index = 0 }: { bu: BuCardData; 
   return (
     <Link
       to={`/bu/${bu.buCode}`}
+      draggable={!!dnd}
+      onDragStart={dnd ? (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', bu.buCode); dnd.onDragStart(); } : undefined}
+      onDragEnd={dnd?.onDragEnd}
+      onDragOver={dnd ? (e) => { e.preventDefault(); dnd.onDragOver(); } : undefined}
+      onDragLeave={dnd?.onDragLeave}
+      onDrop={dnd ? (e) => { e.preventDefault(); dnd.onDrop(); } : undefined}
       style={{ animationDelay: `${Math.min(index, 15) * 40}ms` }}
-      className="group animate-rise flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-indigo-100/80 bg-gradient-to-br from-white to-indigo-50/70 p-3.5 shadow-sm ring-1 ring-transparent transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-indigo-200 active:translate-y-0 dark:border-slate-700 dark:from-slate-800 dark:to-indigo-950/30 dark:hover:ring-indigo-500/40"
+      className={`group animate-rise flex flex-col gap-1.5 overflow-hidden rounded-2xl border border-indigo-100/80 bg-gradient-to-br from-white to-indigo-50/70 p-3.5 shadow-sm ring-1 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10 hover:ring-indigo-200 active:translate-y-0 dark:border-slate-700 dark:from-slate-800 dark:to-indigo-950/30 dark:hover:ring-indigo-500/40 ${
+        dnd?.isOver ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : 'ring-transparent'
+      } ${dnd?.isDragging ? 'opacity-40' : ''}`}
     >
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
         {labelFor(bu.buCode)}

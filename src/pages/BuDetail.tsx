@@ -11,11 +11,12 @@ import SalesTable from '../components/SalesTable';
 import { TableSkeleton } from '../components/Skeleton';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
-  fetchBuComparison, fetchTrend, fetchRanges, rangesWithSupport,
-  fetchBuExpenses, rangesWithExpenses, fetchBuSales, rangesWithSales,
+  fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
+  fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
   type SalesItemRow,
 } from '../lib/queries';
+import { COMBINE_SEP } from '../contexts/CombineContext';
 
 type View = 'pnl' | 'expenses' | 'sales';
 
@@ -39,7 +40,10 @@ export default function BuDetail() {
 
   const { labelFor } = useBuLabels();
   const reqRef = useRef(0); // guards against out-of-order responses
-  const buName = code ? labelFor(code) : '';
+  // A combined box arrives as "BU01+BU05"; split into member codes.
+  const codes = code ? code.split(COMBINE_SEP) : [];
+  const isCombined = codes.length > 1;
+  const buName = isCombined ? codes.map(labelFor).join(' + ') : code ? labelFor(code) : '';
   const currentId = cmp?.currentId;
   const priorLabel = cmp?.priorLabel ?? 'Prior';
   const currentLabel = cmp?.currentLabel ?? 'Current';
@@ -49,7 +53,7 @@ export default function BuDetail() {
   const salesAvailable = !!currentId && salesRanges.has(currentId);
 
   useEffect(() => {
-    Promise.all([fetchRanges(), code ? fetchTrend(code) : Promise.resolve([]), rangesWithSupport(), rangesWithExpenses(), rangesWithSales()])
+    Promise.all([fetchRanges(), code && !isCombined ? fetchTrend(code) : Promise.resolve([]), rangesWithSupport(), rangesWithExpenses(), rangesWithSales()])
       .then(([r, t, sup, exp, sal]) => {
         setRanges(r);
         setTrend(t);
@@ -76,11 +80,14 @@ export default function BuDetail() {
     setLoading(true);
     let load: Promise<unknown>;
     if (view === 'expenses') {
-      load = fetchBuExpenses(currentId, cmp.priorId, code).then((d) => { if (myReq === reqRef.current) setExpenses(d); });
+      load = (isCombined ? fetchExpensesCombined(currentId, cmp.priorId, codes) : fetchBuExpenses(currentId, cmp.priorId, code))
+        .then((d) => { if (myReq === reqRef.current) setExpenses(d); });
     } else if (view === 'sales') {
-      load = fetchBuSales(currentId, cmp.priorId, code).then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
+      load = (isCombined ? fetchSalesCombined(currentId, cmp.priorId, codes) : fetchBuSales(currentId, cmp.priorId, code))
+        .then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
     } else {
-      load = fetchBuComparison(currentId, cmp.priorId, code, method).then((d) => { if (myReq === reqRef.current) setLines(d); });
+      load = (isCombined ? fetchComparisonCombined(currentId, cmp.priorId, codes, method) : fetchBuComparison(currentId, cmp.priorId, code, method))
+        .then((d) => { if (myReq === reqRef.current) setLines(d); });
     }
     load
       .catch((e) => { if (myReq === reqRef.current) setError((e as Error).message); })
@@ -167,9 +174,11 @@ export default function BuDetail() {
       ) : (
         <>
           <PnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />
-          <Suspense fallback={<div className="h-48 rounded-2xl bg-white shadow-sm dark:bg-slate-800" />}>
-            <TrendChart data={trend} />
-          </Suspense>
+          {!isCombined && (
+            <Suspense fallback={<div className="h-48 rounded-2xl bg-white shadow-sm dark:bg-slate-800" />}>
+              <TrendChart data={trend} />
+            </Suspense>
+          )}
         </>
       )}
     </div>

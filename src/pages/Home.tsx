@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
-import BuCard from '../components/BuCard';
+import BuCard, { type CardDnd } from '../components/BuCard';
+import CombinedCard, { type CombinedCardData } from '../components/CombinedCard';
 import TruckingCard from '../components/TruckingCard';
 import GffcCard from '../components/GffcCard';
 import { BuCardsSkeleton } from '../components/Skeleton';
 import { fetchGffcPnl, type GffcPnlResult } from '../lib/gffc/gffcQueries';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
+import { useCombine } from '../contexts/CombineContext';
 import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
 
 export default function Home() {
-  const { refresh: refreshLabels } = useBuLabels();
+  const { refresh: refreshLabels, labelFor } = useBuLabels();
+  const { groups, combine, uncombine } = useCombine();
+  const [dragCode, setDragCode] = useState<string | null>(null);
+  const [overCode, setOverCode] = useState<string | null>(null);
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [cards, setCards] = useState<BuCardData[]>([]);
@@ -102,6 +107,35 @@ export default function Home() {
     setTick((t) => t + 1);
   }, [refreshLabels]);
 
+  // Combined boxes (session-only): each group of 2+ BUs sums its members' cards.
+  const groupedCodes = new Set(groups.flat());
+  const groupCards = groups
+    .map((g) => {
+      const members = cards.filter((c) => g.includes(c.buCode));
+      if (members.length < 2) return null;
+      const netIncome = members.reduce((s, m) => s + m.netIncome, 0);
+      const diff = members.reduce((s, m) => s + m.diff, 0);
+      const prior = netIncome - diff;
+      const data: CombinedCardData = {
+        codes: members.map((m) => m.buCode),
+        labels: members.map((m) => labelFor(m.buCode)),
+        netIncome, diff, pctDiff: prior !== 0 ? diff / prior : 0,
+      };
+      return { key: data.codes.join('+'), data };
+    })
+    .filter((x): x is { key: string; data: CombinedCardData } => x !== null);
+  const standalone = cards.filter((c) => !groupedCodes.has(c.buCode));
+
+  const dndFor = (code: string): CardDnd => ({
+    onDragStart: () => setDragCode(code),
+    onDragEnd: () => { setDragCode(null); setOverCode(null); },
+    onDragOver: () => setOverCode(code),
+    onDragLeave: () => setOverCode((k) => (k === code ? null : k)),
+    onDrop: () => { if (dragCode && dragCode !== code) combine(dragCode, code); setDragCode(null); setOverCode(null); },
+    isOver: overCode === code && dragCode !== null && dragCode !== code,
+    isDragging: dragCode === code,
+  });
+
   if (error) return (
     <div className="space-y-3">
       <p className="text-red-600">{error}</p>
@@ -138,13 +172,20 @@ export default function Home() {
       ) : cards.length === 0 && !truck?.hasData && !gffc?.hasData ? (
         <p className="text-center text-slate-400 dark:text-slate-500">No data for this comparison. Try ↻ Refresh.</p>
       ) : (
+        <>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">Tip: drag a BU box onto another to combine their P&amp;L, Expenses &amp; Sales. Uncheck a combined box to split it.</p>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {cards.map((bu, i) => (
-            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={i} />
+          {groupCards.map((gc, i) => (
+            <CombinedCard key={gc.key} data={gc.data} priorLabel={cmp?.priorLabel} index={i}
+              onUncombine={() => uncombine(gc.data.codes[0])} dnd={dndFor(gc.data.codes[0])} />
+          ))}
+          {standalone.map((bu, i) => (
+            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={groupCards.length + i} dnd={dndFor(bu.buCode)} />
           ))}
           {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} index={cards.length} />}
           {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
         </div>
+        </>
       )}
     </div>
   );

@@ -163,12 +163,25 @@ async function sideByLine(rangeId: string, buCode: string, method: AllocMethod):
   return side;
 }
 
-// Compare a BU across two ranges → ordered comparison lines.
-export async function fetchBuComparison(currentRangeId: string, priorRangeId: string | undefined, buCode: string, method: AllocMethod = 'gross_sales'): Promise<ComparisonLine[]> {
-  const [cur, pri] = await Promise.all([
-    sideByLine(currentRangeId, buCode, method),
-    priorRangeId ? sideByLine(priorRangeId, buCode, method) : Promise.resolve(new Map<string, { amount: number; pct: number }>()),
-  ]);
+type SideMap = Map<string, { amount: number; pct: number }>;
+
+// Sum several BUs into one side (for combined boxes). Amounts add; the %-of-sales
+// and the ratio lines (Net Income %, Net Income from Ops %) are recomputed from
+// the combined gross sales so they stay correct.
+async function combinedSide(rangeId: string, codes: string[], method: AllocMethod): Promise<SideMap> {
+  const sides = await Promise.all(codes.map((c) => sideByLine(rangeId, c, method)));
+  const sum = new Map<string, number>();
+  for (const s of sides) for (const [k, v] of s) { if (!PCT_KEYS.has(k)) sum.set(k, (sum.get(k) ?? 0) + v.amount); }
+  const out: SideMap = new Map();
+  if (sum.size === 0) return out;
+  const gs = sum.get('gross_sales') ?? 0;
+  for (const [k, amount] of sum) out.set(k, { amount, pct: gs !== 0 ? amount / gs : 0 });
+  if (sum.has('net_income')) out.set('net_income_pct', { amount: gs !== 0 ? (sum.get('net_income') ?? 0) / gs : 0, pct: 0 });
+  if (sum.has('net_income_ops')) out.set('net_income_ops_pct', { amount: gs !== 0 ? (sum.get('net_income_ops') ?? 0) / gs : 0, pct: 0 });
+  return out;
+}
+
+function buildComparisonLines(cur: SideMap, pri: SideMap): ComparisonLine[] {
   const keys = new Set([...cur.keys(), ...pri.keys()]);
   return [...keys]
     .map((key) => {
@@ -190,6 +203,26 @@ export async function fetchBuComparison(currentRangeId: string, priorRangeId: st
     .sort((a, b) => (LINE_ORDER.get(a.key) ?? 999) - (LINE_ORDER.get(b.key) ?? 999));
 }
 
+// Compare a BU across two ranges → ordered comparison lines.
+export async function fetchBuComparison(currentRangeId: string, priorRangeId: string | undefined, buCode: string, method: AllocMethod = 'gross_sales'): Promise<ComparisonLine[]> {
+  const [cur, pri] = await Promise.all([
+    sideByLine(currentRangeId, buCode, method),
+    priorRangeId ? sideByLine(priorRangeId, buCode, method) : Promise.resolve(new Map() as SideMap),
+  ]);
+  return buildComparisonLines(cur, pri);
+}
+
+// Same, but summed across several BUs (a combined box on Home).
+export async function fetchComparisonCombined(currentRangeId: string, priorRangeId: string | undefined, codes: string[], method: AllocMethod = 'gross_sales'): Promise<ComparisonLine[]> {
+  const [cur, pri] = await Promise.all([
+    combinedSide(currentRangeId, codes, method),
+    priorRangeId ? combinedSide(priorRangeId, codes, method) : Promise.resolve(new Map() as SideMap),
+  ]);
+  return buildComparisonLines(cur, pri);
+}
+
+export type ExpenseSectionKey = 'salaries' | 'controllable' | 'uncontrollable';
+
 export interface ExpenseRow {
   account: string;
   section: 'controllable' | 'uncontrollable';
@@ -203,7 +236,7 @@ export interface ExpenseRow {
 }
 
 export interface ExpenseSection {
-  section: 'controllable' | 'uncontrollable';
+  section: ExpenseSectionKey;
   total: number;      // current section total
   priorTotal: number;
   rows: ExpenseRow[];
@@ -234,18 +267,21 @@ async function grossSalesFull(rangeId: string, buCode: string): Promise<number> 
   return ((data?.amount as number) ?? 0) * 1000;
 }
 
-// Expense accounts for a BU in the current range (compared to a prior range),
-// grouped by section and sorted largest-first. The % column is each account as
-// a share of that period's GROSS SALES (expense ÷ gross sales).
-export async function fetchBuExpenses(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<ExpenseSection[]> {
-  const [cur, pri, grossCur, grossPri] = await Promise.all([
-    expensesByAccount(currentRangeId, buCode),
-    priorRangeId ? expensesByAccount(priorRangeId, buCode) : Promise.resolve(new Map<string, { amount: number; section: 'controllable' | 'uncontrollable'; groupName: string }>()),
-    grossSalesFull(currentRangeId, buCode),
-    priorRangeId ? grossSalesFull(priorRangeId, buCode) : Promise.resolve(0),
-  ]);
-  const accounts = new Set([...cur.keys(), ...pri.keys()]);
+type ExpMap = Map<string, { amount: number; section: 'controllable' | 'uncontrollable'; groupName: string }>;
 
+function mergeExpMaps(maps: ExpMap[]): ExpMap {
+  const out: ExpMap = new Map();
+  for (const m of maps) for (const [acc, v] of m) {
+    const e = out.get(acc);
+    if (e) e.amount += v.amount; else out.set(acc, { ...v });
+  }
+  return out;
+}
+
+// Build the three expense sections (Salaries / Controllable / Non-controllable)
+// from already-fetched current & prior account maps + gross sales.
+function buildExpenseSections(cur: ExpMap, pri: ExpMap, grossCur: number, grossPri: number): ExpenseSection[] {
+  const accounts = new Set([...cur.keys(), ...pri.keys()]);
   const rows: ExpenseRow[] = [...accounts].map((account) => {
     const c = cur.get(account);
     const p = pri.get(account);
@@ -264,37 +300,48 @@ export async function fetchBuExpenses(currentRangeId: string, priorRangeId: stri
     };
   });
 
-  const sections: ('controllable' | 'uncontrollable')[] = ['controllable', 'uncontrollable'];
-  return sections
-    .map((section) => {
-      let secRows = rows.filter((r) => r.section === section);
-      // Controllable: collapse every Salaries & Wages account into one total line.
-      if (section === 'controllable') {
-        const sal = secRows.filter((r) => /salar|wage/i.test(r.groupName));
-        if (sal.length > 0) {
-          const current = sal.reduce((s, r) => s + r.current, 0);
-          const prior = sal.reduce((s, r) => s + r.prior, 0);
-          secRows = secRows.filter((r) => !/salar|wage/i.test(r.groupName));
-          secRows.push({
-            account: 'Salaries & Wages',
-            section, groupName: 'Salaries & Wages',
-            current, prior,
-            currentPct: grossCur !== 0 ? current / grossCur : 0,
-            priorPct: grossPri !== 0 ? prior / grossPri : 0,
-            diff: current - prior,
-            pctDiff: prior !== 0 ? (current - prior) / prior : 0,
-          });
-        }
-      }
-      const sectionRows = secRows.sort((a, b) => b.current - a.current);
-      return {
-        section,
-        total: sectionRows.reduce((s, r) => s + r.current, 0),
-        priorTotal: sectionRows.reduce((s, r) => s + r.prior, 0),
-        rows: sectionRows,
-      };
-    })
-    .filter((s) => s.rows.length > 0);
+  // Salaries & Wages is its own group (shown first), pulled out of both the
+  // Controllable and Non-controllable sections.
+  const isSal = (r: ExpenseRow) => /salar|wage/i.test(r.groupName);
+  const build = (section: ExpenseSectionKey, filter: (r: ExpenseRow) => boolean): ExpenseSection => {
+    const secRows = rows.filter(filter).sort((a, b) => b.current - a.current);
+    return {
+      section,
+      total: secRows.reduce((s, r) => s + r.current, 0),
+      priorTotal: secRows.reduce((s, r) => s + r.prior, 0),
+      rows: secRows,
+    };
+  };
+  return [
+    build('salaries', (r) => isSal(r)),
+    build('controllable', (r) => r.section === 'controllable' && !isSal(r)),
+    build('uncontrollable', (r) => r.section === 'uncontrollable' && !isSal(r)),
+  ].filter((s) => s.rows.length > 0);
+}
+
+// Expense accounts for a BU in the current range (compared to a prior range),
+// grouped by section and sorted largest-first. The % column is each account as
+// a share of that period's GROSS SALES (expense ÷ gross sales).
+export async function fetchBuExpenses(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<ExpenseSection[]> {
+  const [cur, pri, grossCur, grossPri] = await Promise.all([
+    expensesByAccount(currentRangeId, buCode),
+    priorRangeId ? expensesByAccount(priorRangeId, buCode) : Promise.resolve(new Map() as ExpMap),
+    grossSalesFull(currentRangeId, buCode),
+    priorRangeId ? grossSalesFull(priorRangeId, buCode) : Promise.resolve(0),
+  ]);
+  return buildExpenseSections(cur, pri, grossCur, grossPri);
+}
+
+// Same, summed across several BUs (a combined box).
+export async function fetchExpensesCombined(currentRangeId: string, priorRangeId: string | undefined, codes: string[]): Promise<ExpenseSection[]> {
+  const sumGross = (a: number[]) => a.reduce((s, v) => s + v, 0);
+  const [cur, pri, grossCur, grossPri] = await Promise.all([
+    Promise.all(codes.map((c) => expensesByAccount(currentRangeId, c))).then(mergeExpMaps),
+    priorRangeId ? Promise.all(codes.map((c) => expensesByAccount(priorRangeId, c))).then(mergeExpMaps) : Promise.resolve(new Map() as ExpMap),
+    Promise.all(codes.map((c) => grossSalesFull(currentRangeId, c))).then(sumGross),
+    priorRangeId ? Promise.all(codes.map((c) => grossSalesFull(priorRangeId, c))).then(sumGross) : Promise.resolve(0),
+  ]);
+  return buildExpenseSections(cur, pri, grossCur, grossPri);
 }
 
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
@@ -331,12 +378,18 @@ export async function fetchItemUnits(): Promise<Map<string, string>> {
 // Quantity per item for a BU, comparing a current range vs a prior range,
 // sorted largest-first by current quantity. U/M uses the Finance override when
 // set, otherwise the unit carried in the import.
-export async function fetchBuSales(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<SalesItemRow[]> {
-  const [cur, pri, overrides] = await Promise.all([
-    salesByItem(currentRangeId, buCode),
-    priorRangeId ? salesByItem(priorRangeId, buCode) : Promise.resolve(new Map<string, { qty: number; uom: string }>()),
-    fetchItemUnits(),
-  ]);
+type QtyMap = Map<string, { qty: number; uom: string }>;
+
+function mergeQtyMaps(maps: QtyMap[]): QtyMap {
+  const out: QtyMap = new Map();
+  for (const m of maps) for (const [item, v] of m) {
+    const e = out.get(item);
+    if (e) e.qty += v.qty; else out.set(item, { ...v });
+  }
+  return out;
+}
+
+function buildSalesRows(cur: QtyMap, pri: QtyMap, overrides: Map<string, string>): SalesItemRow[] {
   const items = new Set([...cur.keys(), ...pri.keys()]);
   return [...items]
     .map((item) => {
@@ -348,6 +401,25 @@ export async function fetchBuSales(currentRangeId: string, priorRangeId: string 
       return { item, uom, prior, current, diff: current - prior, pctDiff: prior !== 0 ? (current - prior) / prior : 0 };
     })
     .sort((a, b) => b.current - a.current);
+}
+
+export async function fetchBuSales(currentRangeId: string, priorRangeId: string | undefined, buCode: string): Promise<SalesItemRow[]> {
+  const [cur, pri, overrides] = await Promise.all([
+    salesByItem(currentRangeId, buCode),
+    priorRangeId ? salesByItem(priorRangeId, buCode) : Promise.resolve(new Map() as QtyMap),
+    fetchItemUnits(),
+  ]);
+  return buildSalesRows(cur, pri, overrides);
+}
+
+// Same, summed across several BUs (a combined box).
+export async function fetchSalesCombined(currentRangeId: string, priorRangeId: string | undefined, codes: string[]): Promise<SalesItemRow[]> {
+  const [cur, pri, overrides] = await Promise.all([
+    Promise.all(codes.map((c) => salesByItem(currentRangeId, c))).then(mergeQtyMaps),
+    priorRangeId ? Promise.all(codes.map((c) => salesByItem(priorRangeId, c))).then(mergeQtyMaps) : Promise.resolve(new Map() as QtyMap),
+    fetchItemUnits(),
+  ]);
+  return buildSalesRows(cur, pri, overrides);
 }
 
 // Distinct sales items across all ranges, with a representative imported unit,
