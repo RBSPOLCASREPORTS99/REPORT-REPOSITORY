@@ -172,8 +172,17 @@ export default function BuDetail() {
         <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
           canEdit={profile?.role === 'finance'}
           onReclassify={async (account, section) => {
-            try { await saveExpenseSection(account, section); setTick((t) => t + 1); }
-            catch (e) { setError((e as Error).message); }
+            try {
+              await saveExpenseSection(account, section);
+              // Refetch quietly (no loading skeleton) so the table stays mounted
+              // and the collapse state is preserved.
+              if (currentId && cmp) {
+                const d = isCombined
+                  ? await fetchExpensesCombined(currentId, cmp.priorId, codes)
+                  : await fetchBuExpenses(currentId, cmp.priorId, code!);
+                setExpenses(d);
+              }
+            } catch (e) { setError((e as Error).message); }
           }} />
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
