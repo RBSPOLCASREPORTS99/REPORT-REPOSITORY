@@ -17,13 +17,24 @@ export interface GffcMonthInputs {
 
 const MONTHS3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-// "Jan 26", "Aug 25", "Aug '25" -> {year, month}; ranges/labels -> null.
-function parseMonthHeader(s: string): { year: number; month: number } | null {
-  const m = /^([a-z]{3})\s*'?(\d{2})$/i.exec(s.trim());
+// A month-column header from a QuickBooks P&L export. Handles "Jan 26",
+// "Jan 2026", "January 2026", "Aug '25", and Excel date serials. Ranges
+// ("Aug '25 - Jan 26") and "% of Income" / "TOTAL" labels -> null.
+function parseMonthHeader(v: string | number): { year: number; month: number } | null {
+  if (typeof v === 'number') {
+    if (v < 20000 || v > 80000) return null; // not a plausible Excel date serial
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+  }
+  const s = v.trim();
+  if (s.includes('-') || s.includes('%')) return null;
+  const m = /^([a-z]+)\.?\s*'?(\d{2,4})$/i.exec(s);
   if (!m) return null;
-  const mi = MONTHS3.indexOf(m[1].toLowerCase());
+  const mi = MONTHS3.indexOf(m[1].toLowerCase().slice(0, 3));
   if (mi < 0) return null;
-  return { year: 2000 + Number(m[2]), month: mi + 1 };
+  let yr = Number(m[2]);
+  if (yr < 100) yr += 2000;
+  return { year: yr, month: mi + 1 };
 }
 
 type Cell = string | number;
@@ -37,10 +48,9 @@ function parseSheet(ws: XLSX.WorkSheet): GffcMonthInputs[] {
   for (let r = 0; r < Math.min(6, rows.length); r++) {
     const cols: { col: number; year: number; month: number }[] = [];
     (rows[r] ?? []).forEach((v, c) => {
-      if (typeof v === 'string') {
-        const ym = parseMonthHeader(v);
-        if (ym) cols.push({ col: c, ...ym });
-      }
+      if (v === '' || v == null) return;
+      const ym = parseMonthHeader(v);
+      if (ym) cols.push({ col: c, ...ym });
     });
     if (cols.length > monthCols.length) { monthCols = cols; headerRow = r; }
   }
@@ -69,9 +79,12 @@ function parseSheet(ws: XLSX.WorkSheet): GffcMonthInputs[] {
   });
 }
 
+// The GFFC QuickBooks export is identified by its "P&L 2025" / "P&L 2026"
+// sheets (the monthly P&L for last / this year). POLCAS exports never use those
+// names, so this is unambiguous.
 export function isGffcWorkbook(wb: XLSX.WorkBook): boolean {
   const n = wb.SheetNames;
-  return n.includes('GFFC TOTAL P&L') || (n.includes('P&L 2026') && n.some((s) => s.startsWith('P&L per CLASS')));
+  return n.includes('P&L 2026') || n.includes('P&L 2025') || n.includes('GFFC TOTAL P&L');
 }
 
 // Parse all months from P&L 2025 + P&L 2026 (overlaps deduped by the caller's
