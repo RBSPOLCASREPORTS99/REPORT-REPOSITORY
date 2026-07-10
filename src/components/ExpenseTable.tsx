@@ -55,7 +55,7 @@ export default function ExpenseTable({
             <th className={`${headCls} px-2 ${cellCls(4)}`}>%</th>
             <th className={`${headCls} ${cellCls(5)}`}>DIFF</th>
             <th className={`${headCls} ${cellCls(6)}`}>%DIFF</th>
-            {canEdit && <th className={`${headCls} px-2 ${cellCls(7)}`}>Class</th>}
+            {canEdit && <th className={`${headCls} px-2 ${cellCls(7)}`}>ET</th>}
           </tr>
         </thead>
         <tbody>
