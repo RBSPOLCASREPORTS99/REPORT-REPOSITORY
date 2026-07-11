@@ -136,7 +136,8 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
   const agg = new Map<string, MonthlyExpenseRow>();
   const buSet = new Set<string>();
   const monthSet = new Set<string>();
-  const unmappedAccounts = new Set<string>();
+  const unmappedAccounts = new Set<string>();  // excluded (COGS / taxes)
+  const defaultedAccounts = new Set<string>(); // new expense accounts → Controllable
 
   for (let r = hdr + 1; r < qb.length; r++) {
     const row = qb[r];
@@ -151,8 +152,15 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
     const amount = debit - credit;
     if (amount === 0) continue;
 
-    const cl = classification.get(account.toUpperCase());
-    if (!cl) { unmappedAccounts.add(account); continue; } // not a known expense-report account (COGS, tax, or new) — exclude
+    let cl = classification.get(account.toUpperCase());
+    if (!cl) {
+      // A new account not seen before: exclude true non-expense accounts (COGS /
+      // taxes), otherwise default it to Controllable (regroup later). The BU is
+      // still taken from the transaction's Class, so amounts land on the right BU.
+      if (/cost of goods sold|\bcogs\b|income tax/i.test(account)) { unmappedAccounts.add(account); continue; }
+      cl = { section: 'controllable', group: 'Uncategorized' };
+      defaultedAccounts.add(account);
+    }
     const { section, group } = cl;
 
     const { year, month } = ymFromSerial(date);
@@ -165,8 +173,11 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
     monthSet.add(`${year}-${month}`);
   }
 
+  if (defaultedAccounts.size > 0) {
+    warnings.push(`${defaultedAccounts.size} new account(s) not seen before were added as Controllable (reclassify/regroup later if needed): ${[...defaultedAccounts].sort().join(', ')}.`);
+  }
   if (unmappedAccounts.size > 0) {
-    warnings.push(`${unmappedAccounts.size} account(s) weren't in the known expense classification and were excluded (COGS/taxes, or new accounts): ${[...unmappedAccounts].sort().join(', ')}. To include a new expense account, import a full expense workbook (with the classification tabs) once.`);
+    warnings.push(`${unmappedAccounts.size} non-expense account(s) (COGS / taxes) were excluded: ${[...unmappedAccounts].sort().join(', ')}.`);
   }
 
   const months = [...monthSet].map((s) => { const [y, m] = s.split('-').map(Number); return { year: y, month: m }; })
