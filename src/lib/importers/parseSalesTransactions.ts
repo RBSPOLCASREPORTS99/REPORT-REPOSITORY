@@ -21,8 +21,23 @@ export interface ParsedSalesTx {
   warnings: string[];
 }
 
+// Locate the QuickBooks sales-transaction sheet by name or, failing that, by its
+// columns (Item / Class / Qty) — so a raw single-sheet QB export (e.g. "Sheet1")
+// is still recognised.
+export function findSalesTxSheet(wb: XLSX.WorkBook): string | null {
+  if (wb.SheetNames.includes('QB Sales Data')) return 'QB Sales Data';
+  for (const name of wb.SheetNames) {
+    const d = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+    for (let r = 0; r < Math.min(5, d.length); r++) {
+      const H = d[r] ?? [];
+      if (H.includes('Item') && H.includes('Class') && H.includes('Qty')) return name;
+    }
+  }
+  return null;
+}
+
 export function isSalesTxWorkbook(wb: XLSX.WorkBook): boolean {
-  return wb.SheetNames.includes('QB Sales Data');
+  return findSalesTxSheet(wb) !== null;
 }
 
 function buFromClass(cls: string): string | null {
@@ -59,10 +74,10 @@ function buildItemToCode(wb: XLSX.WorkBook): Map<string, string> {
 
 // code → {display item, uom}, from the finished per-BU tabs (union). Each row:
 // display item col0, codes col1-3, U/M col4.
-function buildCodeToDisplay(wb: XLSX.WorkBook): Map<string, { item: string; uom: string }> {
+function buildCodeToDisplay(wb: XLSX.WorkBook, txSheet: string): Map<string, { item: string; uom: string }> {
   const map = new Map<string, { item: string; uom: string }>();
   for (const name of wb.SheetNames) {
-    if (name === 'QB Sales Data' || /^\d/.test(name)) continue; // skip raw + helper pivots
+    if (name === txSheet || /^\d/.test(name)) continue; // skip the raw transaction + helper pivots
     const ws = wb.Sheets[name];
     const d = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, raw: true, defval: '' });
     // per-BU tabs have the ITEM header around row 5; scan generously
@@ -80,11 +95,14 @@ function buildCodeToDisplay(wb: XLSX.WorkBook): Map<string, { item: string; uom:
 
 export function parseSalesTransactions(data: ArrayBuffer): ParsedSalesTx {
   const wb = XLSX.read(data, { type: 'array' });
-  const itemToCode = buildItemToCode(wb);
-  const codeToDisplay = buildCodeToDisplay(wb);
   const warnings: string[] = [];
 
-  const qb = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets['QB Sales Data'], { header: 1, raw: true, defval: '' });
+  const txSheet = findSalesTxSheet(wb);
+  if (!txSheet) return { rows: [], months: [], buCodes: [], warnings: ['No QuickBooks sales transaction sheet (Item / Class / Qty columns) found.'] };
+  const itemToCode = buildItemToCode(wb);
+  const codeToDisplay = buildCodeToDisplay(wb, txSheet);
+
+  const qb = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[txSheet], { header: 1, raw: true, defval: '' });
   let hdr = 0;
   for (let r = 0; r < 5; r++) { if ((qb[r] ?? []).includes('Item') && (qb[r] ?? []).includes('Qty')) { hdr = r; break; } }
   const H = qb[hdr] ?? [];
