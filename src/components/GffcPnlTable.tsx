@@ -1,12 +1,24 @@
+import { useState } from 'react';
 import { formatPercent, formatMoney } from '../lib/format';
 import { useUi } from '../contexts/UiContext';
 import type { GffcPnlLine } from '../lib/gffc/gffcQueries';
 
 const BOLD = new Set(['gross', 'gross_income', 'total', 'net']);
+// Collapsible groups: sales categories roll up into the Gross Sales total, and
+// the expense groups roll up into Total Expense. Detail rows precede their header.
+const HEADER_OF: Record<string, string> = { category: 'gross', expense: 'total' };
+const COLLAPSIBLE = new Set(['gross', 'total']);
 
 // GFFC Total P&L comparison table: LINE ITEM | prior | % | current | % | DIFF | %DIFF.
 export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { lines: GffcPnlLine[]; priorLabel: string; currentLabel: string }) {
   const { units } = useUi();
+  // Gross Sales & Expenses collapse by default (like the BU / Truck P&L).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (k: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
   const money = (v: number) => formatMoney(v, 'full', units);
   const grossC = lines.find((l) => l.kind === 'gross')?.current || 0;
   const grossP = lines.find((l) => l.kind === 'gross')?.prior || 0;
@@ -28,6 +40,11 @@ export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { line
         </thead>
         <tbody>
           {lines.map((line) => {
+            // Hide detail rows whose group (Gross Sales / Expenses) is collapsed.
+            const group = HEADER_OF[line.kind];
+            if (group && !expanded.has(group)) return null;
+            const isHeader = COLLAPSIBLE.has(line.kind);
+            const open = isHeader && expanded.has(line.kind);
             const bold = BOLD.has(line.kind);
             const isPct = line.kind === 'pct';
             const diff = line.current - line.prior;
@@ -37,8 +54,13 @@ export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { line
             const stickyCls = bold ? 'bg-slate-100 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300';
             const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
             return (
-              <tr key={line.key} className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls}`}>
-                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${stickyCls}`}>{line.label}</td>
+              <tr key={line.key}
+                onClick={isHeader ? () => toggle(line.kind) : undefined}
+                className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls} ${isHeader ? 'cursor-pointer select-none' : ''}`}>
+                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${stickyCls}`}>
+                  {isHeader && <span className="mr-1 inline-block w-3 text-indigo-500">{open ? '▾' : '▸'}</span>}
+                  {line.label}
+                </td>
                 {isPct ? (
                   <>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">{formatPercent(line.prior)}</td>
