@@ -7,7 +7,7 @@ import type { ExpenseSection, ExpenseRow, SalesItemRow } from '../queries';
 
 export interface Period { start: string; end: string } // 'YYYY-MM-DD'
 
-export type GffcLineKind = 'category' | 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'net' | 'pct';
+export type GffcLineKind = 'category' | 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'other' | 'net' | 'pct';
 export interface GffcPnlLine {
   key: string;
   label: string;
@@ -56,14 +56,18 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
   const grossSales = (a: Record<string, number>) => GFFC_CATEGORIES.reduce((s, x) => s + (a[x.key] ?? 0), 0);
   const totalExpense = (a: Record<string, number>) => GFFC_EXPENSE_KEYS.reduce((s, k) => s + (a[k] ?? 0), 0);
   const grossIncome = (a: Record<string, number>) => grossSales(a) - (a.cogs ?? 0);
-  const net = (a: Record<string, number>) => grossIncome(a) - totalExpense(a);
+  const otherIncome = (a: Record<string, number>) => a.other_income ?? 0;
+  const net = (a: Record<string, number>) => grossIncome(a) - totalExpense(a) + otherIncome(a);
 
   const line = (key: string, label: string, kind: GffcLineKind, cf: (a: Record<string, number>) => number, cost?: boolean): GffcPnlLine =>
     ({ key, label, kind, current: cf(cur), prior: cf(pri), cost });
 
-  // Sales categories, auto-sorted biggest-first by current amount.
+  // Sales categories & expense groups, auto-sorted biggest-first by current amount.
   const categoryLines = GFFC_CATEGORIES
     .map((x) => line(x.key, x.label, 'category', (a) => a[x.key] ?? 0))
+    .sort((a, b) => b.current - a.current);
+  const expenseLines = GFFC_GROUPS.filter((g) => g.key !== 'cogs')
+    .map((g) => line(g.key, g.label, 'expense', (a) => a[g.key] ?? 0, true))
     .sort((a, b) => b.current - a.current);
 
   const lines: GffcPnlLine[] = [
@@ -71,8 +75,9 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
     line('gross_sales', 'Gross Sales', 'gross', grossSales),
     line('cogs', 'Cost of Goods Sold', 'cogs', (a) => a.cogs ?? 0, true),
     line('gross_income', 'Gross Income', 'gross_income', grossIncome),
-    ...GFFC_GROUPS.filter((g) => g.key !== 'cogs').map((g) => line(g.key, g.label, 'expense', (a) => a[g.key] ?? 0, true)),
+    ...expenseLines,
     line('total_expense', 'Total Expense', 'total', totalExpense, true),
+    line('other_income', 'Other Income', 'other', otherIncome),
     line('net_income', 'Net Income', 'net', net),
     line('net_income_pct', 'Net Income %', 'pct', (a) => (grossSales(a) !== 0 ? net(a) / grossSales(a) : 0)),
   ];

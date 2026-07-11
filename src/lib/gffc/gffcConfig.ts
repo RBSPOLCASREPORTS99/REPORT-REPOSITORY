@@ -33,7 +33,10 @@ export const GFFC_GROUPS: GffcInputLine[] = [
   { key: 'salaries', qbLabel: 'Total Salaries and Wages', label: 'Salaries & Wages' },
 ];
 
-export const GFFC_INPUTS: GffcInputLine[] = [...GFFC_CATEGORIES, ...GFFC_GROUPS];
+// Other Income (QB "Net Other Income") — added into Net Income after expenses.
+export const GFFC_OTHER_INCOME: GffcInputLine = { key: 'other_income', qbLabel: 'Net Other Income', label: 'Other Income' };
+
+export const GFFC_INPUTS: GffcInputLine[] = [...GFFC_CATEGORIES, ...GFFC_GROUPS, GFFC_OTHER_INCOME];
 // The 5 expense groups that sum into Total Expense.
 export const GFFC_EXPENSE_KEYS = ['admin', 'finance', 'operations', 'repairs', 'salaries'];
 export const GFFC_LABEL = 'GFFC - Chickboy Meating Place';
