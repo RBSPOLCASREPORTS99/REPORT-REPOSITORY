@@ -1,17 +1,17 @@
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { TrendPoint } from '../lib/queries';
 
-// All three series share one Y axis (so the true peso gap between Gross Sales and
-// Expense shows at scale). The band between Gross Sales and Expense is shaded to
-// emphasise that gap — it should stay wide; if sales fall and expenses don't, it
-// visibly narrows.
+// All three series share one Y axis (so the true peso gap between Gross Income
+// and Expense shows at scale). The band between Gross Income and Expense is
+// shaded to emphasise that gap — it should stay wide; if income falls and
+// expenses don't, it visibly narrows.
 const SERIES = [
-  { key: 'Gross Sales', color: '#64748b' },
+  { key: 'Gross Income', color: '#64748b' },
   { key: 'Expense', color: '#f59e0b' },
   { key: 'Net Income from Operations', color: '#16a34a' },
 ] as const;
 
-interface Row { label: string; 'Gross Sales': number; 'Expense': number; 'Net Income from Operations': number; Gap: [number, number] }
+interface Row { label: string; 'Gross Income': number; 'Expense': number; 'Net Income from Operations': number; Gap: [number, number] }
 
 function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: Row }[]; label?: string }) {
   if (!active || !payload?.length) return null;
@@ -34,21 +34,21 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export default function TrendChart({ data }: { data: TrendPoint[] }) {
   if (data.length < 2) return null;
   const chartData: Row[] = data.map((p) => {
-    const gs = Math.round(p.grossSales);
+    const gi = Math.round(p.grossIncome);
     const ex = Math.round(p.totalExpense);
     return {
       label: p.label,
-      'Gross Sales': gs,
+      'Gross Income': gi,
       'Expense': ex,
       'Net Income from Operations': Math.round(p.netIncomeOps),
-      Gap: [ex, gs],
+      Gap: [ex, gi],
     };
   });
 
   return (
     <div className="rounded-2xl bg-white dark:bg-slate-800 p-4 shadow-sm">
       <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Trend (₱ thousands)</h3>
-      <p className="mb-2 text-xs text-slate-400 dark:text-slate-500">Shaded band = gap between Gross Sales and Expense</p>
+      <p className="mb-2 text-xs text-slate-400 dark:text-slate-500">Shaded band = gap between Gross Income and Expense</p>
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 12, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" strokeOpacity={0.4} />
