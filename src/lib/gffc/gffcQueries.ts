@@ -50,7 +50,23 @@ async function sumPeriod(p: Period): Promise<{ agg: Record<string, number>; hasD
 // Build the ordered GFFC Total P&L for a current period vs an optional prior.
 export async function fetchGffcPnl(current: Period, prior?: Period): Promise<GffcPnlResult> {
   const c = await sumPeriod(current);
-  const p = prior ? await sumPeriod(prior) : { agg: {}, hasData: false };
+  let p = prior ? await sumPeriod(prior) : { agg: {} as Record<string, number>, hasData: false };
+
+  // GFFC started August 2025, so a prior-year YTD (Jan–…) has no actual data.
+  // Simulate it from GFFC's first partial year: each line = (Aug 2025–Dec 2025
+  // total) ÷ the current YTD's month count (e.g. 6 for YTD June). The derived
+  // rows (Gross Income, Total Expense, Net Income) then compute from these.
+  const isJan = (d?: string) => !!d && Number(d.split('-')[1]) === 1;
+  if (prior && !p.hasData && isJan(current.start) && isJan(prior.start)) {
+    const base = await sumPeriod({ start: '2025-08-01', end: '2025-12-31' });
+    if (base.hasData) {
+      const monthCount = monthsInPeriod(current.start, current.end).length || 1;
+      const sim: Record<string, number> = {};
+      for (const [k, v] of Object.entries(base.agg)) sim[k] = v / monthCount;
+      p = { agg: sim, hasData: true };
+    }
+  }
+
   const cur = c.agg, pri = p.agg;
 
   const grossSales = (a: Record<string, number>) => GFFC_CATEGORIES.reduce((s, x) => s + (a[x.key] ?? 0), 0);
