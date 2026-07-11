@@ -61,8 +61,13 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
   const line = (key: string, label: string, kind: GffcLineKind, cf: (a: Record<string, number>) => number, cost?: boolean): GffcPnlLine =>
     ({ key, label, kind, current: cf(cur), prior: cf(pri), cost });
 
+  // Sales categories, auto-sorted biggest-first by current amount.
+  const categoryLines = GFFC_CATEGORIES
+    .map((x) => line(x.key, x.label, 'category', (a) => a[x.key] ?? 0))
+    .sort((a, b) => b.current - a.current);
+
   const lines: GffcPnlLine[] = [
-    ...GFFC_CATEGORIES.map((x) => line(x.key, x.label, 'category', (a) => a[x.key] ?? 0)),
+    ...categoryLines,
     line('gross_sales', 'Gross Sales', 'gross', grossSales),
     line('cogs', 'Cost of Goods Sold', 'cogs', (a) => a.cogs ?? 0, true),
     line('gross_income', 'Gross Income', 'gross_income', grossIncome),
