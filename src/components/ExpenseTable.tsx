@@ -62,6 +62,7 @@ export default function ExpenseTable({
           {sections.map((sec) => {
             const open = !collapsed.has(sec.section);
             const secDiff = sec.total - sec.priorTotal;
+            const secPctDiff = sec.priorTotal !== 0 ? secDiff / sec.priorTotal : 0;
             return (
               <Fragment key={sec.section}>
                 <tr onClick={() => toggle(sec.section)}
@@ -77,7 +78,7 @@ export default function ExpenseTable({
                   <td className={`px-3 py-2 text-right tabular-nums ${secDiff >= 0 ? 'text-red-600' : 'text-green-600'} ${cellCls(5)}`}>
                     {money(Math.abs(secDiff))}
                   </td>
-                  <td className={`px-3 py-2 ${cellCls(6)}`} />
+                  <td className={`px-3 py-2 text-right tabular-nums ${secDiff >= 0 ? 'text-red-600' : 'text-green-600'} ${cellCls(6)}`}>{formatPercent(secPctDiff)}</td>
                   {canEdit && <td className={`px-2 py-2 ${cellCls(7)}`} />}
                 </tr>
                 {open && sec.rows.map((row) => {
