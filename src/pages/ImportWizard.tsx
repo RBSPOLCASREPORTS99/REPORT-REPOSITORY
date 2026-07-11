@@ -48,6 +48,7 @@ export default function ImportWizard() {
   const [month, setMonth] = useState(1);
   const [trucking, setTrucking] = useState<TruckingInputs>({}); // per-BU trucking cost (grid + preview), pre-filled from the dashboard
   const [monthExists, setMonthExists] = useState(false);
+  const [importedAt, setImportedAt] = useState<string | null>(null);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [dashMonthExists, setDashMonthExists] = useState(false);
@@ -79,10 +80,18 @@ export default function ImportWizard() {
     let cancelled = false;
     (async () => {
       const a = await loadStoredAlloc(year, month);
-      const { data: pm } = await supabase.from('pnl_months').select('id').eq('year', year).eq('month', month).maybeSingle();
+      const { data: pm } = await supabase.from('pnl_months').select('id, import_batch_id, created_at').eq('year', year).eq('month', month).maybeSingle();
+      // When this month was last imported: the linked import batch's timestamp
+      // (updated on each re-import), falling back to when the month was created.
+      let ts: string | null = pm ? (pm.created_at as string) ?? null : null;
+      if (pm?.import_batch_id) {
+        const { data: b } = await supabase.from('import_batches').select('created_at').eq('id', pm.import_batch_id).maybeSingle();
+        if (b?.created_at) ts = b.created_at as string;
+      }
       if (cancelled) return;
       setTrucking(Object.fromEntries(Object.entries(a).map(([k, v]) => [k, round5(v as number)])));
       setMonthExists(!!pm);
+      setImportedAt(ts);
     })().catch(() => {});
     return () => { cancelled = true; };
   }, [step, year, month]);
@@ -272,7 +281,7 @@ export default function ImportWizard() {
 
         {monthExists && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            {monthLabel(year, month)} is already imported — importing will <span className="font-medium">update</span> it
+            {monthLabel(year, month)} is already imported{importedAt ? ` (last imported ${new Date(importedAt).toLocaleString()})` : ''} — importing will <span className="font-medium">update</span> it
             (YTD/quarter recompute, publish state kept). Trucking below is pre-filled from the dashboard; edit if needed.
           </p>
         )}
