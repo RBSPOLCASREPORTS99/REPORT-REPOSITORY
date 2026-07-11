@@ -193,7 +193,7 @@ export default function BuDetail() {
           <PnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />
           {!isCombined && (
             <Suspense fallback={<div className="h-48 rounded-2xl bg-white shadow-sm dark:bg-slate-800" />}>
-              <TrendChart data={trend} />
+              <TrendChart data={trend} buName={buName} />
             </Suspense>
           )}
         </>

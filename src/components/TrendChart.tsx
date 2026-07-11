@@ -22,7 +22,7 @@ interface Row {
   Gap: [number, number];
 }
 
-export default function TrendChart({ data }: { data: TrendPoint[] }) {
+export default function TrendChart({ data, buName }: { data: TrendPoint[]; buName?: string }) {
   const [full, setFull] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set<string>(['Gross Sales']));
   const toggle = (key: string) => setHidden((prev) => {
@@ -70,8 +70,11 @@ export default function TrendChart({ data }: { data: TrendPoint[] }) {
       ? 'fixed inset-0 z-50 flex flex-col bg-white p-4 dark:bg-slate-900'
       : 'rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-800'}>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Trend (₱ thousands)</h3>
+        <div className="min-w-0">
+          {full && buName && <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{buName}</h2>}
+          <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            {!full && buName ? `${buName} · ` : ''}Trend (₱ thousands)
+          </h3>
           <p className="text-xs text-slate-400 dark:text-slate-500">Shaded band = gap between Gross Income and Expense</p>
         </div>
         <button
