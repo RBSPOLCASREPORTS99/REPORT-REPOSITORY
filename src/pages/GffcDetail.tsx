@@ -23,6 +23,7 @@ export default function GffcDetail() {
   const [sales, setSales] = useState<SalesItemRow[]>([]);
   const [expAvail, setExpAvail] = useState(false);
   const [salesAvail, setSalesAvail] = useState(false);
+  const [simulated, setSimulated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const reqRef = useRef(0);
@@ -47,6 +48,7 @@ export default function GffcDetail() {
       .then(([p, e, s]) => {
         if (myReq !== reqRef.current) return;
         setLines(p.hasData ? p.lines : []);
+        setSimulated(!!p.simulatedPrior && p.hasData);
         setExpenses(e.sections); setExpAvail(e.hasData);
         setSales(s.rows); setSalesAvail(s.hasData);
       })
@@ -72,6 +74,12 @@ export default function GffcDetail() {
       <div className="sticky top-14 z-30 -mx-4 space-y-2 border-b border-slate-200 bg-slate-50 px-4 py-2 lg:top-0 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-2">
           <h1 className="min-w-0 shrink truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{GFFC_LABEL}</h1>
+          {simulated && view === 'pnl' && (
+            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+              title="Prior YTD simulated from Aug–Dec 2025 ÷ the YTD month count (GFFC started Aug 2025).">
+              Simulated YTD
+            </span>
+          )}
           <div className="flex flex-1 justify-center">
             <SetMonthSelect ranges={ranges} />
           </div>

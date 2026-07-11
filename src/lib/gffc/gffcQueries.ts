@@ -21,6 +21,7 @@ export interface GffcPnlResult {
   lines: GffcPnlLine[];
   net: number;
   priorNet: number;
+  simulatedPrior?: boolean; // prior YTD was simulated from Aug–Dec 2025
 }
 
 function monthsInPeriod(start: string, end: string): { year: number; month: number }[] {
@@ -56,6 +57,7 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
   // Simulate it from GFFC's first partial year: each line = (Aug 2025–Dec 2025
   // total) ÷ the current YTD's month count (e.g. 6 for YTD June). The derived
   // rows (Gross Income, Total Expense, Net Income) then compute from these.
+  let simulatedPrior = false;
   const isJan = (d?: string) => !!d && Number(d.split('-')[1]) === 1;
   if (prior && !p.hasData && isJan(current.start) && isJan(prior.start)) {
     const base = await sumPeriod({ start: '2025-08-01', end: '2025-12-31' });
@@ -64,6 +66,7 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
       const sim: Record<string, number> = {};
       for (const [k, v] of Object.entries(base.agg)) sim[k] = v / monthCount;
       p = { agg: sim, hasData: true };
+      simulatedPrior = true;
     }
   }
 
@@ -98,7 +101,7 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
     line('net_income_pct', 'Net Income %', 'pct', (a) => (grossSales(a) !== 0 ? net(a) / grossSales(a) : 0)),
   ];
 
-  return { hasData: c.hasData, lines, net: net(cur), priorNet: net(pri) };
+  return { hasData: c.hasData, lines, net: net(cur), priorNet: net(pri), simulatedPrior };
 }
 
 function periodMonths(p: Period) {
