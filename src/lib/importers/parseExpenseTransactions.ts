@@ -23,8 +23,23 @@ export interface ParsedExpenseTx {
   warnings: string[];
 }
 
+// Locate the QuickBooks expense-transaction sheet by name or, failing that, by
+// its columns (Account / Class / Debit / Credit) — so a raw single-sheet QB
+// export (e.g. named "Sheet1") is still recognised.
+export function findExpenseTxSheet(wb: XLSX.WorkBook): string | null {
+  if (wb.SheetNames.includes('QB Exp Data')) return 'QB Exp Data';
+  for (const name of wb.SheetNames) {
+    const d = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+    for (let r = 0; r < Math.min(5, d.length); r++) {
+      const H = d[r] ?? [];
+      if (H.includes('Account') && H.includes('Class') && H.includes('Debit') && H.includes('Credit')) return name;
+    }
+  }
+  return null;
+}
+
 export function isExpenseTxWorkbook(wb: XLSX.WorkBook): boolean {
-  return wb.SheetNames.includes('QB Exp Data');
+  return findExpenseTxSheet(wb) !== null;
 }
 
 // "ProfitCost Center:BU01 - Bodega 1" → BU01 → BU0102; support centers → null.
@@ -45,7 +60,7 @@ function ymFromSerial(serial: number): { year: number; month: number } {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
-type Classification = Map<string, { section: Section; group: string }>;
+export type Classification = Map<string, { section: Section; group: string }>;
 
 const SECTION_MARKERS: Record<string, Section> = {
   'CONTROLLABLE EXPENSE': 'controllable',
@@ -99,12 +114,18 @@ function buildClassification(wb: XLSX.WorkBook): Classification {
   return map;
 }
 
-export function parseExpenseTransactions(data: ArrayBuffer): ParsedExpenseTx {
+export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classification): ParsedExpenseTx {
   const wb = XLSX.read(data, { type: 'array' });
   const classification = buildClassification(wb);
+  // Supplement with a stored classification (from prior imports) for accounts the
+  // workbook itself doesn't classify — needed when only the raw QB transaction
+  // sheet is provided (no List / finished tabs).
+  if (fallback) for (const [k, v] of fallback) if (!classification.has(k)) classification.set(k, v);
   const warnings: string[] = [];
 
-  const qb = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets['QB Exp Data'], { header: 1, raw: true, defval: '' });
+  const sheetName = findExpenseTxSheet(wb);
+  if (!sheetName) return { rows: [], months: [], buCodes: [], warnings: ['No QuickBooks expense transaction sheet (Account / Class / Debit / Credit columns) found.'] };
+  const qb = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[sheetName], { header: 1, raw: true, defval: '' });
   // header row has Account / Class / Debit / Credit
   let hdr = 0;
   for (let r = 0; r < 5; r++) { if ((qb[r] ?? []).includes('Account') && (qb[r] ?? []).includes('Class')) { hdr = r; break; } }
@@ -115,7 +136,7 @@ export function parseExpenseTransactions(data: ArrayBuffer): ParsedExpenseTx {
   const agg = new Map<string, MonthlyExpenseRow>();
   const buSet = new Set<string>();
   const monthSet = new Set<string>();
-  let unmapped = 0;
+  const unmappedAccounts = new Set<string>();
 
   for (let r = hdr + 1; r < qb.length; r++) {
     const row = qb[r];
@@ -131,7 +152,7 @@ export function parseExpenseTransactions(data: ArrayBuffer): ParsedExpenseTx {
     if (amount === 0) continue;
 
     const cl = classification.get(account.toUpperCase());
-    if (!cl) { unmapped++; continue; } // not an expense-report account (COGS, tax, …) — exclude
+    if (!cl) { unmappedAccounts.add(account); continue; } // not a known expense-report account (COGS, tax, or new) — exclude
     const { section, group } = cl;
 
     const { year, month } = ymFromSerial(date);
@@ -144,7 +165,9 @@ export function parseExpenseTransactions(data: ArrayBuffer): ParsedExpenseTx {
     monthSet.add(`${year}-${month}`);
   }
 
-  if (unmapped > 0) warnings.push(`${unmapped} transactions were on non-expense accounts (COGS, taxes, etc.) and were excluded.`);
+  if (unmappedAccounts.size > 0) {
+    warnings.push(`${unmappedAccounts.size} account(s) weren't in the known expense classification and were excluded (COGS/taxes, or new accounts): ${[...unmappedAccounts].sort().join(', ')}. To include a new expense account, import a full expense workbook (with the classification tabs) once.`);
+  }
 
   const months = [...monthSet].map((s) => { const [y, m] = s.split('-').map(Number); return { year: y, month: m }; })
     .sort((a, b) => a.year - b.year || a.month - b.month);

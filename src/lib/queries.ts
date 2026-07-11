@@ -290,6 +290,26 @@ function mergeExpMaps(maps: ExpMap[]): ExpMap {
   return out;
 }
 
+// Distinct account → {section, group} learned from previously-imported expense
+// months. Used as a fallback classification when a raw QB expense export (only
+// the transaction sheet, no List / finished tabs) is imported. Paginated so the
+// full history (>1000 rows) is covered.
+export async function fetchStoredExpenseClassification(): Promise<Map<string, { section: 'controllable' | 'uncontrollable'; group: string }>> {
+  const map = new Map<string, { section: 'controllable' | 'uncontrollable'; group: string }>();
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase.from('monthly_expense').select('account, section, group_name').range(from, from + page - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    for (const r of rows) {
+      const key = (r.account as string).toUpperCase();
+      if (!map.has(key)) map.set(key, { section: r.section as 'controllable' | 'uncontrollable', group: (r.group_name as string) ?? '' });
+    }
+    if (rows.length < page) break;
+  }
+  return map;
+}
+
 // Finance-set overrides of each account's Controllable/Non-controllable class.
 export async function fetchExpenseSectionOverrides(): Promise<Map<string, 'controllable' | 'uncontrollable'>> {
   const { data, error } = await supabase.from('expense_account_sections').select('account, section');

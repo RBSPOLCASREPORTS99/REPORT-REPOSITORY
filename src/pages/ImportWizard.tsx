@@ -21,6 +21,7 @@ import { persistGffcExpense, persistGffcSales } from '../lib/importers/persistGf
 import { GFFC_CATEGORIES, GFFC_EXPENSE_KEYS } from '../lib/gffc/gffcConfig';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
+import { fetchStoredExpenseClassification } from '../lib/queries';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -142,8 +143,14 @@ export default function ImportWizard() {
         setSales(parsed); setStep('sales'); return;
       }
       if (isExpenseTxWorkbook(wb)) {
-        const parsed = parseExpenseTransactions(buf);
-        if (parsed.months.length === 0) { setParseError('No dated expense transactions found in "QB Exp Data".'); return; }
+        // Fall back to the classification learned from prior imports, so a raw QB
+        // expense export (transaction sheet only) still classifies its accounts.
+        const fallback = await fetchStoredExpenseClassification();
+        const parsed = parseExpenseTransactions(buf, fallback);
+        if (parsed.months.length === 0) {
+          setParseError('No classifiable expense transactions found. Import a full expense workbook (with the classification tabs) at least once first.');
+          return;
+        }
         setExpense(parsed); setStep('expense'); return;
       }
       if (isSupportWorkbook(wb)) {
