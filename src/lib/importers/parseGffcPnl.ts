@@ -79,19 +79,40 @@ function parseSheet(ws: XLSX.WorkSheet): GffcMonthInputs[] {
   });
 }
 
-// The GFFC QuickBooks export is identified by its distinctive sheet names
-// (monthly P&L, expense details, sales-by-qty). POLCAS exports never use these.
-export function isGffcWorkbook(wb: XLSX.WorkBook): boolean {
-  const n = wb.SheetNames;
-  return ['P&L 2026', 'P&L 2025', 'GFFC TOTAL P&L', 'QB Exp Details', 'Sales by QTY'].some((s) => n.includes(s));
+// A sheet is a GFFC month-columned P&L if its header has 2+ "Mon YY" month
+// columns AND it has a "Total Income" row. This distinguishes it from the POLCAS
+// "P&L by Class" export (whose columns are BU classes, not months), so it works
+// even when the sheet is named generically (e.g. "Sheet1").
+function looksLikeGffcSheet(ws: XLSX.WorkSheet): boolean {
+  const rows = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: '' });
+  let monthCols = 0;
+  for (let r = 0; r < Math.min(6, rows.length); r++) {
+    let c = 0;
+    for (const v of rows[r] ?? []) { if (v !== '' && v != null && parseMonthHeader(v)) c++; }
+    monthCols = Math.max(monthCols, c);
+  }
+  if (monthCols < 2) return false;
+  return rows.some((row) => (row ?? []).some((v) => typeof v === 'string' && v.trim().toUpperCase() === 'TOTAL INCOME'));
 }
 
-// Parse all months from P&L 2025 + P&L 2026 (overlaps deduped by the caller's
-// upsert; later-parsed months win).
+// The GFFC QuickBooks export is identified by its distinctive sheet names
+// (monthly P&L, expense details, sales-by-qty) or, as a fallback, by the
+// month-columned P&L content itself. POLCAS exports never look like this.
+export function isGffcWorkbook(wb: XLSX.WorkBook): boolean {
+  const n = wb.SheetNames;
+  if (['P&L 2026', 'P&L 2025', 'GFFC TOTAL P&L', 'QB Exp Details', 'Sales by QTY'].some((s) => n.includes(s))) return true;
+  return n.some((s) => looksLikeGffcSheet(wb.Sheets[s]));
+}
+
+// Parse all months from the P&L 2025 / P&L 2026 sheets — or, when the sheet is
+// named generically, any sheet whose content is a GFFC month-columned P&L.
+// Overlaps are deduped by the caller's upsert (later-parsed months win).
 export function parseGffcPnl(data: ArrayBuffer): GffcMonthInputs[] {
   const wb = XLSX.read(data, { type: 'array' });
   const out: GffcMonthInputs[] = [];
-  for (const name of ['P&L 2025', 'P&L 2026']) {
+  let targets: string[] = wb.SheetNames.filter((n) => n === 'P&L 2025' || n === 'P&L 2026');
+  if (targets.length === 0) targets = wb.SheetNames.filter((n) => looksLikeGffcSheet(wb.Sheets[n]));
+  for (const name of targets) {
     const ws = wb.Sheets[name];
     if (ws) out.push(...parseSheet(ws));
   }
