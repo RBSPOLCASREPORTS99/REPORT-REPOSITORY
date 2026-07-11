@@ -86,3 +86,13 @@ export const COGS_VARIANCE_LABELS: Record<string, string> = {
   BU09: 'Hog Feeds Price Adjustment',
   BU08PH: 'Reclass or Adjusted Variance',
 };
+
+// Lakatan Farm (BU08LF) P&L: farm-specific labels for the operating-expense
+// lines (it's hand-entered with these categories, not standard QB expenses).
+export const FARM_PNL_LABELS: Record<string, string> = {
+  admin_expense: 'Fertilizer / Chemical',
+  discounting_expense: 'Labor',
+  operations_expense: 'Other Ops',
+  repairs_expense: 'Land Prep',
+  salaries_expense: 'Planting',
+};

@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS } from './constants';
+import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS, FARM_PNL_LABELS } from './constants';
 import { TRUCKS } from './pnl/truckConfig';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
@@ -221,6 +221,13 @@ export async function fetchBuComparison(currentRangeId: string, priorRangeId: st
   if (vLabel) { const l = lines.find((x) => x.key === 'cogs_variance'); if (l) l.label = vLabel; }
   // BU01/02 only: Discounting Expense is labelled "Disc & Interest Expense".
   if (buCode === 'BU0102') { const l = lines.find((x) => x.key === 'discounting_expense'); if (l) l.label = 'Disc & Interest Expense'; }
+  // Lakatan Farm: farm-specific expense labels (Fertilizer/Chemical, Labor, …).
+  if (buCode === 'BU08LF') {
+    for (const [key, label] of Object.entries(FARM_PNL_LABELS)) {
+      const l = lines.find((x) => x.key === key);
+      if (l) l.label = label;
+    }
+  }
   return lines;
 }
 
