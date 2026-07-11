@@ -89,8 +89,7 @@ export default function FarmEntry() {
         {FARM_INPUT_LINES.map((line) => (
           <div key={line.key} className="grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-2">
             <span className="text-sm text-slate-600 dark:text-slate-300">
-              {line.label}
-              {line.farmHint && <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({line.farmHint})</span>}
+              {line.farmHint ?? line.label}
             </span>
             <input type="number" inputMode="decimal" value={inputs[line.key] || ''}
               onChange={(e) => setField(line.key, e.target.value)}
