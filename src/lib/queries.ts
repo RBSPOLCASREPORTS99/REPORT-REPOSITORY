@@ -219,6 +219,8 @@ export async function fetchBuComparison(currentRangeId: string, priorRangeId: st
   // BU-specific label for the broken-out COGS variance line.
   const vLabel = COGS_VARIANCE_LABELS[buCode];
   if (vLabel) { const l = lines.find((x) => x.key === 'cogs_variance'); if (l) l.label = vLabel; }
+  // BU01/02 only: Discounting Expense is labelled "Disc & Interest Expense".
+  if (buCode === 'BU0102') { const l = lines.find((x) => x.key === 'discounting_expense'); if (l) l.label = 'Disc & Interest Expense'; }
   return lines;
 }
 
