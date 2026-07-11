@@ -81,9 +81,11 @@ export default function TruckPnl() {
       <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← Back to Home</Link>
 
       <div className="sticky top-14 z-30 -mx-4 space-y-2 border-b border-slate-200 bg-slate-50 px-4 py-2 lg:top-0 dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <h1 className="min-w-0 shrink truncate text-lg font-semibold text-slate-900 dark:text-slate-100">Simulated P&amp;L per Truck</h1>
-          <SetMonthSelect ranges={ranges} />
+          <div className="flex flex-1 justify-center">
+            <SetMonthSelect ranges={ranges} />
+          </div>
         </div>
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
       </div>
