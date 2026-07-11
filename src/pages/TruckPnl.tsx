@@ -52,7 +52,7 @@ export default function TruckPnl() {
 
   const money = (v: number) => formatMoney(v, 'thousands', units);
   const chgCls = (v: number, cost?: boolean) => ((cost ? v <= 0 : v >= 0) ? 'text-green-600' : 'text-red-600');
-  const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
+  const numCls = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100');
   const priorLabel = cmp?.priorLabel ?? 'Prior';
   const currentLabel = cmp?.currentLabel ?? 'Current';
   const lines = data ? (data.pnl[selected] ?? data.pnl.TOTAL) : undefined;
@@ -135,8 +135,10 @@ export default function TruckPnl() {
                   const bold = line.kind !== 'account';
                   const isHeader = line.kind === 'subtotal' && sectionHeaders.has(line.label);
                   const open = isHeader && expanded.has(line.label);
-                  const rowCls = bold ? 'bg-slate-100/80 font-semibold dark:bg-slate-700/50' : '';
-                  const stickyCls = bold ? 'bg-slate-100 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                  // Total / subtotal rows: solid neutral band + indigo accent label
+                  // so they read clearly in both light and dark mode.
+                  const rowCls = bold ? 'bg-slate-100 font-semibold dark:bg-slate-700/70' : '';
+                  const stickyCls = bold ? 'bg-slate-100 font-semibold text-indigo-700 dark:bg-slate-700 dark:text-indigo-300' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300';
                   const diff = line.current - line.prior;
                   const favorable = line.cost ? diff < 0 : diff >= 0;
                   return (

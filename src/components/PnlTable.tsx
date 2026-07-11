@@ -4,7 +4,7 @@ import { useUi } from '../contexts/UiContext';
 import { useColHighlight } from '../lib/useColHighlight';
 import type { ComparisonLine } from '../lib/queries';
 
-const BOLD_KEYS = new Set(['gross_income', 'cogs_total', 'total_expense', 'total_allocated_expense', 'total_support_centers', 'net_income_ops', 'net_income']);
+const BOLD_KEYS = new Set(['gross_sales', 'gross_income', 'cogs_total', 'total_expense', 'total_allocated_expense', 'total_support_centers', 'net_income_ops', 'net_income']);
 
 // Operating-expense lines that get auto-sorted biggest-first within their block.
 const EXPENSE_SORT_KEYS = new Set([
@@ -96,15 +96,17 @@ export default function PnlTable({
             const up = line.diff >= 0;
             // Favourable = income up OR cost down; drives the DIFF/%DIFF colour.
             const favorable = COST_KEYS.has(line.key) ? line.diff < 0 : line.diff >= 0;
-            const rowCls = bold ? 'bg-slate-100/80 font-semibold dark:bg-slate-700/50' : '';
-            const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
+            // Total / subtotal rows: solid neutral band + indigo accent label so
+            // they stand out and read clearly in both light and dark mode.
+            const rowCls = bold ? 'bg-slate-100 font-semibold dark:bg-slate-700/70' : '';
+            const numCls = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : bold ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-slate-100');
             const isHeader = GROUP_HEADERS.has(line.key) && hasDetails(line.key);
             const isOpen = isHeader && !collapsed.has(line.key);
             return (
               <tr key={line.key}
                 onClick={isHeader ? () => toggle(line.key) : undefined}
                 className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls} ${isHeader ? 'cursor-pointer select-none' : ''}`}>
-                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${bold ? 'bg-slate-100 font-semibold text-slate-900 dark:bg-slate-700 dark:text-slate-100' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'} ${cellCls(0)}`}>
+                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${bold ? 'bg-slate-100 font-semibold text-indigo-700 dark:bg-slate-700 dark:text-indigo-300' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'} ${cellCls(0)}`}>
                   {isHeader && <span className="mr-1 inline-block w-3 text-indigo-500">{isOpen ? '▾' : '▸'}</span>}
                   {line.label}
                 </td>
