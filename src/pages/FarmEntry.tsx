@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchRanges, type RangeRow } from '../lib/queries';
-import { FARM_INPUT_LINES, deriveFarmLines, loadFarmInputs, saveFarmEntry, type FarmInputs } from '../lib/farmEntry';
+import { FARM_INPUT_LINES, deriveFarmLines, loadFarmInputs, saveFarmEntry, computeFarmAllocations, type FarmInputs } from '../lib/farmEntry';
 import { formatThousands } from '../lib/format';
 
 // Manual entry for Lakatan Farm (BU08LF), which is hand-typed in the Excel
@@ -39,6 +39,18 @@ export default function FarmEntry() {
     if (Number.isNaN(num)) return;
     setInputs((prev) => ({ ...prev, [key]: num }));
     setSaved(false);
+  }
+
+  async function autoAllocate() {
+    setError('');
+    try {
+      const res = await computeFarmAllocations(rangeId, inputs.gross_sales ?? 0);
+      if (!res) { setError("This period's company pools aren't imported yet — import the month's P&L first."); return; }
+      setInputs((prev) => ({ ...prev, ...res }));
+      setSaved(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Auto-compute failed.');
+    }
   }
 
   async function handleSave() {
@@ -87,6 +99,14 @@ export default function FarmEntry() {
           </div>
         ))}
       </div>
+
+      <button onClick={autoAllocate}
+        className="w-full rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300 sm:w-auto">
+        ⚙ Auto-compute allocated &amp; support centers (% of Gross Sales)
+      </button>
+      <p className="text-xs text-slate-400 dark:text-slate-500">
+        Fills Admin (allocated), Cost of Money, and Support Finance / HR / Management as (Farm Gross Sales ÷ company Gross Sales) × each company pool for this period. Review, then Save.
+      </p>
 
       <div className="flex items-center justify-between rounded-2xl bg-brand-600 px-4 py-3 text-white">
         <span className="text-sm">Net Income (computed)</span>
