@@ -197,6 +197,9 @@ export default function Home() {
             Total P&L card can span 3 — i.e. 1.5× a normal BU box. */}
         <div className="grid grid-cols-4 items-start gap-2.5 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 [&>*]:col-span-2">
           {company && <CompanyCard net={company.net} priorNet={company.priorNet} priorLabel={cmp?.priorLabel} index={0} />}
+          {/* Half-box spacer so the row-1 BU boxes land on a 2-column boundary,
+              aligning them with the row below (e.g. BU01/02 above BU09). */}
+          {company && <div aria-hidden className="col-span-1!" />}
           {groupCards.map((gc, i) => (
             <CombinedCard key={gc.key} data={gc.data} priorLabel={cmp?.priorLabel} index={i}
               onUncombine={() => uncombine(gc.data.codes[0])} dnd={dndFor(gc.data.codes[0])} />
