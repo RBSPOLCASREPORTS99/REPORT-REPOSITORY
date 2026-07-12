@@ -57,7 +57,7 @@ export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { line
               <tr key={line.key}
                 onClick={isHeader ? () => toggle(line.kind) : undefined}
                 className={`border-b border-slate-200 dark:border-slate-700/60 ${rowCls} ${isHeader ? 'cursor-pointer select-none' : ''}`}>
-                <td className={`sticky left-0 px-4 py-2.5 text-left uppercase ${stickyCls}`}>
+                <td className={`sticky left-0 px-4 py-2.5 text-left ${line.indent ? 'pl-10 normal-case text-slate-500 dark:text-slate-400' : 'uppercase'} ${stickyCls}`}>
                   {isHeader && <span className="mr-1 inline-block w-3 text-indigo-500">{open ? '▾' : '▸'}</span>}
                   {line.label}
                 </td>

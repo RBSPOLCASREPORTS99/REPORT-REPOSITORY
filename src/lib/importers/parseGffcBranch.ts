@@ -38,17 +38,26 @@ function canonicalBranch(raw: string): string | null {
   return null;
 }
 
-// Report row label → base P&L line key. Operations rolls up the allocated MCP
-// ops line so each branch's Total Expense reconciles with the sheet.
+// Report row label → base P&L line key. MCP Ops and the Salaries & Wages
+// sub-components (several "- allocated") are captured as their own detail keys so
+// the branch view can show the expense breakdown with allocation, exactly like
+// the sheet. The salary sub-lines are display-only — the "salaries" total row
+// already includes them, so they are not re-summed into Total Expense.
 function lineKeyFor(label: string): string | null {
   const s = label.trim().toLowerCase();
   if (s === 'gross sales') return 'gross_sales';
   if (s === 'cost of goods sold') return 'cogs';
   if (s === 'admin expense') return 'admin';
   if (s === 'finance expense') return 'finance';
-  if (s === 'operations expense' || s === 'mcp ops expense - allocated') return 'operations';
+  if (s === 'operations expense') return 'operations';
+  if (s === 'mcp ops expense - allocated') return 'mcp_ops';
   if (s === 'repairs/maint. expense') return 'repairs';
   if (s === 'salaries & wages') return 'salaries';
+  if (s === 'sales crew') return 'sal_sales_crew';
+  if (s === 'manager - allocated') return 'sal_manager';
+  if (s === 'finance/acctng - allocated') return 'sal_finance';
+  if (s === 'mcp butcher - allocated') return 'sal_mcp_butcher';
+  if (s === 'calamanade prod') return 'sal_calamanade';
   return null;
 }
 

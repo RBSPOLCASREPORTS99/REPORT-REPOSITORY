@@ -16,6 +16,7 @@ export interface GffcPnlLine {
   current: number;
   prior: number;
   cost?: boolean; // expense/COGS line (an increase is unfavourable)
+  indent?: boolean; // sub-line of the row above (e.g. a Salaries & Wages component)
 }
 export interface GffcPnlResult {
   hasData: boolean;
@@ -269,7 +270,17 @@ export async function fetchGffcBranchPnl(current: Period, prior?: Period): Promi
   // A branch's value for line k (TOTAL = sum of all real branches).
   const at = (m: Record<string, Record<string, number>>, b: string, k: string) =>
     b === TOTAL ? real.reduce((s, br) => s + (m[br]?.[k] ?? 0), 0) : m[b]?.[k] ?? 0;
-  const EXP = ['admin', 'finance', 'operations', 'repairs', 'salaries'];
+  // Total Expense = the top-level groups. The salary sub-lines are display-only
+  // detail (already inside "salaries"), so they are not part of this sum.
+  const EXP = ['admin', 'finance', 'operations', 'mcp_ops', 'repairs', 'salaries'];
+  // Salaries & Wages breakdown, several of them costs allocated to the branch.
+  const SALARY_DETAIL: [string, string][] = [
+    ['sal_sales_crew', 'Sales Crew'],
+    ['sal_manager', 'Manager - allocated'],
+    ['sal_finance', 'Finance/Acctng - allocated'],
+    ['sal_mcp_butcher', 'MCP Butcher - allocated'],
+    ['sal_calamanade', 'Calamanade Prod'],
+  ];
 
   const buildLines = (b: string): GffcPnlLine[] => {
     const c = (k: string) => at(cur, b, k);
@@ -278,16 +289,24 @@ export async function fetchGffcBranchPnl(current: Period, prior?: Period): Promi
     const teC = EXP.reduce((s, k) => s + c(k), 0), teP = EXP.reduce((s, k) => s + p(k), 0);
     const giC = gsC - c('cogs'), giP = gsP - p('cogs');
     const netC = giC - teC + c('other_income'), netP = giP - teP + p('other_income');
-    const L = (key: string, label: string, kind: GffcLineKind, current: number, prior: number, cost?: boolean): GffcPnlLine =>
-      ({ key, label, kind, current, prior, cost });
-    // Expense groups auto-sorted biggest-first by current amount (like the P&L).
-    const expenseLines = [
-      L('admin', 'Admin Expense', 'expense', c('admin'), p('admin'), true),
-      L('finance', 'Finance Expense', 'expense', c('finance'), p('finance'), true),
-      L('operations', 'Operations Expense', 'expense', c('operations'), p('operations'), true),
-      L('repairs', 'Repairs/Maint. Expense', 'expense', c('repairs'), p('repairs'), true),
-      L('salaries', 'Salaries & Wages', 'expense', c('salaries'), p('salaries'), true),
-    ].sort((x, y) => y.current - x.current);
+    const L = (key: string, label: string, kind: GffcLineKind, current: number, prior: number, cost?: boolean, indent?: boolean): GffcPnlLine =>
+      ({ key, label, kind, current, prior, cost, indent });
+    // Salary sub-lines shown indented right under Salaries & Wages (skip empties).
+    const salaryDetail = SALARY_DETAIL
+      .map(([k, label]) => L(k, label, 'expense', c(k), p(k), true, true))
+      .filter((l) => l.current !== 0 || l.prior !== 0);
+    // Top-level expense groups auto-sorted biggest-first by current amount, with
+    // each group's detail lines kept immediately after it.
+    const expenseBlocks: { head: GffcPnlLine; detail: GffcPnlLine[] }[] = [
+      { head: L('admin', 'Admin Expense', 'expense', c('admin'), p('admin'), true), detail: [] },
+      { head: L('finance', 'Finance Expense', 'expense', c('finance'), p('finance'), true), detail: [] },
+      { head: L('operations', 'Operations Expense', 'expense', c('operations'), p('operations'), true), detail: [] },
+      { head: L('mcp_ops', 'MCP Ops Expense - allocated', 'expense', c('mcp_ops'), p('mcp_ops'), true), detail: [] },
+      { head: L('repairs', 'Repairs/Maint. Expense', 'expense', c('repairs'), p('repairs'), true), detail: [] },
+      { head: L('salaries', 'Salaries & Wages', 'expense', c('salaries'), p('salaries'), true), detail: salaryDetail },
+    ].filter((blk) => blk.head.current !== 0 || blk.head.prior !== 0 || blk.detail.length > 0);
+    expenseBlocks.sort((x, y) => y.head.current - x.head.current);
+    const expenseLines = expenseBlocks.flatMap((blk) => [blk.head, ...blk.detail]);
     return [
       L('gross_sales', 'Gross Sales', 'gross', gsC, gsP),
       L('cogs', 'Cost of Goods Sold', 'cogs', c('cogs'), p('cogs'), true),
