@@ -16,6 +16,9 @@ import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDa
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
 import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, parseGffcSalesByItem, isGffcSalesByItemWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
+import { parseBuParameterStd, isBuParametersWorkbook, type BuStdImport } from '../lib/importers/parseParameters';
+import { saveBuParameterStd } from '../lib/params/paramQueries';
+import { BU_PARAM_CONFIG } from '../lib/params/paramConfig';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
 import { persistGffcExpense, persistGffcSales, persistGffcBranch } from '../lib/importers/persistGffcData';
 import { parseGffcBranchPnl, type GffcBranchRow } from '../lib/importers/parseGffcBranch';
@@ -26,7 +29,7 @@ import { fetchStoredExpenseClassification } from '../lib/queries';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
-type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'done';
+type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'paramstd' | 'done';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = [2024, 2025, 2026, 2027];
@@ -71,6 +74,7 @@ export default function ImportWizard() {
   const [gffcBranch, setGffcBranch] = useState<GffcBranchRow[]>([]);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
+  const [paramStd, setParamStd] = useState<BuStdImport[]>([]);
   const [parseError, setParseError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
@@ -126,6 +130,15 @@ export default function ImportWizard() {
       const buf = await file.arrayBuffer();
       setFileBuffer(buf);
       const wb = XLSX.read(buf, { type: 'array' });
+
+      // BR "Parameters" workbook → import each BU's persistent STD (standards).
+      if (isBuParametersWorkbook(wb)) {
+        const std = parseBuParameterStd(wb);
+        if (std.length === 0) { setParseError('No parameter standards (STD column) found in this workbook.'); return; }
+        setParamStd(std);
+        setStep('paramstd');
+        return;
+      }
 
       if (isGffcWorkbook(wb)) {
         const months = parseGffcPnl(buf);
@@ -263,6 +276,14 @@ export default function ImportWizard() {
       await persistGffcExpense(gffcExpense);
       await persistGffcSales(gffcSales);
       await persistGffcBranch(gffcBranch);
+      setStep('done');
+    } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
+  }
+  async function handleConfirmParamStd() {
+    if (!user) return;
+    setConfirming(true); setConfirmError('');
+    try {
+      for (const { buCode, std } of paramStd) await saveBuParameterStd(buCode, std);
       setStep('done');
     } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
   }
@@ -514,6 +535,49 @@ export default function ImportWizard() {
     );
   }
 
+  // ---- BU Parameter Standards (persistent STD from the Parameters workbook) ---
+  if (step === 'paramstd') {
+    const defOf = (bu: string, key: string) => BU_PARAM_CONFIG[bu]?.params.find((p) => p.key === key);
+    const fmtStd = (bu: string, key: string, v: number) => {
+      const d = defOf(bu, key);
+      if (d?.pct) return `${(v * 100).toFixed(d.decimals ?? 1)}%`;
+      const s = v.toLocaleString(undefined, { maximumFractionDigits: d?.decimals ?? 2 });
+      return d?.peso ? `₱${s}` : s;
+    };
+    const total = paramStd.reduce((s, b) => s + Object.keys(b.std).length, 0);
+    return (
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import BU Parameter Standards</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Reads the persistent <span className="font-medium">STD</span> column so you don't type standards each period.
+          Re-importing replaces each BU's standards; edit them any time on the BU's Parameters tab.
+        </p>
+        <div className="space-y-3">
+          {paramStd.map(({ buCode, std }) => (
+            <div key={buCode} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-800">
+              <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{buCode === 'BU0102' ? 'BU01 & BU02' : buCode} · {Object.keys(std).length} standards</p>
+              <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                {Object.entries(std).map(([key, v]) => (
+                  <div key={key} className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="text-slate-600 dark:text-slate-300">{defOf(buCode, key)?.label ?? key}</span>
+                    <span className="tabular-nums font-medium text-slate-900 dark:text-slate-100">{fmtStd(buCode, key, v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
+          <button onClick={handleConfirmParamStd} disabled={confirming} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {confirming ? 'Importing…' : `Import ${total} standards`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- GFFC - Chickboy Meating Place: Total P&L + Expenses + Sales --------
   if (step === 'gffc') {
     const pnlRange = () => {
@@ -589,7 +653,7 @@ export default function ImportWizard() {
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Upload a monthly QuickBooks <strong>P&L by Class</strong> export (one per month), or the Expense,
-        Sales-in-Qty, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
+        Sales-in-Qty, Parameters, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
       </p>
       <div
         onDragOver={(e) => e.preventDefault()}
