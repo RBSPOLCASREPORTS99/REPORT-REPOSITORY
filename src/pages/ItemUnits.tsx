@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import { fetchSalesItems, fetchItemUnits, saveItemUnit } from '../lib/queries';
 import { ListSkeleton } from '../components/Skeleton';
 
-interface Row { item: string; importedUom: string; uom: string; dirty?: boolean }
+interface Row { item: string; importedUom: string; uom: string; official: string; dirty?: boolean }
 
-// Finance screen to set the Unit of Measure (U/M) shown per item in Sales Qty.
-// The set value overrides whatever the import carried and is remembered.
+// Finance screen ("PAC Items") to set, per sales item: an official (PAC) display
+// name and its Unit of Measure, both used in Sales Qty. When no official name is
+// set the item's own name is used; items sharing an official name are summed.
 export default function ItemUnits() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,8 +18,11 @@ export default function ItemUnits() {
   function reload() {
     setLoading(true);
     Promise.all([fetchSalesItems(), fetchItemUnits()])
-      .then(([items, overrides]) => {
-        setRows(items.map((it) => ({ item: it.item, importedUom: it.importedUom, uom: overrides.get(it.item) || it.importedUom || '' })));
+      .then(([items, units]) => {
+        setRows(items.map((it) => {
+          const u = units.get(it.item);
+          return { item: it.item, importedUom: it.importedUom, uom: u?.uom || it.importedUom || '', official: u?.official || '' };
+        }));
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -26,18 +30,18 @@ export default function ItemUnits() {
   useEffect(reload, []);
 
   const filtered = useMemo(
-    () => rows.filter((r) => r.item.toLowerCase().includes(q.trim().toLowerCase())),
+    () => rows.filter((r) => (r.item + ' ' + r.official).toLowerCase().includes(q.trim().toLowerCase())),
     [rows, q],
   );
 
-  function edit(item: string, uom: string) {
-    setRows((rs) => rs.map((r) => (r.item === item ? { ...r, uom, dirty: true } : r)));
+  function edit(item: string, patch: Partial<Row>) {
+    setRows((rs) => rs.map((r) => (r.item === item ? { ...r, ...patch, dirty: true } : r)));
   }
   async function save(row: Row) {
     setSavingItem(row.item);
     setError('');
     try {
-      await saveItemUnit(row.item, row.uom);
+      await saveItemUnit(row.item, row.uom, row.official);
       setRows((rs) => rs.map((r) => (r.item === row.item ? { ...r, dirty: false } : r)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed.');
@@ -52,10 +56,11 @@ export default function ItemUnits() {
     <div className="space-y-5">
       <Link to="/" className="inline-block text-sm text-slate-500 dark:text-slate-400">← Back to Home</Link>
       <div>
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Item Units (U/M)</h1>
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">PAC Items</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Set the unit of measure shown for each item in <span className="font-medium">Sales Qty</span>.
-          What you set here overrides the imported unit and is remembered.
+          Set each item's <span className="font-medium">official (PAC) name</span> and <span className="font-medium">Unit of Measure</span> for
+          <span className="font-medium"> Sales Qty</span>. No official name → the item's own name is used. Two items can
+          share one official name — their quantities are then summed together.
           {missing > 0 && <span className="text-amber-600 dark:text-amber-500"> {missing} item{missing === 1 ? '' : 's'} without a unit.</span>}
         </p>
       </div>
@@ -75,14 +80,26 @@ export default function ItemUnits() {
         <p className="text-slate-400 dark:text-slate-500">No sales items imported yet.</p>
       ) : (
         <div className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm dark:divide-slate-700 dark:bg-slate-800">
+          <div className="grid grid-cols-[1fr_1fr_6rem_auto] items-center gap-3 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <span>Item (set name)</span>
+            <span>Official name</span>
+            <span>U/M</span>
+            <span />
+          </div>
           {filtered.map((r) => (
-            <div key={r.item} className="grid grid-cols-[1fr_7rem_auto] items-center gap-3 px-4 py-2.5">
+            <div key={r.item} className="grid grid-cols-[1fr_1fr_6rem_auto] items-center gap-3 px-4 py-2.5">
               <span className="truncate text-sm text-slate-800 dark:text-slate-100" title={r.item}>{r.item}</span>
               <input
+                value={r.official}
+                onChange={(e) => edit(r.item, { official: e.target.value })}
+                placeholder={r.item}
+                className="min-w-0 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+              />
+              <input
                 value={r.uom}
-                onChange={(e) => edit(r.item, e.target.value)}
+                onChange={(e) => edit(r.item, { uom: e.target.value })}
                 placeholder="e.g. kgs"
-                className={`w-28 rounded-lg border px-2 py-1.5 text-sm ${r.uom ? 'border-slate-300 dark:border-slate-600' : 'border-amber-300 dark:border-amber-700'} dark:bg-slate-900 dark:text-slate-100`}
+                className={`w-24 rounded-lg border px-2 py-1.5 text-sm ${r.uom ? 'border-slate-300 dark:border-slate-600' : 'border-amber-300 dark:border-amber-700'} dark:bg-slate-900 dark:text-slate-100`}
               />
               <button
                 onClick={() => save(r)}

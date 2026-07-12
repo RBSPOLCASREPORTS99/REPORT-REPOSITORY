@@ -33,7 +33,7 @@ export default function Layout() {
           { to: '/publish', label: 'Publish periods', icon: '📢' },
           { to: '/users', label: 'Users & access', icon: '👥' },
           { to: '/bu-names', label: 'Business Unit Names', icon: '🏷️' },
-          { to: '/item-units', label: 'Item Units (U/M)', icon: '📏' },
+          { to: '/item-units', label: 'PAC Items', icon: '📏' },
         ]
       : []),
     { to: '/account', label: 'My account (PIN)', icon: '👤' },

@@ -430,10 +430,11 @@ async function salesByItem(rangeId: string, buCode: string): Promise<Map<string,
 
 // Finance-set U/M overrides (item -> uom), applied on top of the imported unit.
 // Tolerant of the table not existing yet (returns empty) so Sales never breaks.
-export async function fetchItemUnits(): Promise<Map<string, string>> {
-  const { data, error } = await supabase.from('item_units').select('item, uom');
+export type ItemUnit = { uom: string; official: string };
+export async function fetchItemUnits(): Promise<Map<string, ItemUnit>> {
+  const { data, error } = await supabase.from('item_units').select('item, uom, official_name');
   if (error) return new Map();
-  return new Map((data ?? []).map((r) => [r.item as string, (r.uom as string) || '']));
+  return new Map((data ?? []).map((r) => [r.item as string, { uom: (r.uom as string) || '', official: ((r.official_name as string) ?? '').trim() }]));
 }
 
 // Quantity per item for a BU, comparing a current range vs a prior range,
@@ -450,17 +451,23 @@ function mergeQtyMaps(maps: QtyMap[]): QtyMap {
   return out;
 }
 
-function buildSalesRows(cur: QtyMap, pri: QtyMap, overrides: Map<string, string>): SalesItemRow[] {
+function buildSalesRows(cur: QtyMap, pri: QtyMap, units: Map<string, ItemUnit>): SalesItemRow[] {
   const items = new Set([...cur.keys(), ...pri.keys()]);
-  return [...items]
-    .map((item) => {
-      const c = cur.get(item);
-      const p = pri.get(item);
-      const current = c?.qty ?? 0;
-      const prior = p?.qty ?? 0;
-      const uom = overrides.get(item) || c?.uom || p?.uom || '';
-      return { item, uom, prior, current, diff: current - prior, pctDiff: prior !== 0 ? (current - prior) / prior : 0 };
-    })
+  // Group by display name: the item's official (PAC) name when set, else its own
+  // name. Different items sharing one official name have their quantities summed.
+  const groups = new Map<string, { current: number; prior: number; uom: string }>();
+  for (const item of items) {
+    const u = units.get(item);
+    const display = u?.official || item;
+    const itemUom = (u?.uom || '') || cur.get(item)?.uom || pri.get(item)?.uom || '';
+    const g = groups.get(display) ?? { current: 0, prior: 0, uom: '' };
+    g.current += cur.get(item)?.qty ?? 0;
+    g.prior += pri.get(item)?.qty ?? 0;
+    if (!g.uom && itemUom) g.uom = itemUom;
+    groups.set(display, g);
+  }
+  return [...groups.entries()]
+    .map(([item, g]) => ({ item, uom: g.uom, prior: g.prior, current: g.current, diff: g.current - g.prior, pctDiff: g.prior !== 0 ? (g.current - g.prior) / g.prior : 0 }))
     .sort((a, b) => b.current - a.current);
 }
 
@@ -497,8 +504,11 @@ export async function fetchSalesItems(): Promise<{ item: string; importedUom: st
   return [...map.entries()].map(([item, importedUom]) => ({ item, importedUom })).sort((a, b) => a.item.localeCompare(b.item));
 }
 
-export async function saveItemUnit(item: string, uom: string): Promise<void> {
-  const { error } = await supabase.from('item_units').upsert({ item, uom: uom.trim(), updated_at: new Date().toISOString() }, { onConflict: 'item' });
+export async function saveItemUnit(item: string, uom: string, official = ''): Promise<void> {
+  const { error } = await supabase.from('item_units').upsert(
+    { item, uom: uom.trim(), official_name: official.trim() || null, updated_at: new Date().toISOString() },
+    { onConflict: 'item' },
+  );
   if (error) throw error;
 }
 
