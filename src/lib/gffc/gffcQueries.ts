@@ -200,66 +200,74 @@ export async function fetchGffcSales(current: Period, prior?: Period): Promise<{
 
 // ---- Per-branch P&L (from the "P&L PER BRANCH" sheet) -----------------------
 
-export type GffcBranchKind = 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'other' | 'net' | 'pct';
-export interface GffcBranchLine {
-  key: string;
-  label: string;
-  kind: GffcBranchKind;
-  values: Record<string, number>; // branch name → value; includes 'TOTAL'
-  cost?: boolean;
-}
 export interface GffcBranchResult {
   hasData: boolean;
-  branches: string[]; // ordered branch names (Total appended separately)
-  lines: GffcBranchLine[];
+  branches: string[]; // ordered branch tabs (Main Branch, Branch 2, …, Total)
+  byBranch: Record<string, GffcPnlLine[]>; // per-branch comparison lines
 }
 
 const TOTAL = 'TOTAL';
+// Branches Finance reads first; the rest follow alphabetically, Total last.
+const BRANCH_ORDER = ['Main Branch', 'Branch 2'];
 
-// Sum each branch's base P&L lines over a period and derive Gross Income /
-// Total Expense / Net Income, plus a Total-of-all-branches column.
-export async function fetchGffcBranchPnl(current: Period): Promise<GffcBranchResult> {
-  const months = monthsInPeriod(current.start, current.end);
-  const years = [...new Set(months.map((x) => x.year))];
-  const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
+// Per-branch P&L, each as a current-vs-prior comparison (same shape as the GFFC
+// Total P&L). Each branch's base lines are summed over the current and prior
+// periods and the derived rows (Gross Income / Total Expense / Net Income)
+// computed from them; a Total-of-all-branches tab is appended.
+export async function fetchGffcBranchPnl(current: Period, prior?: Period): Promise<GffcBranchResult> {
+  const curMonths = monthsInPeriod(current.start, current.end);
+  const priMonths = prior ? monthsInPeriod(prior.start, prior.end) : [];
+  const years = [...new Set([...curMonths, ...priMonths].map((x) => x.year))];
   const { data } = await supabase.from('gffc_branch_pnl').select('year, month, branch, line_key, amount').in('year', years);
 
-  const agg: Record<string, Record<string, number>> = {};
+  const curSet = new Set(curMonths.map((x) => `${x.year}-${x.month}`));
+  const priSet = new Set(priMonths.map((x) => `${x.year}-${x.month}`));
+  const cur: Record<string, Record<string, number>> = {};
+  const pri: Record<string, Record<string, number>> = {};
   for (const r of data ?? []) {
-    if (!inSet.has(`${r.year}-${r.month}`)) continue;
-    const b = r.branch as string;
-    (agg[b] ??= {})[r.line_key as string] = (agg[b]?.[r.line_key as string] ?? 0) + Number(r.amount);
+    const mk = `${r.year}-${r.month}`;
+    const b = r.branch as string, k = r.line_key as string, amt = Number(r.amount);
+    if (curSet.has(mk)) (cur[b] ??= {})[k] = (cur[b]?.[k] ?? 0) + amt;
+    if (priSet.has(mk)) (pri[b] ??= {})[k] = (pri[b]?.[k] ?? 0) + amt;
   }
-  const branches = Object.keys(agg).sort();
-  if (branches.length === 0) return { hasData: false, branches: [], lines: [] };
+  const real = [...new Set([...Object.keys(cur), ...Object.keys(pri)])];
+  if (real.length === 0) return { hasData: false, branches: [], byBranch: {} };
+  const rank = (b: string) => { const i = BRANCH_ORDER.indexOf(b); return i === -1 ? BRANCH_ORDER.length : i; };
+  real.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 
-  const base = (b: string, k: string) => (b === TOTAL ? branches.reduce((s, br) => s + (agg[br]?.[k] ?? 0), 0) : agg[b]?.[k] ?? 0);
-  const gross = (b: string) => base(b, 'gross_sales');
-  const cogs = (b: string) => base(b, 'cogs');
-  const gi = (b: string) => gross(b) - cogs(b);
-  const te = (b: string) => base(b, 'admin') + base(b, 'finance') + base(b, 'operations') + base(b, 'repairs') + base(b, 'salaries');
-  const oi = (b: string) => base(b, 'other_income');
-  const net = (b: string) => gi(b) - te(b) + oi(b);
+  // A branch's value for line k (TOTAL = sum of all real branches).
+  const at = (m: Record<string, Record<string, number>>, b: string, k: string) =>
+    b === TOTAL ? real.reduce((s, br) => s + (m[br]?.[k] ?? 0), 0) : m[b]?.[k] ?? 0;
+  const EXP = ['admin', 'finance', 'operations', 'repairs', 'salaries'];
 
-  const cols = [...branches, TOTAL];
-  const line = (key: string, label: string, kind: GffcBranchKind, fn: (b: string) => number, cost?: boolean): GffcBranchLine =>
-    ({ key, label, kind, cost, values: Object.fromEntries(cols.map((b) => [b, fn(b)])) });
+  const buildLines = (b: string): GffcPnlLine[] => {
+    const c = (k: string) => at(cur, b, k);
+    const p = (k: string) => at(pri, b, k);
+    const gsC = c('gross_sales'), gsP = p('gross_sales');
+    const teC = EXP.reduce((s, k) => s + c(k), 0), teP = EXP.reduce((s, k) => s + p(k), 0);
+    const giC = gsC - c('cogs'), giP = gsP - p('cogs');
+    const netC = giC - teC + c('other_income'), netP = giP - teP + p('other_income');
+    const L = (key: string, label: string, kind: GffcLineKind, current: number, prior: number, cost?: boolean): GffcPnlLine =>
+      ({ key, label, kind, current, prior, cost });
+    return [
+      L('gross_sales', 'Gross Sales', 'gross', gsC, gsP),
+      L('cogs', 'Cost of Goods Sold', 'cogs', c('cogs'), p('cogs'), true),
+      L('gross_income', 'Gross Income', 'gross_income', giC, giP),
+      L('admin', 'Admin Expense', 'expense', c('admin'), p('admin'), true),
+      L('finance', 'Finance Expense', 'expense', c('finance'), p('finance'), true),
+      L('operations', 'Operations Expense', 'expense', c('operations'), p('operations'), true),
+      L('repairs', 'Repairs/Maint. Expense', 'expense', c('repairs'), p('repairs'), true),
+      L('salaries', 'Salaries & Wages', 'expense', c('salaries'), p('salaries'), true),
+      L('total_expense', 'Total Expense', 'total', teC, teP, true),
+      L('other_income', 'Other Income', 'other', c('other_income'), p('other_income')),
+      L('net_income', 'Net Income', 'net', netC, netP),
+      L('net_income_pct', 'Net Income %', 'pct', gsC ? netC / gsC : 0, gsP ? netP / gsP : 0),
+    ];
+  };
 
-  const lines: GffcBranchLine[] = [
-    line('gross_sales', 'Gross Sales', 'gross', gross),
-    line('cogs', 'Cost of Goods Sold', 'cogs', cogs, true),
-    line('gross_income', 'Gross Income', 'gross_income', gi),
-    line('admin', 'Admin Expense', 'expense', (b) => base(b, 'admin'), true),
-    line('finance', 'Finance Expense', 'expense', (b) => base(b, 'finance'), true),
-    line('operations', 'Operations Expense', 'expense', (b) => base(b, 'operations'), true),
-    line('repairs', 'Repairs/Maint. Expense', 'expense', (b) => base(b, 'repairs'), true),
-    line('salaries', 'Salaries & Wages', 'expense', (b) => base(b, 'salaries'), true),
-    line('total_expense', 'Total Expense', 'total', te, true),
-    line('other_income', 'Other Income', 'other', oi),
-    line('net_income', 'Net Income', 'net', net),
-    line('net_income_pct', 'Net Income %', 'pct', (b) => (gross(b) !== 0 ? net(b) / gross(b) : 0)),
-  ];
-  return { hasData: true, branches, lines };
+  const branches = [...real, TOTAL];
+  const byBranch = Object.fromEntries(branches.map((b) => [b, buildLines(b)]));
+  return { hasData: true, branches, byBranch };
 }
 
 // ---- GFFC Parameters (operational KPIs) ------------------------------------
@@ -333,17 +341,17 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
     if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label, std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true });
   }
 
-  const brC = await fetchGffcBranchPnl(current);
-  const brP = prior ? await fetchGffcBranchPnl(prior) : null;
-  const gsC = brC.lines.find((l) => l.key === 'gross_sales');
-  const gsP = brP?.lines.find((l) => l.key === 'gross_sales');
+  const br = await fetchGffcBranchPnl(current, prior);
   const dC = daysInPeriod(current);
   const dP = prior ? daysInPeriod(prior) : 0;
-  if (gsC) for (const b of brC.branches) {
+  for (const b of br.branches) {
+    if (b === TOTAL) continue; // per-branch only
+    const gs = br.byBranch[b]?.find((l) => l.key === 'gross_sales');
+    if (!gs) continue;
     rows.push({
       key: `salesday_${b}`, label: `Avg Sales/Day — ${b}`, std: null,
-      prior: gsP && dP ? (gsP.values[b] ?? 0) / dP : null,
-      current: dC ? (gsC.values[b] ?? 0) / dC : null,
+      prior: dP ? gs.prior / dP : null,
+      current: dC ? gs.current / dC : null,
       decimals: 0, pct: false, peso: true,
     });
   }

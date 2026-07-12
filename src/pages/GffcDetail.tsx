@@ -27,7 +27,7 @@ export default function GffcDetail() {
   const [sales, setSales] = useState<SalesItemRow[]>([]);
   const [expAvail, setExpAvail] = useState(false);
   const [salesAvail, setSalesAvail] = useState(false);
-  const [branch, setBranch] = useState<GffcBranchResult>({ hasData: false, branches: [], lines: [] });
+  const [branch, setBranch] = useState<GffcBranchResult>({ hasData: false, branches: [], byBranch: {} });
   const [params, setParams] = useState<ParamRow[]>([]);
   const [simulated, setSimulated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export default function GffcDetail() {
     const pri = periodOf(cmp.priorId);
     const myReq = ++reqRef.current;
     setLoading(true);
-    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSales(cur, pri), fetchGffcBranchPnl(cur), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri)])
+    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSales(cur, pri), fetchGffcBranchPnl(cur, pri), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri)])
       .then(([p, e, s, br, pm]) => {
         if (myReq !== reqRef.current) return;
         setLines(p.hasData ? p.lines : []);
@@ -134,7 +134,7 @@ export default function GffcDetail() {
       ) : view === 'sales' ? (
         <SalesTable rows={sales} priorLabel={priorLabel} currentLabel={currentLabel} buCode="GFFC" />
       ) : view === 'branch' ? (
-        <GffcBranchTable data={branch} periodLabel={currentLabel} />
+        <GffcBranchTable data={branch} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'params' ? (
         <ParametersTable rows={params} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : lines.length === 0 ? (
