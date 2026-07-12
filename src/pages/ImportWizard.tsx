@@ -35,6 +35,17 @@ const YEARS = [2024, 2025, 2026, 2027];
 // dashboard values and manual edits).
 const round5 = (v: number) => Math.round(v * 1e5) / 1e5;
 
+// Surface real error text, including Supabase's plain {message, details} objects
+// (which are not Error instances, so `e.message` alone would be lost).
+function errMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object' && 'message' in e) {
+    const o = e as { message?: unknown; details?: unknown };
+    return [o.message, o.details].filter(Boolean).map(String).join(' — ') || 'Import failed.';
+  }
+  return 'Import failed.';
+}
+
 export default function ImportWizard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -253,7 +264,7 @@ export default function ImportWizard() {
       await persistGffcSales(gffcSales);
       await persistGffcBranch(gffcBranch);
       setStep('done');
-    } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
+    } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
   }
   async function handleConfirmSales() {
     if (!sales || !fileBuffer || !user) return;

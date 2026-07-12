@@ -166,7 +166,9 @@ export function parseGffcSalesByItem(wb: XLSX.WorkBook): GffcSalesRow[] {
   (rows[0] ?? []).forEach((v, c) => { const ym = parseMonthLabel(v); if (ym) monthCols.push({ col: c, ...ym }); });
   if (monthCols.length === 0) return [];
 
-  const out: GffcSalesRow[] = [];
+  // Aggregate by (year, month, category, item) so a repeated item is summed
+  // rather than emitted twice.
+  const agg = new Map<string, GffcSalesRow>();
   let cat = '';
   for (let r = 2; r < rows.length; r++) {
     const row = rows[r];
@@ -178,8 +180,11 @@ export function parseGffcSalesByItem(wb: XLSX.WorkBook): GffcSalesRow[] {
     const item = cleanName(c3);
     for (const { col, year, month } of monthCols) {
       const q = row[col];
-      if (typeof q === 'number' && q !== 0) out.push({ year, month, category: cat, item, uom: '', qty: q });
+      if (typeof q !== 'number' || q === 0) continue;
+      const key = `${year}|${month}|${cat}|${item}`;
+      const e = agg.get(key);
+      if (e) e.qty += q; else agg.set(key, { year, month, category: cat, item, uom: '', qty: q });
     }
   }
-  return out;
+  return [...agg.values()];
 }

@@ -33,9 +33,18 @@ export async function persistGffcBranch(rows: GffcBranchRow[]): Promise<void> {
 export async function persistGffcSales(rows: GffcSalesRow[]): Promise<void> {
   if (rows.length === 0) return;
   await replaceMonths('gffc_monthly_sales', [...new Set(rows.map((r) => `${r.year}-${r.month}`))]);
-  const nonZero = rows.filter((r) => r.qty !== 0);
-  for (let i = 0; i < nonZero.length; i += 500) {
-    const { error } = await supabase.from('gffc_monthly_sales').insert(nonZero.slice(i, i + 500));
+  // Collapse to one row per (year, month, category, item) — the table's key —
+  // summing any duplicates, so a repeated item never breaks the insert.
+  const agg = new Map<string, GffcSalesRow>();
+  for (const r of rows) {
+    if (r.qty === 0) continue;
+    const k = `${r.year}|${r.month}|${r.category}|${r.item}`;
+    const e = agg.get(k);
+    if (e) e.qty += r.qty; else agg.set(k, { ...r });
+  }
+  const payload = [...agg.values()];
+  for (let i = 0; i < payload.length; i += 500) {
+    const { error } = await supabase.from('gffc_monthly_sales').insert(payload.slice(i, i + 500));
     if (error) throw error;
   }
 }

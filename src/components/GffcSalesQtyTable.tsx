@@ -8,8 +8,9 @@ import type { GffcSalesGrouped } from '../lib/gffc/gffcQueries';
 // and Rank (1 = biggest seller). Items are ordered by current-period qty and
 // categories by current total. Each category header is collapsible.
 export default function GffcSalesQtyTable({ data, priorLabel, currentLabel }: { data: GffcSalesGrouped; priorLabel: string; currentLabel: string }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const toggle = (k: string) => setCollapsed((prev) => {
+  // Every category collapses by default; the user expands the ones they want.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (k: string) => setExpanded((prev) => {
     const next = new Set(prev);
     if (next.has(k)) next.delete(k); else next.add(k);
     return next;
@@ -38,7 +39,7 @@ export default function GffcSalesQtyTable({ data, priorLabel, currentLabel }: { 
         </thead>
         <tbody>
           {data.categories.map((cat) => {
-            const open = !collapsed.has(cat.category);
+            const open = expanded.has(cat.category);
             return (
               <Fragment key={cat.category}>
                 <tr onClick={() => toggle(cat.category)}
