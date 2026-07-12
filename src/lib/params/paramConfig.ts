@@ -94,6 +94,16 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('production_bag', 'Hog Feeds Production in Bags', 0),
     ],
   },
+  // GFFC (Chickboy Meating Place) — manual operational KPIs only; the auto
+  // parameters (avg selling price per category, avg sales/day per branch) are
+  // computed from GFFC data in gffcQueries, not this engine.
+  GFFC: {
+    params: [
+      M('carcass_recovery', '% Carcass Recovery', 1, { pct: true }),
+      M('mcp_recovery', '% MCP Recovery', 1, { pct: true }),
+      M('mcp_kilos_per_manhr', 'MCP Kilos per Man-Hr', 2),
+    ],
+  },
   BU11: {
     params: [
       PNL('labor_cost', ['salaries_expense']),

@@ -244,3 +244,91 @@ export async function fetchGffcBranchPnl(current: Period): Promise<GffcBranchRes
   ];
   return { hasData: true, branches, lines };
 }
+
+// ---- GFFC Parameters (operational KPIs) ------------------------------------
+import type { ParamRow } from '../params/paramQueries';
+
+const GFFC_MANUAL_PARAMS = [
+  { key: 'carcass_recovery', label: '% Carcass Recovery', pct: true, decimals: 1 },
+  { key: 'mcp_recovery', label: '% MCP Recovery', pct: true, decimals: 1 },
+  { key: 'mcp_kilos_per_manhr', label: 'MCP Kilos per Man-Hr', pct: false, decimals: 2 },
+];
+
+// Sales-by-QTY category name (as stored in gffc_monthly_sales.category) → GFFC
+// P&L category key, for the auto average-selling-price rows.
+const GFFC_CAT_PRICE = [
+  { key: 'beef', label: 'Avg Selling Price — Beef Meat', re: /beef/i },
+  { key: 'calamanade', label: 'Avg Selling Price — Calamanade', re: /calaman/i },
+  { key: 'chicken', label: 'Avg Selling Price — Chicken Meat', re: /chicken/i },
+  { key: 'dairy', label: 'Avg Selling Price — Dairy Products', re: /dairy/i },
+  { key: 'frozen', label: 'Avg Selling Price — Frozen Items', re: /frozen/i },
+  { key: 'fruits_veg', label: 'Avg Selling Price — Fruits & Vegetables', re: /fruit|veget/i },
+  { key: 'grocery', label: 'Avg Selling Price — Grocery Items', re: /grocery/i },
+  { key: 'highland', label: 'Avg Selling Price — Highland Lakatan', re: /lakatan|highland/i },
+  { key: 'pork', label: 'Avg Selling Price — Pork Meat', re: /pork/i },
+  { key: 'seafoods', label: 'Avg Selling Price — Seafoods', re: /seafood/i },
+];
+
+async function gffcCategoryQty(period: Period): Promise<Record<string, number>> {
+  const months = monthsInPeriod(period.start, period.end);
+  const years = [...new Set(months.map((x) => x.year))];
+  const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
+  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, category, qty').in('year', years);
+  const out: Record<string, number> = {};
+  for (const r of data ?? []) {
+    if (!inSet.has(`${r.year}-${r.month}`)) continue;
+    const m = GFFC_CAT_PRICE.find((c) => c.re.test(String(r.category)));
+    if (m) out[m.key] = (out[m.key] ?? 0) + Number(r.qty);
+  }
+  return out;
+}
+
+const daysInPeriod = (p: Period) => (new Date(p.end).getTime() - new Date(p.start).getTime()) / 86400000 + 1;
+
+// GFFC Parameters: manual KPIs (per range) + auto average selling price per
+// category (category sales ÷ qty) + auto average sales/day per branch.
+export async function fetchGffcParameters(currentRangeId: string, priorRangeId: string | undefined, current: Period, prior?: Period): Promise<ParamRow[]> {
+  const rangeIds = [currentRangeId, priorRangeId].filter((x): x is string => !!x);
+  const [{ data: manual }, { data: stdRows }] = await Promise.all([
+    supabase.from('bu_parameters').select('range_id, param_key, value').eq('bu_code', 'GFFC').in('range_id', rangeIds),
+    supabase.from('bu_parameter_std').select('param_key, value').eq('bu_code', 'GFFC'),
+  ]);
+  const mval = (rid: string | undefined, key: string) => {
+    const r = manual?.find((x) => x.range_id === rid && x.param_key === key);
+    return r ? Number(r.value) : null;
+  };
+  const std = new Map((stdRows ?? []).map((r) => [r.param_key as string, Number(r.value)]));
+
+  const rows: ParamRow[] = [];
+  for (const m of GFFC_MANUAL_PARAMS) {
+    rows.push({ key: m.key, label: m.label, std: std.has(m.key) ? std.get(m.key)! : null, prior: mval(priorRangeId, m.key), current: mval(currentRangeId, m.key), decimals: m.decimals, pct: m.pct, peso: false });
+  }
+
+  const [salesC, qtyC, salesP, qtyP] = await Promise.all([
+    sumPeriod(current), gffcCategoryQty(current),
+    prior ? sumPeriod(prior) : Promise.resolve({ agg: {} as Record<string, number>, hasData: false }),
+    prior ? gffcCategoryQty(prior) : Promise.resolve({} as Record<string, number>),
+  ]);
+  const price = (sales: Record<string, number>, qty: Record<string, number>, key: string) => ((qty[key] ?? 0) !== 0 ? (sales[key] ?? 0) / qty[key] : null);
+  for (const c of GFFC_CAT_PRICE) {
+    const cur = price(salesC.agg, qtyC, c.key);
+    const pri = prior ? price(salesP.agg, qtyP, c.key) : null;
+    if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label, std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true });
+  }
+
+  const brC = await fetchGffcBranchPnl(current);
+  const brP = prior ? await fetchGffcBranchPnl(prior) : null;
+  const gsC = brC.lines.find((l) => l.key === 'gross_sales');
+  const gsP = brP?.lines.find((l) => l.key === 'gross_sales');
+  const dC = daysInPeriod(current);
+  const dP = prior ? daysInPeriod(prior) : 0;
+  if (gsC) for (const b of brC.branches) {
+    rows.push({
+      key: `salesday_${b}`, label: `Avg Sales/Day — ${b}`, std: null,
+      prior: gsP && dP ? (gsP.values[b] ?? 0) / dP : null,
+      current: dC ? (gsC.values[b] ?? 0) / dC : null,
+      decimals: 0, pct: false, peso: true,
+    });
+  }
+  return rows;
+}
