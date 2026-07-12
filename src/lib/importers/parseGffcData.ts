@@ -13,8 +13,33 @@ const serialToYm = (n: number) => {
 // ---- Expenses: "QB Exp Details" transactions -> per (year, month, account) ---
 export interface GffcExpenseRow { year: number; month: number; account: string; section: string; controllable: boolean; amount: number }
 
+// Locate the GFFC expense-transaction sheet by name ("QB Exp Details") or, for
+// a standalone export, by its columns (Account + Amount). GFFC uses a single
+// "Amount" column (not the POLCAS Debit/Credit split).
+export function findGffcExpenseSheet(wb: XLSX.WorkBook): string | null {
+  if (wb.SheetNames.includes('QB Exp Details')) return 'QB Exp Details';
+  for (const name of wb.SheetNames) {
+    const d = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+    for (let r = 0; r < Math.min(6, d.length); r++) {
+      const row = (d[r] ?? []).map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''));
+      if (row.includes('account') && row.includes('amount') && !row.includes('debit')) return name;
+    }
+  }
+  return null;
+}
+
+// A standalone GFFC expense export: has the expense sheet AND its Class column
+// references GFFC (Chickboy / a GFFC branch), distinguishing it from POLCAS.
+export function isGffcExpenseWorkbook(wb: XLSX.WorkBook): boolean {
+  const name = findGffcExpenseSheet(wb);
+  if (!name) return false;
+  const rows = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+  return rows.some((r) => (r ?? []).some((v) => typeof v === 'string' && /chickboy|calamanade|savemart|meat cutting/i.test(v)));
+}
+
 export function parseGffcExpense(wb: XLSX.WorkBook): GffcExpenseRow[] {
-  const ws = wb.Sheets['QB Exp Details'];
+  const sheet = findGffcExpenseSheet(wb);
+  const ws = sheet ? wb.Sheets[sheet] : undefined;
   if (!ws) return [];
   const rows = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: '' });
 

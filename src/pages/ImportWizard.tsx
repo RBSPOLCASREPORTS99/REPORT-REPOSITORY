@@ -15,7 +15,7 @@ import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '.
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
-import { parseGffcExpense, parseGffcSales, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
+import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
 import { persistGffcExpense, persistGffcSales, persistGffcBranch } from '../lib/importers/persistGffcData';
 import { parseGffcBranchPnl, type GffcBranchRow } from '../lib/importers/parseGffcBranch';
@@ -129,6 +129,17 @@ export default function ImportWizard() {
         setGffcExpense(exp);
         setGffcSales(sal);
         setGffcBranch(br);
+        setStep('gffc');
+        return;
+      }
+      // Standalone GFFC expense export (transaction sheet only) → GFFC expenses.
+      if (isGffcExpenseWorkbook(wb)) {
+        const exp = parseGffcExpense(wb);
+        if (exp.length === 0) { setParseError('No GFFC expense transactions found in this file.'); return; }
+        setGffcMonths(null);
+        setGffcExpense(exp);
+        setGffcSales([]);
+        setGffcBranch([]);
         setStep('gffc');
         return;
       }
