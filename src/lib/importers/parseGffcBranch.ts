@@ -1,9 +1,12 @@
 import * as XLSX from 'xlsx';
 
-// Parse GFFC's "P&L per CLASS <month>" sheets (one per month) into per-branch
-// base P&L lines. Branches are the class columns (Calamanade, Main Branch, Meat
-// Cutting Plant, Savemart Branch, Chickboy Meating Place); Total/Finance columns
-// are excluded (the viewer derives the Total as the sum of branches).
+// Parse GFFC's "P&L PER BRANCH" sheet — a pre-formatted per-branch P&L report
+// covering Jan–Jun 2026 — into per-branch base P&L lines. The report is a wide
+// table: a branch-group header row above a month-serial row, with each month
+// followed by a "%" column and DIFF / % DIFF columns per group. QuickBooks
+// labels the same branch inconsistently across months, so names are canonicalised
+// (Main Branch; Branch 2 = "Branch 1 @ Savemart"; Calamanade; Meat Cutting Plant).
+// The all-branches TOTAL group is ignored — the viewer derives the Total.
 
 export interface GffcBranchRow {
   year: number;
@@ -13,61 +16,91 @@ export interface GffcBranchRow {
   amount: number; // full pesos
 }
 
-// line_key → the QuickBooks "Total …" row label to pull for each branch column.
-const BRANCH_LINES: { key: string; qb: string }[] = [
-  { key: 'gross_sales', qb: 'total income' },
-  { key: 'cogs', qb: 'total cogs' },
-  { key: 'admin', qb: 'total admin expense' },
-  { key: 'finance', qb: 'total finance expense' },
-  { key: 'operations', qb: 'total operation expense' },
-  { key: 'repairs', qb: 'total repairs and maintenance' },
-  { key: 'salaries', qb: 'total salaries and wages' },
-  { key: 'other_income', qb: 'net other income' },
-];
+const BRANCH_SHEET = 'P&L PER BRANCH';
 
-const MONTHS3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-function monthFromSheetName(name: string): { year: number; month: number } | null {
-  const m = /P&L per CLASS\s+([A-Za-z]+)\s+(\d{4})/i.exec(name);
-  if (!m) return null;
-  const mi = MONTHS3.indexOf(m[1].toLowerCase().slice(0, 3));
-  if (mi < 0) return null;
-  return { year: Number(m[2]), month: mi + 1 };
+const findBranchSheet = (wb: XLSX.WorkBook): string | undefined =>
+  wb.SheetNames.find((n) => n.trim().toUpperCase() === BRANCH_SHEET);
+
+// A GFFC per-branch workbook is identified by its "P&L PER BRANCH" sheet.
+export function hasGffcBranchSheets(wb: XLSX.WorkBook): boolean {
+  return findBranchSheet(wb) !== undefined;
 }
 
-// A GFFC per-branch workbook has at least one "P&L per CLASS <Month> <Year>"
-// sheet. Used to route the branch-only monthly file through the GFFC importer.
-export function hasGffcBranchSheets(wb: XLSX.WorkBook): boolean {
-  return wb.SheetNames.some((n) => monthFromSheetName(n) !== null);
+// Collapse QuickBooks' inconsistent class labels to the canonical branch names.
+// Only these four persist; the TOTAL columns (and any unknown label) are skipped.
+function canonicalBranch(raw: string): string | null {
+  const s = raw.trim().toLowerCase();
+  if (!s || s.includes('total')) return null;
+  if (s.includes('savemart') || s.includes('branch 1')) return 'Branch 2';
+  if (s.includes('meat cutting')) return 'Meat Cutting Plant';
+  if (s.includes('calaman')) return 'Calamanade';
+  if (s.includes('main')) return 'Main Branch';
+  return null;
+}
+
+// Report row label → base P&L line key. Operations rolls up the allocated MCP
+// ops line so each branch's Total Expense reconciles with the sheet.
+function lineKeyFor(label: string): string | null {
+  const s = label.trim().toLowerCase();
+  if (s === 'gross sales') return 'gross_sales';
+  if (s === 'cost of goods sold') return 'cogs';
+  if (s === 'admin expense') return 'admin';
+  if (s === 'finance expense') return 'finance';
+  if (s === 'operations expense' || s === 'mcp ops expense - allocated') return 'operations';
+  if (s === 'repairs/maint. expense') return 'repairs';
+  if (s === 'salaries & wages') return 'salaries';
+  return null;
+}
+
+const isSerial = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 20000 && v <= 80000;
+
+function ymFromSerial(n: number): { year: number; month: number } {
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 86400000);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
 export function parseGffcBranchPnl(wb: XLSX.WorkBook): GffcBranchRow[] {
-  const out: GffcBranchRow[] = [];
-  for (const name of wb.SheetNames) {
-    const ym = monthFromSheetName(name);
-    if (!ym) continue;
-    const rows = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
-    if (rows.length === 0) continue;
+  const name = findBranchSheet(wb);
+  if (!name) return [];
+  const rows = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
 
-    // Branch columns = header (row 0) cells that name a class, excluding the
-    // Total / Finance / grand-total columns.
-    const header = rows[0] ?? [];
-    const branchCols: { col: number; branch: string }[] = [];
-    header.forEach((v, c) => {
-      const s = typeof v === 'string' ? v.trim() : '';
-      if (s && !/^total\b|finance/i.test(s) && !/^total$/i.test(s)) branchCols.push({ col: c, branch: s });
-    });
-    if (branchCols.length === 0) continue;
+  // Month row = the row with the most integer date serials; the group-header row
+  // is the one directly above it.
+  let monthRowIdx = -1, best = 0;
+  for (let r = 0; r < Math.min(8, rows.length); r++) {
+    const cnt = (rows[r] ?? []).filter(isSerial).length;
+    if (cnt > best) { best = cnt; monthRowIdx = r; }
+  }
+  if (monthRowIdx < 1) return [];
+  const monthRow = rows[monthRowIdx] ?? [];
+  const groupRow = rows[monthRowIdx - 1] ?? [];
 
-    for (const row of rows) {
-      let label = '';
-      for (let c = 0; c <= 6; c++) { const s = typeof row[c] === 'string' ? (row[c] as string).trim() : ''; if (s) { label = s; break; } }
-      const def = BRANCH_LINES.find((d) => label.toLowerCase() === d.qb);
-      if (!def) continue;
-      for (const { col, branch } of branchCols) {
-        const v = row[col];
-        if (typeof v === 'number' && v !== 0) out.push({ year: ym.year, month: ym.month, branch, lineKey: def.key, amount: v });
-      }
+  // Each value column = a month serial under a (carried-forward) branch header.
+  const cols: { col: number; branch: string; year: number; month: number }[] = [];
+  let curBranch: string | null = null;
+  for (let c = 0; c < monthRow.length; c++) {
+    const g = groupRow[c];
+    if (typeof g === 'string' && g.trim() !== '') curBranch = canonicalBranch(g);
+    const v = monthRow[c];
+    if (isSerial(v) && curBranch) cols.push({ col: c, branch: curBranch, ...ymFromSerial(v) });
+  }
+  if (cols.length === 0) return [];
+
+  const agg = new Map<string, GffcBranchRow>();
+  for (let r = monthRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const key = lineKeyFor(typeof row[0] === 'string' ? row[0] : '');
+    if (!key) continue;
+    for (const { col, branch, year, month } of cols) {
+      const v = row[col];
+      if (typeof v !== 'number' || v === 0) continue;
+      const mk = `${branch}|${year}|${month}|${key}`;
+      const e = agg.get(mk);
+      if (e) e.amount += v;
+      else agg.set(mk, { year, month, branch, lineKey: key, amount: v });
     }
   }
-  return out;
+  return [...agg.values()];
 }

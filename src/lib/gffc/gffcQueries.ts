@@ -198,7 +198,7 @@ export async function fetchGffcSales(current: Period, prior?: Period): Promise<{
   return { hasData: out.length > 0, rows: out };
 }
 
-// ---- Per-branch P&L (from the "P&L per CLASS <month>" sheets) ---------------
+// ---- Per-branch P&L (from the "P&L PER BRANCH" sheet) -----------------------
 
 export type GffcBranchKind = 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'other' | 'net' | 'pct';
 export interface GffcBranchLine {

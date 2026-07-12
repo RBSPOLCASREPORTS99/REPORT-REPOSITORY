@@ -9,7 +9,7 @@ const BOLD = new Set(['gross', 'gross_income', 'total', 'net']);
 export default function GffcBranchTable({ data, periodLabel }: { data: GffcBranchResult; periodLabel: string }) {
   const { units } = useUi();
   const { tableProps, cellCls } = useColHighlight();
-  if (!data.hasData) return <p className="text-slate-400 dark:text-slate-500">No per-branch data for this period. Import the GFFC workbook with the "P&L per CLASS" sheets.</p>;
+  if (!data.hasData) return <p className="text-slate-400 dark:text-slate-500">No per-branch data for this period. Import the GFFC workbook with the "P&L PER BRANCH" sheet.</p>;
 
   const money = (v: number) => formatMoney(v, 'full', units);
   const cols = [...data.branches, 'TOTAL'];

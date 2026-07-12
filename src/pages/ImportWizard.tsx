@@ -523,7 +523,7 @@ export default function ImportWizard() {
           {pnlRange() && <p>Total P&amp;L (P&amp;L 2025 / 2026): <span className="font-medium">{pnlRange()}</span></p>}
           {gffcExpense.length > 0 && <p>Expense Report (QB Exp Details): <span className="font-medium">{gffcExpense.length} account-months</span> across {expMonths} months</p>}
           {gffcSales.length > 0 && <p>Sales by Qty: <span className="font-medium">{salesItems} items</span> across {salesMonths} months</p>}
-          {gffcBranch.length > 0 && <p>Per-Branch P&amp;L (P&amp;L per CLASS): <span className="font-medium">{new Set(gffcBranch.map((r) => r.branch)).size} branches</span> across {new Set(gffcBranch.map((r) => `${r.year}-${r.month}`)).size} months</p>}
+          {gffcBranch.length > 0 && <p>Per-Branch P&amp;L (P&amp;L PER BRANCH): <span className="font-medium">{new Set(gffcBranch.map((r) => r.branch)).size} branches</span> across {new Set(gffcBranch.map((r) => `${r.year}-${r.month}`)).size} months</p>}
         </div>
 
         {pnlPreview.length > 0 && (
