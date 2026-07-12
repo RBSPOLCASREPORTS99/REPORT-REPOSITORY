@@ -89,8 +89,8 @@ export default function GffcDetail() {
           <h1 className="min-w-0 shrink truncate text-lg font-semibold text-slate-900 dark:text-slate-100">{GFFC_LABEL}</h1>
           {simulated && view === 'pnl' && (
             <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
-              title="Prior YTD simulated from Aug–Dec 2025 ÷ the YTD month count (GFFC started Aug 2025).">
-              Simulated YTD
+              title="Prior YTD simulated from GFFC's actual Aug–Dec 2025 monthly average (÷5) × the YTD month count (GFFC started Aug 2025).">
+              Simulated YTD 2025
             </span>
           )}
           <div className="flex flex-1 justify-center">

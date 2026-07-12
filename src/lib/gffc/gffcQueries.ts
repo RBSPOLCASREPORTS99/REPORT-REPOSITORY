@@ -56,16 +56,18 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
 
   // GFFC started August 2025, so a prior-year YTD (Jan–…) has no actual data.
   // Simulate it from GFFC's first partial year: each line = (Aug 2025–Dec 2025
-  // total) ÷ the current YTD's month count (e.g. 6 for YTD June). The derived
-  // rows (Gross Income, Total Expense, Net Income) then compute from these.
+  // total ÷ 5 months of actual data) × the current YTD's month count (e.g. × 6
+  // for YTD June). The derived rows (Gross Income, Total Expense, Net Income)
+  // then compute from these.
   let simulatedPrior = false;
   const isJan = (d?: string) => !!d && Number(d.split('-')[1]) === 1;
   if (prior && !p.hasData && isJan(current.start) && isJan(prior.start)) {
     const base = await sumPeriod({ start: '2025-08-01', end: '2025-12-31' });
     if (base.hasData) {
+      const baseMonths = monthsInPeriod('2025-08-01', '2025-12-31').length; // 5
       const monthCount = monthsInPeriod(current.start, current.end).length || 1;
       const sim: Record<string, number> = {};
-      for (const [k, v] of Object.entries(base.agg)) sim[k] = v / monthCount;
+      for (const [k, v] of Object.entries(base.agg)) sim[k] = (v / baseMonths) * monthCount;
       p = { agg: sim, hasData: true };
       simulatedPrior = true;
     }
