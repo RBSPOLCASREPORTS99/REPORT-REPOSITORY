@@ -3,14 +3,15 @@ import { Link } from 'react-router-dom';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
 import GffcPnlTable from '../components/GffcPnlTable';
+import GffcBranchTable from '../components/GffcBranchTable';
 import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
 import { TableSkeleton } from '../components/Skeleton';
 import { fetchRanges, type RangeRow, type ExpenseSection, type SalesItemRow } from '../lib/queries';
-import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, type GffcPnlLine, type Period } from '../lib/gffc/gffcQueries';
+import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
 import { GFFC_LABEL } from '../lib/gffc/gffcConfig';
 
-type View = 'pnl' | 'expenses' | 'sales';
+type View = 'pnl' | 'branch' | 'expenses' | 'sales';
 
 // GFFC - Chickboy Meating Place company screen: Total P&L / Expense Report /
 // Sales by Qty, with the shared YTD / QTR / Month comparisons.
@@ -23,6 +24,7 @@ export default function GffcDetail() {
   const [sales, setSales] = useState<SalesItemRow[]>([]);
   const [expAvail, setExpAvail] = useState(false);
   const [salesAvail, setSalesAvail] = useState(false);
+  const [branch, setBranch] = useState<GffcBranchResult>({ hasData: false, branches: [], lines: [] });
   const [simulated, setSimulated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -44,23 +46,26 @@ export default function GffcDetail() {
     const pri = periodOf(cmp.priorId);
     const myReq = ++reqRef.current;
     setLoading(true);
-    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSales(cur, pri)])
-      .then(([p, e, s]) => {
+    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSales(cur, pri), fetchGffcBranchPnl(cur)])
+      .then(([p, e, s, br]) => {
         if (myReq !== reqRef.current) return;
         setLines(p.hasData ? p.lines : []);
         setSimulated(!!p.simulatedPrior && p.hasData);
         setExpenses(e.sections); setExpAvail(e.hasData);
         setSales(s.rows); setSalesAvail(s.hasData);
+        setBranch(br);
       })
       .catch((err) => { if (myReq === reqRef.current) setError((err as Error).message); })
       .finally(() => { if (myReq === reqRef.current) setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cmp, ranges]);
 
+  const branchAvail = branch.hasData;
   useEffect(() => {
     if (view === 'expenses' && !expAvail) setView('pnl');
     if (view === 'sales' && !salesAvail) setView('pnl');
-  }, [expAvail, salesAvail, view]);
+    if (view === 'branch' && !branchAvail) setView('pnl');
+  }, [expAvail, salesAvail, branchAvail, view]);
 
   const priorLabel = cmp?.priorLabel ?? 'Prior';
   const currentLabel = cmp?.currentLabel ?? 'Current';
@@ -86,12 +91,13 @@ export default function GffcDetail() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
-          {(expAvail || salesAvail) && (
+          {(expAvail || salesAvail || branchAvail) && (
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
-              {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
+              {(['pnl', 'branch', 'expenses', 'sales'] as View[]).map((v) => {
+                if (v === 'branch' && !branchAvail) return null;
                 if (v === 'expenses' && !expAvail) return null;
                 if (v === 'sales' && !salesAvail) return null;
-                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
+                const label = v === 'pnl' ? 'P&L' : v === 'branch' ? 'Per Branch' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
                 return (
                   <button key={v} onClick={() => setView(v)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -110,6 +116,8 @@ export default function GffcDetail() {
         <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'sales' ? (
         <SalesTable rows={sales} priorLabel={priorLabel} currentLabel={currentLabel} buCode="GFFC" />
+      ) : view === 'branch' ? (
+        <GffcBranchTable data={branch} periodLabel={currentLabel} />
       ) : lines.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">
           No GFFC P&amp;L for this period yet. Import the GFFC workbook (P&amp;L 2025 / P&amp;L 2026).

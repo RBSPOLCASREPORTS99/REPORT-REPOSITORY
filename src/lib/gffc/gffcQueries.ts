@@ -180,3 +180,67 @@ export async function fetchGffcSales(current: Period, prior?: Period): Promise<{
     .sort((a, b) => b.current - a.current);
   return { hasData: out.length > 0, rows: out };
 }
+
+// ---- Per-branch P&L (from the "P&L per CLASS <month>" sheets) ---------------
+
+export type GffcBranchKind = 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'other' | 'net' | 'pct';
+export interface GffcBranchLine {
+  key: string;
+  label: string;
+  kind: GffcBranchKind;
+  values: Record<string, number>; // branch name → value; includes 'TOTAL'
+  cost?: boolean;
+}
+export interface GffcBranchResult {
+  hasData: boolean;
+  branches: string[]; // ordered branch names (Total appended separately)
+  lines: GffcBranchLine[];
+}
+
+const TOTAL = 'TOTAL';
+
+// Sum each branch's base P&L lines over a period and derive Gross Income /
+// Total Expense / Net Income, plus a Total-of-all-branches column.
+export async function fetchGffcBranchPnl(current: Period): Promise<GffcBranchResult> {
+  const months = monthsInPeriod(current.start, current.end);
+  const years = [...new Set(months.map((x) => x.year))];
+  const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
+  const { data } = await supabase.from('gffc_branch_pnl').select('year, month, branch, line_key, amount').in('year', years);
+
+  const agg: Record<string, Record<string, number>> = {};
+  for (const r of data ?? []) {
+    if (!inSet.has(`${r.year}-${r.month}`)) continue;
+    const b = r.branch as string;
+    (agg[b] ??= {})[r.line_key as string] = (agg[b]?.[r.line_key as string] ?? 0) + Number(r.amount);
+  }
+  const branches = Object.keys(agg).sort();
+  if (branches.length === 0) return { hasData: false, branches: [], lines: [] };
+
+  const base = (b: string, k: string) => (b === TOTAL ? branches.reduce((s, br) => s + (agg[br]?.[k] ?? 0), 0) : agg[b]?.[k] ?? 0);
+  const gross = (b: string) => base(b, 'gross_sales');
+  const cogs = (b: string) => base(b, 'cogs');
+  const gi = (b: string) => gross(b) - cogs(b);
+  const te = (b: string) => base(b, 'admin') + base(b, 'finance') + base(b, 'operations') + base(b, 'repairs') + base(b, 'salaries');
+  const oi = (b: string) => base(b, 'other_income');
+  const net = (b: string) => gi(b) - te(b) + oi(b);
+
+  const cols = [...branches, TOTAL];
+  const line = (key: string, label: string, kind: GffcBranchKind, fn: (b: string) => number, cost?: boolean): GffcBranchLine =>
+    ({ key, label, kind, cost, values: Object.fromEntries(cols.map((b) => [b, fn(b)])) });
+
+  const lines: GffcBranchLine[] = [
+    line('gross_sales', 'Gross Sales', 'gross', gross),
+    line('cogs', 'Cost of Goods Sold', 'cogs', cogs, true),
+    line('gross_income', 'Gross Income', 'gross_income', gi),
+    line('admin', 'Admin Expense', 'expense', (b) => base(b, 'admin'), true),
+    line('finance', 'Finance Expense', 'expense', (b) => base(b, 'finance'), true),
+    line('operations', 'Operations Expense', 'expense', (b) => base(b, 'operations'), true),
+    line('repairs', 'Repairs/Maint. Expense', 'expense', (b) => base(b, 'repairs'), true),
+    line('salaries', 'Salaries & Wages', 'expense', (b) => base(b, 'salaries'), true),
+    line('total_expense', 'Total Expense', 'total', te, true),
+    line('other_income', 'Other Income', 'other', oi),
+    line('net_income', 'Net Income', 'net', net),
+    line('net_income_pct', 'Net Income %', 'pct', (b) => (gross(b) !== 0 ? net(b) / gross(b) : 0)),
+  ];
+  return { hasData: true, branches, lines };
+}

@@ -17,7 +17,8 @@ import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashbo
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
 import { parseGffcExpense, parseGffcSales, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
-import { persistGffcExpense, persistGffcSales } from '../lib/importers/persistGffcData';
+import { persistGffcExpense, persistGffcSales, persistGffcBranch } from '../lib/importers/persistGffcData';
+import { parseGffcBranchPnl, type GffcBranchRow } from '../lib/importers/parseGffcBranch';
 import { GFFC_CATEGORIES, GFFC_EXPENSE_KEYS } from '../lib/gffc/gffcConfig';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
@@ -56,6 +57,7 @@ export default function ImportWizard() {
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
   const [gffcExpense, setGffcExpense] = useState<GffcExpenseRow[]>([]);
   const [gffcSales, setGffcSales] = useState<GffcSalesRow[]>([]);
+  const [gffcBranch, setGffcBranch] = useState<GffcBranchRow[]>([]);
   const [expense, setExpense] = useState<ParsedExpenseTx | null>(null);
   const [sales, setSales] = useState<ParsedSalesTx | null>(null);
   const [parseError, setParseError] = useState('');
@@ -118,13 +120,15 @@ export default function ImportWizard() {
         const months = parseGffcPnl(buf);
         const exp = parseGffcExpense(wb);
         const sal = parseGffcSales(wb);
-        if (months.length === 0 && exp.length === 0 && sal.length === 0) {
+        const br = parseGffcBranchPnl(wb);
+        if (months.length === 0 && exp.length === 0 && sal.length === 0 && br.length === 0) {
           setParseError('No GFFC P&L / Expense / Sales data found in this workbook.');
           return;
         }
         setGffcMonths(months.length ? months : null);
         setGffcExpense(exp);
         setGffcSales(sal);
+        setGffcBranch(br);
         setStep('gffc');
         return;
       }
@@ -225,6 +229,7 @@ export default function ImportWizard() {
       if (gffcMonths?.length) await persistGffcPnl(gffcMonths, fileName, user.id);
       await persistGffcExpense(gffcExpense);
       await persistGffcSales(gffcSales);
+      await persistGffcBranch(gffcBranch);
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -507,6 +512,7 @@ export default function ImportWizard() {
           {pnlRange() && <p>Total P&amp;L (P&amp;L 2025 / 2026): <span className="font-medium">{pnlRange()}</span></p>}
           {gffcExpense.length > 0 && <p>Expense Report (QB Exp Details): <span className="font-medium">{gffcExpense.length} account-months</span> across {expMonths} months</p>}
           {gffcSales.length > 0 && <p>Sales by Qty: <span className="font-medium">{salesItems} items</span> across {salesMonths} months</p>}
+          {gffcBranch.length > 0 && <p>Per-Branch P&amp;L (P&amp;L per CLASS): <span className="font-medium">{new Set(gffcBranch.map((r) => r.branch)).size} branches</span> across {new Set(gffcBranch.map((r) => `${r.year}-${r.month}`)).size} months</p>}
         </div>
 
         {pnlPreview.length > 0 && (
