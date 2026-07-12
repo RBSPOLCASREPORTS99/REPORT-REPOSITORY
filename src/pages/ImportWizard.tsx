@@ -15,7 +15,7 @@ import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '.
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
-import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
+import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, parseGffcSalesByItem, isGffcSalesByItemWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { persistGffcPnl } from '../lib/importers/persistGffcPnl';
 import { persistGffcExpense, persistGffcSales, persistGffcBranch } from '../lib/importers/persistGffcData';
 import { parseGffcBranchPnl, type GffcBranchRow } from '../lib/importers/parseGffcBranch';
@@ -129,6 +129,17 @@ export default function ImportWizard() {
         setGffcExpense(exp);
         setGffcSales(sal);
         setGffcBranch(br);
+        setStep('gffc');
+        return;
+      }
+      // Standalone GFFC "Sales by Item" export (multi-month) → GFFC sales by qty.
+      if (isGffcSalesByItemWorkbook(wb)) {
+        const sal = parseGffcSalesByItem(wb);
+        if (sal.length === 0) { setParseError('No GFFC sales-by-item rows found in this file.'); return; }
+        setGffcMonths(null);
+        setGffcExpense([]);
+        setGffcSales(sal);
+        setGffcBranch([]);
         setStep('gffc');
         return;
       }

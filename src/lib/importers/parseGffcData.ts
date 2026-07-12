@@ -122,3 +122,64 @@ export function parseGffcSales(wb: XLSX.WorkBook): GffcSalesRow[] {
   }
   return out;
 }
+
+// ---- Sales by Item (multi-month QB "Sales by Item Summary") ------------------
+// A wide export: row 0 has a month header ("Aug 25", …, plus a "TOTAL") every 8
+// columns, row 1 sub-heads each month with Qty / Amount / % of Sales / Avg Price.
+// The Qty column sits at the month header's own column. Rows are an
+// Inventory → category (col C) → item (col D) hierarchy, with "Total <category>"
+// subtotal rows. We pull each item's Qty per month.
+const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function parseMonthLabel(v: Cell): { year: number; month: number } | null {
+  if (typeof v !== 'string') return null;
+  const m = /^([a-z]+)\.?\s*'?(\d{2,4})$/i.exec(v.trim());
+  if (!m) return null;
+  const mi = MON3.indexOf(m[1].toLowerCase().slice(0, 3));
+  if (mi < 0) return null;
+  let y = Number(m[2]); if (y < 100) y += 2000;
+  return { year: y, month: mi + 1 };
+}
+
+// Locate the sheet by its distinctive header: 2+ month columns on row 0 and the
+// Qty / Amount / Avg Price sub-heads on row 1.
+export function findGffcSalesByItemSheet(wb: XLSX.WorkBook): string | null {
+  for (const name of wb.SheetNames) {
+    const d = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+    const months = (d[0] ?? []).filter((v) => parseMonthLabel(v)).length;
+    const sub = (d[1] ?? []).map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''));
+    if (months >= 2 && sub.includes('qty') && sub.includes('amount') && sub.includes('avg price')) return name;
+  }
+  return null;
+}
+
+export function isGffcSalesByItemWorkbook(wb: XLSX.WorkBook): boolean {
+  return findGffcSalesByItemSheet(wb) !== null;
+}
+
+export function parseGffcSalesByItem(wb: XLSX.WorkBook): GffcSalesRow[] {
+  const name = findGffcSalesByItemSheet(wb);
+  if (!name) return [];
+  const rows = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+
+  // Month Qty columns = the columns whose row-0 header parses to a month.
+  const monthCols: { col: number; year: number; month: number }[] = [];
+  (rows[0] ?? []).forEach((v, c) => { const ym = parseMonthLabel(v); if (ym) monthCols.push({ col: c, ...ym }); });
+  if (monthCols.length === 0) return [];
+
+  const out: GffcSalesRow[] = [];
+  let cat = '';
+  for (let r = 2; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    const c2 = typeof row[2] === 'string' ? row[2].trim() : ''; // category / Total <cat>
+    const c3 = typeof row[3] === 'string' ? row[3].trim() : ''; // item
+    if (c2) { if (!/^total\b/i.test(c2)) cat = cleanName(c2); continue; }
+    if (!c3) continue;
+    const item = cleanName(c3);
+    for (const { col, year, month } of monthCols) {
+      const q = row[col];
+      if (typeof q === 'number' && q !== 0) out.push({ year, month, category: cat, item, uom: '', qty: q });
+    }
+  }
+  return out;
+}

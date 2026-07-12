@@ -230,6 +230,75 @@ export async function fetchGffcSales(current: Period, prior?: Period): Promise<{
   return { hasData: out.length > 0, rows: out };
 }
 
+// ---- Sales by Qty, grouped/ranked (GFFC "Sales by Qty" report format) --------
+// Grouped by category; within each category items carry, for the current and
+// prior period: qty, % distribution (qty ÷ category total), and rank (1 = the
+// biggest seller). Items sort by current-period qty; categories by current total.
+export interface GffcSalesItem {
+  item: string;
+  curQty: number; priQty: number;
+  curPct: number; priPct: number; // share of the category total
+  curRank: number; priRank: number; // rank within the category (1 = biggest)
+}
+export interface GffcSalesCategory {
+  category: string; uom: string;
+  items: GffcSalesItem[];
+  curTotal: number; priTotal: number;
+}
+export interface GffcSalesGrouped {
+  hasData: boolean;
+  categories: GffcSalesCategory[];
+  grandCur: number; grandPri: number;
+}
+
+interface SaleCatRow { year: number; month: number; category: string; item: string; uom: string; qty: number }
+
+export async function fetchGffcSalesGrouped(current: Period, prior?: Period): Promise<GffcSalesGrouped> {
+  const { years } = periodMonths(current);
+  const py = prior ? periodMonths(prior).years : [];
+  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, category, item, uom, qty').in('year', [...new Set([...years, ...py])]);
+  const rows = (data ?? []) as SaleCatRow[];
+  const curSet = new Set(monthsInPeriod(current.start, current.end).map((x) => `${x.year}-${x.month}`));
+  const priSet = new Set(prior ? monthsInPeriod(prior.start, prior.end).map((x) => `${x.year}-${x.month}`) : []);
+
+  const cats = new Map<string, Map<string, { uom: string; cur: number; pri: number }>>();
+  for (const r of rows) {
+    const cat = r.category || '(Uncategorized)';
+    if (!cats.has(cat)) cats.set(cat, new Map());
+    const im = cats.get(cat)!;
+    if (!im.has(r.item)) im.set(r.item, { uom: r.uom || '', cur: 0, pri: 0 });
+    const e = im.get(r.item)!;
+    if (r.uom && !e.uom) e.uom = r.uom;
+    if (curSet.has(`${r.year}-${r.month}`)) e.cur += Number(r.qty);
+    if (priSet.has(`${r.year}-${r.month}`)) e.pri += Number(r.qty);
+  }
+
+  // Competition ranking: rank = 1 + how many items sold strictly more (all
+  // zero-qty items therefore tie at the bottom, matching the Excel).
+  const rankOf = (vals: number[], v: number) => 1 + vals.filter((x) => x > v).length;
+
+  const categories: GffcSalesCategory[] = [];
+  for (const [cat, im] of cats) {
+    const raw = [...im.entries()].map(([item, v]) => ({ item, uom: v.uom, cur: v.cur, pri: v.pri })).filter((x) => x.cur !== 0 || x.pri !== 0);
+    if (raw.length === 0) continue;
+    const curTotal = raw.reduce((s, x) => s + x.cur, 0);
+    const priTotal = raw.reduce((s, x) => s + x.pri, 0);
+    const curVals = raw.map((x) => x.cur), priVals = raw.map((x) => x.pri);
+    const items: GffcSalesItem[] = raw.map((x) => ({
+      item: x.item,
+      curQty: x.cur, priQty: x.pri,
+      curPct: curTotal ? x.cur / curTotal : 0,
+      priPct: priTotal ? x.pri / priTotal : 0,
+      curRank: rankOf(curVals, x.cur), priRank: rankOf(priVals, x.pri),
+    })).sort((a, b) => b.curQty - a.curQty || a.curRank - b.curRank || b.priQty - a.priQty);
+    categories.push({ category: cat, uom: raw.find((x) => x.uom)?.uom || '', items, curTotal, priTotal });
+  }
+  categories.sort((a, b) => b.curTotal - a.curTotal || b.priTotal - a.priTotal);
+  const grandCur = categories.reduce((s, c) => s + c.curTotal, 0);
+  const grandPri = categories.reduce((s, c) => s + c.priTotal, 0);
+  return { hasData: categories.length > 0, categories, grandCur, grandPri };
+}
+
 // ---- Per-branch P&L (from the "P&L PER BRANCH" sheet) -----------------------
 
 export interface GffcBranchResult {

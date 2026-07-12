@@ -5,11 +5,11 @@ import SetMonthSelect from '../components/SetMonthSelect';
 import GffcPnlTable from '../components/GffcPnlTable';
 import GffcBranchTable from '../components/GffcBranchTable';
 import ExpenseTable from '../components/ExpenseTable';
-import SalesTable from '../components/SalesTable';
+import GffcSalesQtyTable from '../components/GffcSalesQtyTable';
 import ParametersTable from '../components/ParametersTable';
 import { TableSkeleton } from '../components/Skeleton';
-import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type SalesItemRow, type TrendPoint } from '../lib/queries';
-import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, fetchGffcParameters, fetchGffcTrend, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
+import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type TrendPoint } from '../lib/queries';
+import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSalesGrouped, fetchGffcBranchPnl, fetchGffcParameters, fetchGffcTrend, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type GffcSalesGrouped, type Period } from '../lib/gffc/gffcQueries';
 
 const TrendChart = lazy(() => import('../components/TrendChart'));
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +26,7 @@ export default function GffcDetail() {
   const [view, setView] = useState<View>('pnl');
   const [lines, setLines] = useState<GffcPnlLine[]>([]);
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
-  const [sales, setSales] = useState<SalesItemRow[]>([]);
+  const [sales, setSales] = useState<GffcSalesGrouped>({ hasData: false, categories: [], grandCur: 0, grandPri: 0 });
   const [expAvail, setExpAvail] = useState(false);
   const [salesAvail, setSalesAvail] = useState(false);
   const [branch, setBranch] = useState<GffcBranchResult>({ hasData: false, branches: [], byBranch: {} });
@@ -52,17 +52,17 @@ export default function GffcDetail() {
   useEffect(() => {
     if (!cmp) return;
     const cur = periodOf(cmp.currentId);
-    if (!cur) { setLines([]); setExpenses([]); setSales([]); setExpAvail(false); setSalesAvail(false); setLoading(false); return; }
+    if (!cur) { setLines([]); setExpenses([]); setSales({ hasData: false, categories: [], grandCur: 0, grandPri: 0 }); setExpAvail(false); setSalesAvail(false); setLoading(false); return; }
     const pri = periodOf(cmp.priorId);
     const myReq = ++reqRef.current;
     setLoading(true);
-    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSales(cur, pri), fetchGffcBranchPnl(cur, pri), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri)])
+    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSalesGrouped(cur, pri), fetchGffcBranchPnl(cur, pri), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri)])
       .then(([p, e, s, br, pm]) => {
         if (myReq !== reqRef.current) return;
         setLines(p.hasData ? p.lines : []);
         setSimulated(!!p.simulatedPrior && p.hasData);
         setExpenses(e.sections); setExpAvail(e.hasData);
-        setSales(s.rows); setSalesAvail(s.hasData);
+        setSales(s); setSalesAvail(s.hasData);
         setBranch(br);
         setParams(pm);
       })
@@ -162,7 +162,7 @@ export default function GffcDetail() {
             } catch (e) { setError((e as Error).message); }
           }} />
       ) : view === 'sales' ? (
-        <SalesTable rows={sales} priorLabel={priorLabel} currentLabel={currentLabel} buCode="GFFC" />
+        <GffcSalesQtyTable data={sales} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'branch' ? (
         <GffcBranchTable data={branch} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'params' ? (
