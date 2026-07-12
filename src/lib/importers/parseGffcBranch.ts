@@ -34,6 +34,12 @@ function monthFromSheetName(name: string): { year: number; month: number } | nul
   return { year: Number(m[2]), month: mi + 1 };
 }
 
+// A GFFC per-branch workbook has at least one "P&L per CLASS <Month> <Year>"
+// sheet. Used to route the branch-only monthly file through the GFFC importer.
+export function hasGffcBranchSheets(wb: XLSX.WorkBook): boolean {
+  return wb.SheetNames.some((n) => monthFromSheetName(n) !== null);
+}
+
 export function parseGffcBranchPnl(wb: XLSX.WorkBook): GffcBranchRow[] {
   const out: GffcBranchRow[] = [];
   for (const name of wb.SheetNames) {

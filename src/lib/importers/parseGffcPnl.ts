@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { GFFC_INPUTS } from '../gffc/gffcConfig';
+import { hasGffcBranchSheets } from './parseGffcBranch';
 
 // Parse GFFC's QuickBooks "P&L 2025" / "P&L 2026" sheets into additive monthly
 // inputs. These are standard (non-by-class) QB P&L sheets with month columns:
@@ -22,7 +23,10 @@ const MONTHS3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 
 // ("Aug '25 - Jan 26") and "% of Income" / "TOTAL" labels -> null.
 function parseMonthHeader(v: string | number): { year: number; month: number } | null {
   if (typeof v === 'number') {
-    if (v < 20000 || v > 80000) return null; // not a plausible Excel date serial
+    // A month-column date serial is a whole day number in the plausible range.
+    // Requiring an integer avoids mistaking fractional data cells (e.g. a branch
+    // sales figure like 29822.55) for a date.
+    if (!Number.isInteger(v) || v < 20000 || v > 80000) return null;
     const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
   }
@@ -79,6 +83,10 @@ function parseSheet(ws: XLSX.WorkSheet): GffcMonthInputs[] {
   });
 }
 
+// Per-branch sheets ("P&L per CLASS <month>", "P&L PER BRANCH") are branch
+// breakdowns, never the company Total P&L — they must not feed the month parser.
+const isBranchSheetName = (name: string) => /per\s*class|per\s*branch/i.test(name);
+
 // A sheet is a GFFC month-columned P&L if its header has 2+ "Mon YY" month
 // columns AND it has a "Total Income" row. This distinguishes it from the POLCAS
 // "P&L by Class" export (whose columns are BU classes, not months), so it works
@@ -101,7 +109,8 @@ function looksLikeGffcSheet(ws: XLSX.WorkSheet): boolean {
 export function isGffcWorkbook(wb: XLSX.WorkBook): boolean {
   const n = wb.SheetNames;
   if (['P&L 2026', 'P&L 2025', 'GFFC TOTAL P&L', 'QB Exp Details', 'Sales by QTY'].some((s) => n.includes(s))) return true;
-  return n.some((s) => looksLikeGffcSheet(wb.Sheets[s]));
+  if (hasGffcBranchSheets(wb)) return true; // branch-only monthly file
+  return n.some((s) => !isBranchSheetName(s) && looksLikeGffcSheet(wb.Sheets[s]));
 }
 
 // Parse all months from the P&L 2025 / P&L 2026 sheets — or, when the sheet is
@@ -111,7 +120,7 @@ export function parseGffcPnl(data: ArrayBuffer): GffcMonthInputs[] {
   const wb = XLSX.read(data, { type: 'array' });
   const out: GffcMonthInputs[] = [];
   let targets: string[] = wb.SheetNames.filter((n) => n === 'P&L 2025' || n === 'P&L 2026');
-  if (targets.length === 0) targets = wb.SheetNames.filter((n) => looksLikeGffcSheet(wb.Sheets[n]));
+  if (targets.length === 0) targets = wb.SheetNames.filter((n) => !isBranchSheetName(n) && looksLikeGffcSheet(wb.Sheets[n]));
   for (const name of targets) {
     const ws = wb.Sheets[name];
     if (ws) out.push(...parseSheet(ws));
