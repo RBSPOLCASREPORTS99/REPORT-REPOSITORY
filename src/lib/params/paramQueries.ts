@@ -19,19 +19,25 @@ async function resolveParams(rangeId: string | undefined, buCode: string, config
   const vals = new Map<string, number>();
   if (!rangeId) return vals;
 
-  const [{ data: manual }, pnlKeys] = [
-    await supabase.from('bu_parameters').select('param_key, value').eq('range_id', rangeId).eq('bu_code', buCode),
-    config.params.filter((p): p is ParamDef & { source: { kind: 'pnl'; line: string } } => p.source.kind === 'pnl'),
-  ];
+  // 1. manual values (stored per range).
+  const { data: manual } = await supabase.from('bu_parameters').select('param_key, value').eq('range_id', rangeId).eq('bu_code', buCode);
   for (const r of manual ?? []) vals.set(r.param_key as string, Number(r.value));
 
+  // 2. P&L-sourced (sum of the given computed_pnl lines, ₱'000 → full pesos).
+  const pnlKeys = config.params.filter((p): p is ParamDef & { source: { kind: 'pnl'; lines: string[] } } => p.source.kind === 'pnl');
   if (pnlKeys.length) {
-    const lines = [...new Set(pnlKeys.map((p) => p.source.line))];
-    const { data: pnl } = await supabase.from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', buCode).in('line_item', lines);
+    const allLines = [...new Set(pnlKeys.flatMap((p) => p.source.lines))];
+    const { data: pnl } = await supabase.from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', buCode).in('line_item', allLines);
     const byLine = new Map((pnl ?? []).map((r) => [r.line_item as string, Number(r.amount)]));
-    for (const p of pnlKeys) vals.set(p.key, (byLine.get(p.source.line) ?? 0) * 1000);
+    for (const p of pnlKeys) vals.set(p.key, p.source.lines.reduce((s, l) => s + (byLine.get(l) ?? 0), 0) * 1000);
   }
 
+  // 3. sums of other params (in config order so dependencies resolve first).
+  for (const p of config.params) {
+    if (p.source.kind === 'sum') vals.set(p.key, p.source.of.reduce((s, k) => s + (vals.get(k) ?? 0), 0));
+  }
+
+  // 4. ratios (num ÷ den), last.
   for (const p of config.params) {
     if (p.source.kind === 'ratio') {
       const num = vals.get(p.source.num) ?? 0;
