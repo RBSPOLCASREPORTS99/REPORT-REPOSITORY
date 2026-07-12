@@ -19,8 +19,11 @@ import {
 } from '../lib/queries';
 import { COMBINE_SEP } from '../contexts/CombineContext';
 import { useAuth } from '../contexts/AuthContext';
+import ParametersTable from '../components/ParametersTable';
+import { fetchBuParameters, type ParamRow } from '../lib/params/paramQueries';
+import { hasParameters } from '../lib/params/paramConfig';
 
-type View = 'pnl' | 'expenses' | 'sales';
+type View = 'pnl' | 'expenses' | 'sales' | 'parameters';
 
 export default function BuDetail() {
   const { code } = useParams<{ code: string }>();
@@ -36,6 +39,7 @@ export default function BuDetail() {
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
   const [salesRanges, setSalesRanges] = useState<Set<string>>(new Set());
   const [salesRows, setSalesRows] = useState<SalesItemRow[]>([]);
+  const [paramRows, setParamRows] = useState<ParamRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
@@ -54,6 +58,7 @@ export default function BuDetail() {
   const methodAvailable = !!currentId && supportRanges.has(currentId);
   const expensesAvailable = !!currentId && expenseRanges.has(currentId);
   const salesAvailable = !!currentId && salesRanges.has(currentId);
+  const paramsAvailable = !isCombined && hasParameters(code);
 
   useEffect(() => {
     Promise.all([fetchRanges(), code && !isCombined ? fetchTrend(code) : Promise.resolve([]), rangesWithSupport(), rangesWithExpenses(), rangesWithSales()])
@@ -75,7 +80,8 @@ export default function BuDetail() {
   useEffect(() => {
     if (view === 'expenses' && !expensesAvailable) setView('pnl');
     if (view === 'sales' && !salesAvailable) setView('pnl');
-  }, [expensesAvailable, salesAvailable, view]);
+    if (view === 'parameters' && !paramsAvailable) setView('pnl');
+  }, [expensesAvailable, salesAvailable, paramsAvailable, view]);
 
   useEffect(() => {
     if (!currentId || !code || !cmp) return;
@@ -88,6 +94,8 @@ export default function BuDetail() {
     } else if (view === 'sales') {
       load = (isCombined ? fetchSalesCombined(currentId, cmp.priorId, codes) : fetchBuSales(currentId, cmp.priorId, code))
         .then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
+    } else if (view === 'parameters') {
+      load = fetchBuParameters(code, currentId, cmp.priorId).then((d) => { if (myReq === reqRef.current) setParamRows(d ?? []); });
     } else {
       load = (isCombined ? fetchComparisonCombined(currentId, cmp.priorId, codes, method) : fetchBuComparison(currentId, cmp.priorId, code, method))
         .then((d) => { if (myReq === reqRef.current) setLines(d); });
@@ -143,12 +151,13 @@ export default function BuDetail() {
 
         <div className="flex flex-wrap items-center gap-2">
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
-          {(expensesAvailable || salesAvailable) && (
+          {(expensesAvailable || salesAvailable || paramsAvailable) && (
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60 sm:ml-[9%]">
-              {(['pnl', 'expenses', 'sales'] as View[]).map((v) => {
+              {(['pnl', 'expenses', 'sales', 'parameters'] as View[]).map((v) => {
                 if (v === 'expenses' && !expensesAvailable) return null;
                 if (v === 'sales' && !salesAvailable) return null;
-                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : 'Sales Qty';
+                if (v === 'parameters' && !paramsAvailable) return null;
+                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : v === 'sales' ? 'Sales Qty' : 'Parameters';
                 return (
                   <button key={v} onClick={() => setView(v)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -186,6 +195,8 @@ export default function BuDetail() {
           }} />
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
+      ) : view === 'parameters' ? (
+        <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : lines.length === 0 ? (
         <p className="text-slate-400 dark:text-slate-500">No data for this business unit yet.</p>
       ) : (
