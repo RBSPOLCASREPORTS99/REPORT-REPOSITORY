@@ -8,8 +8,9 @@ import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
 import ParametersTable from '../components/ParametersTable';
 import { TableSkeleton } from '../components/Skeleton';
-import { fetchRanges, type RangeRow, type ExpenseSection, type SalesItemRow } from '../lib/queries';
-import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, fetchGffcParameters, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
+import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type SalesItemRow } from '../lib/queries';
+import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, fetchGffcParameters, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
+import { useAuth } from '../contexts/AuthContext';
 import type { ParamRow } from '../lib/params/paramQueries';
 import { GFFC_LABEL } from '../lib/gffc/gffcConfig';
 
@@ -32,6 +33,7 @@ export default function GffcDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const reqRef = useRef(0);
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchRanges().then(setRanges).catch((e) => { setError(e.message); setLoading(false); });
@@ -120,7 +122,15 @@ export default function GffcDetail() {
       {loading ? (
         <TableSkeleton />
       ) : view === 'expenses' ? (
-        <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
+          canEdit={profile?.role === 'finance'}
+          onReclassify={async (account, section) => {
+            try {
+              await saveExpenseSection(gffcOverrideKey(account), section);
+              const cur = periodOf(cmp?.currentId);
+              if (cur) { const e = await fetchGffcExpenses(cur, periodOf(cmp?.priorId)); setExpenses(e.sections); }
+            } catch (e) { setError((e as Error).message); }
+          }} />
       ) : view === 'sales' ? (
         <SalesTable rows={sales} priorLabel={priorLabel} currentLabel={currentLabel} buCode="GFFC" />
       ) : view === 'branch' ? (

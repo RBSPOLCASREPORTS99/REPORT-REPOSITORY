@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { GFFC_CATEGORIES, GFFC_GROUPS, GFFC_EXPENSE_KEYS } from './gffcConfig';
+import { fetchExpenseSectionOverrides } from '../queries';
 import type { ExpenseSection, ExpenseRow, SalesItemRow } from '../queries';
 
 // A date period (from a resolved comparison range) → the GFFC P&L summed over
@@ -111,15 +112,21 @@ function periodMonths(p: Period) {
 // ---- Expense Report (grouped controllable / uncontrollable) -----------------
 interface ExpRow { year: number; month: number; account: string; section: string; controllable: boolean; amount: number }
 
+// GFFC expense-section overrides are namespaced with a "GFFC:" prefix so they
+// don't collide with the POLCAS overrides for a same-named account.
+export const gffcOverrideKey = (account: string) => `GFFC:${account}`;
+
 export async function fetchGffcExpenses(current: Period, prior?: Period): Promise<{ hasData: boolean; sections: ExpenseSection[] }> {
   const { years } = periodMonths(current);
   const py = prior ? periodMonths(prior).years : [];
-  const { data } = await supabase.from('gffc_monthly_expense').select('year, month, account, section, controllable, amount').in('year', [...new Set([...years, ...py])]);
+  const [{ data }, overrides] = await Promise.all([
+    supabase.from('gffc_monthly_expense').select('year, month, account, section, controllable, amount').in('year', [...new Set([...years, ...py])]),
+    fetchExpenseSectionOverrides(),
+  ]);
   const rows = (data ?? []) as ExpRow[];
   const inSet = (p?: Period) => new Set(p ? monthsInPeriod(p.start, p.end).map((x) => `${x.year}-${x.month}`) : []);
   const curSet = inSet(current), priSet = inSet(prior);
 
-  // account -> {section, controllable, current, prior}
   const acc = new Map<string, { section: string; controllable: boolean; current: number; prior: number }>();
   for (const r of rows) {
     const key = r.account;
@@ -132,26 +139,29 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
   const curTotal = all.reduce((s, [, v]) => s + v.current, 0);
   const priTotal = all.reduce((s, [, v]) => s + v.prior, 0);
 
-  const build = (controllable: boolean): ExpenseSection => {
-    const sectionKey: ExpenseSection['section'] = controllable ? 'controllable' : 'uncontrollable';
-    const rowsOut: ExpenseRow[] = all
-      .filter(([, v]) => v.controllable === controllable)
-      .map(([account, v]) => ({
-        account, section: sectionKey, groupName: v.section,
-        current: v.current, prior: v.prior,
-        currentPct: curTotal ? v.current / curTotal : 0, priorPct: priTotal ? v.prior / priTotal : 0,
-        diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0,
-      }))
-      .sort((a, b) => Math.abs(b.current) - Math.abs(a.current));
-    return {
-      section: sectionKey,
-      total: rowsOut.reduce((s, r) => s + r.current, 0),
-      priorTotal: rowsOut.reduce((s, r) => s + r.prior, 0),
-      rows: rowsOut,
-    };
+  const isSal = (account: string) => /salar|wage|13th\s*month/i.test(account);
+  // Finance can reclassify Controllable ↔ Non-controllable; the override wins.
+  const effCtrl = (account: string, base: boolean) => {
+    const o = overrides.get(gffcOverrideKey(account).toUpperCase());
+    return o ? o === 'controllable' : base;
   };
 
-  const sections = [build(true), build(false)].filter((s) => s.rows.length > 0);
+  const mkRow = (account: string, v: { section: string; controllable: boolean; current: number; prior: number }): ExpenseRow => ({
+    account, section: effCtrl(account, v.controllable) ? 'controllable' : 'uncontrollable', groupName: v.section,
+    current: v.current, prior: v.prior,
+    currentPct: curTotal ? v.current / curTotal : 0, priorPct: priTotal ? v.prior / priTotal : 0,
+    diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0,
+  });
+  const buildSec = (section: ExpenseSection['section'], filter: (a: string, v: { controllable: boolean }) => boolean): ExpenseSection => {
+    const rowsOut = all.filter(([a, v]) => filter(a, v)).map(([a, v]) => mkRow(a, v)).sort((x, y) => Math.abs(y.current) - Math.abs(x.current));
+    return { section, total: rowsOut.reduce((s, r) => s + r.current, 0), priorTotal: rowsOut.reduce((s, r) => s + r.prior, 0), rows: rowsOut };
+  };
+
+  const sections = [
+    buildSec('salaries', (a) => isSal(a)),
+    buildSec('controllable', (a, v) => !isSal(a) && effCtrl(a, v.controllable)),
+    buildSec('uncontrollable', (a, v) => !isSal(a) && !effCtrl(a, v.controllable)),
+  ].filter((s) => s.rows.length > 0);
   return { hasData: sections.length > 0, sections };
 }
 
