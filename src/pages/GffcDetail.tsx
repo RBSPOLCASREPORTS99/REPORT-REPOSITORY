@@ -34,6 +34,7 @@ export default function GffcDetail() {
   const [simulated, setSimulated] = useState(false);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
   const reqRef = useRef(0);
   const { profile } = useAuth();
@@ -41,7 +42,7 @@ export default function GffcDetail() {
   useEffect(() => {
     fetchRanges().then(setRanges).catch((e) => { setError(e.message); setLoading(false); });
     fetchGffcTrend().then(setTrend).catch(() => {});
-  }, []);
+  }, [tick]);
 
   const periodOf = (id?: string): Period | undefined => {
     const r = ranges.find((x) => x.id === id);
@@ -68,7 +69,19 @@ export default function GffcDetail() {
       .catch((err) => { if (myReq === reqRef.current) setError((err as Error).message); })
       .finally(() => { if (myReq === reqRef.current) setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmp, ranges]);
+  }, [cmp, ranges, tick]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFull, setIsFull] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFull(document.fullscreenElement === containerRef.current);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+  function toggleFull() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else containerRef.current?.requestFullscreen?.();
+  }
 
   const branchAvail = branch.hasData;
   const paramsAvail = params.some((r) => r.current != null || r.std != null);
@@ -85,8 +98,11 @@ export default function GffcDetail() {
   if (error) return <p className="text-red-600">{error}</p>;
 
   return (
-    <div className="space-y-3">
-      <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← All business units</Link>
+    <div
+      ref={containerRef}
+      className={`space-y-3 ${isFull ? 'h-full overflow-auto bg-slate-50 p-6 dark:bg-slate-900' : ''}`}
+    >
+      {!isFull && <Link to="/" className="text-sm text-slate-400 dark:text-slate-500">← All business units</Link>}
 
       <div className="sticky top-14 z-30 -mx-4 space-y-2 border-b border-slate-200 bg-slate-50 px-4 py-2 lg:top-0 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-2">
@@ -99,6 +115,16 @@ export default function GffcDetail() {
           )}
           <div className="flex flex-1 justify-center">
             <SetMonthSelect ranges={ranges} />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button onClick={() => setTick((t) => t + 1)} title="Reload data"
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+              ↻ Refresh
+            </button>
+            <button onClick={toggleFull}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+              {isFull ? '✕ Exit full screen' : '⛶ Full screen'}
+            </button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
