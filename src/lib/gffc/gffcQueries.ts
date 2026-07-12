@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { GFFC_CATEGORIES, GFFC_GROUPS, GFFC_EXPENSE_KEYS } from './gffcConfig';
 import { fetchExpenseSectionOverrides } from '../queries';
-import type { ExpenseSection, ExpenseRow, SalesItemRow } from '../queries';
+import type { ExpenseSection, ExpenseRow, SalesItemRow, TrendPoint } from '../queries';
 
 // A date period (from a resolved comparison range) → the GFFC P&L summed over
 // its months. GFFC values are full pesos.
@@ -109,6 +109,37 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
 
 function periodMonths(p: Period) {
   return { months: monthsInPeriod(p.start, p.end), years: [...new Set(monthsInPeriod(p.start, p.end).map((x) => x.year))] };
+}
+
+// ---- Trend (monthly Gross Sales / Gross Income / Expense / NIfO) -------------
+const TREND_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// GFFC monthly trend for the chart shared with the BUs. GFFC values are full
+// pesos; the chart is in ₱ thousands, so divide by 1000 to match its scale.
+export async function fetchGffcTrend(limit = 12): Promise<TrendPoint[]> {
+  const { data } = await supabase.from('gffc_monthly_pnl').select('year, month, line_key, amount');
+  const byM = new Map<string, { year: number; month: number; agg: Record<string, number> }>();
+  for (const r of data ?? []) {
+    const key = `${r.year}-${String(r.month).padStart(2, '0')}`;
+    let e = byM.get(key);
+    if (!e) { e = { year: r.year as number, month: r.month as number, agg: {} }; byM.set(key, e); }
+    e.agg[r.line_key as string] = (e.agg[r.line_key as string] ?? 0) + Number(r.amount);
+  }
+  const K = 1000;
+  const points = [...byM.entries()].map(([key, { year, month, agg }]) => {
+    const gs = GFFC_CATEGORIES.reduce((s, x) => s + (agg[x.key] ?? 0), 0);
+    const gi = gs - (agg.cogs ?? 0);
+    const te = GFFC_EXPENSE_KEYS.reduce((s, k) => s + (agg[k] ?? 0), 0);
+    return {
+      label: `${TREND_MON[month - 1]} ${String(year).slice(2)}`,
+      periodEnd: key,
+      grossSales: gs / K,
+      grossIncome: gi / K,
+      totalExpense: te / K,
+      netIncomeOps: (gi - te) / K,
+    };
+  });
+  return points.sort((a, b) => a.periodEnd.localeCompare(b.periodEnd)).slice(-limit);
 }
 
 // ---- Expense Report (grouped controllable / uncontrollable) -----------------
@@ -249,15 +280,19 @@ export async function fetchGffcBranchPnl(current: Period, prior?: Period): Promi
     const netC = giC - teC + c('other_income'), netP = giP - teP + p('other_income');
     const L = (key: string, label: string, kind: GffcLineKind, current: number, prior: number, cost?: boolean): GffcPnlLine =>
       ({ key, label, kind, current, prior, cost });
-    return [
-      L('gross_sales', 'Gross Sales', 'gross', gsC, gsP),
-      L('cogs', 'Cost of Goods Sold', 'cogs', c('cogs'), p('cogs'), true),
-      L('gross_income', 'Gross Income', 'gross_income', giC, giP),
+    // Expense groups auto-sorted biggest-first by current amount (like the P&L).
+    const expenseLines = [
       L('admin', 'Admin Expense', 'expense', c('admin'), p('admin'), true),
       L('finance', 'Finance Expense', 'expense', c('finance'), p('finance'), true),
       L('operations', 'Operations Expense', 'expense', c('operations'), p('operations'), true),
       L('repairs', 'Repairs/Maint. Expense', 'expense', c('repairs'), p('repairs'), true),
       L('salaries', 'Salaries & Wages', 'expense', c('salaries'), p('salaries'), true),
+    ].sort((x, y) => y.current - x.current);
+    return [
+      L('gross_sales', 'Gross Sales', 'gross', gsC, gsP),
+      L('cogs', 'Cost of Goods Sold', 'cogs', c('cogs'), p('cogs'), true),
+      L('gross_income', 'Gross Income', 'gross_income', giC, giP),
+      ...expenseLines,
       L('total_expense', 'Total Expense', 'total', teC, teP, true),
       L('other_income', 'Other Income', 'other', c('other_income'), p('other_income')),
       L('net_income', 'Net Income', 'net', netC, netP),

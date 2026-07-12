@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
@@ -8,8 +8,10 @@ import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
 import ParametersTable from '../components/ParametersTable';
 import { TableSkeleton } from '../components/Skeleton';
-import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type SalesItemRow } from '../lib/queries';
-import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, fetchGffcParameters, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
+import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type SalesItemRow, type TrendPoint } from '../lib/queries';
+import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSales, fetchGffcBranchPnl, fetchGffcParameters, fetchGffcTrend, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type Period } from '../lib/gffc/gffcQueries';
+
+const TrendChart = lazy(() => import('../components/TrendChart'));
 import { useAuth } from '../contexts/AuthContext';
 import type { ParamRow } from '../lib/params/paramQueries';
 import { GFFC_LABEL } from '../lib/gffc/gffcConfig';
@@ -30,6 +32,7 @@ export default function GffcDetail() {
   const [branch, setBranch] = useState<GffcBranchResult>({ hasData: false, branches: [], byBranch: {} });
   const [params, setParams] = useState<ParamRow[]>([]);
   const [simulated, setSimulated] = useState(false);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const reqRef = useRef(0);
@@ -37,6 +40,7 @@ export default function GffcDetail() {
 
   useEffect(() => {
     fetchRanges().then(setRanges).catch((e) => { setError(e.message); setLoading(false); });
+    fetchGffcTrend().then(setTrend).catch(() => {});
   }, []);
 
   const periodOf = (id?: string): Period | undefined => {
@@ -142,7 +146,12 @@ export default function GffcDetail() {
           No GFFC P&amp;L for this period yet. Import the GFFC workbook (P&amp;L 2025 / P&amp;L 2026).
         </p>
       ) : (
-        <GffcPnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <>
+          <GffcPnlTable lines={lines} priorLabel={priorLabel} currentLabel={currentLabel} />
+          <Suspense fallback={<div className="h-48 rounded-2xl bg-white shadow-sm dark:bg-slate-800" />}>
+            <TrendChart data={trend} buName={GFFC_LABEL} />
+          </Suspense>
+        </>
       )}
     </div>
   );
