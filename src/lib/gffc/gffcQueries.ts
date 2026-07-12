@@ -119,10 +119,15 @@ export const gffcOverrideKey = (account: string) => `GFFC:${account}`;
 export async function fetchGffcExpenses(current: Period, prior?: Period): Promise<{ hasData: boolean; sections: ExpenseSection[] }> {
   const { years } = periodMonths(current);
   const py = prior ? periodMonths(prior).years : [];
-  const [{ data }, overrides] = await Promise.all([
+  const grossOf = (agg: Record<string, number>) => GFFC_CATEGORIES.reduce((s, x) => s + (agg[x.key] ?? 0), 0);
+  const [{ data }, overrides, curSum, priSum] = await Promise.all([
     supabase.from('gffc_monthly_expense').select('year, month, account, section, controllable, amount').in('year', [...new Set([...years, ...py])]),
     fetchExpenseSectionOverrides(),
+    sumPeriod(current),
+    prior ? sumPeriod(prior) : Promise.resolve({ agg: {}, hasData: false }),
   ]);
+  const grossCur = grossOf(curSum.agg);
+  const grossPri = grossOf(priSum.agg);
   const rows = (data ?? []) as ExpRow[];
   const inSet = (p?: Period) => new Set(p ? monthsInPeriod(p.start, p.end).map((x) => `${x.year}-${x.month}`) : []);
   const curSet = inSet(current), priSet = inSet(prior);
@@ -136,8 +141,6 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
     if (priSet.has(`${r.year}-${r.month}`)) e.prior += Number(r.amount);
   }
   const all = [...acc.entries()].filter(([, v]) => v.current !== 0 || v.prior !== 0);
-  const curTotal = all.reduce((s, [, v]) => s + v.current, 0);
-  const priTotal = all.reduce((s, [, v]) => s + v.prior, 0);
 
   const isSal = (account: string) => /salar|wage|13th\s*month/i.test(account);
   // Finance can reclassify Controllable ↔ Non-controllable; the override wins.
@@ -149,12 +152,14 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
   const mkRow = (account: string, v: { section: string; controllable: boolean; current: number; prior: number }): ExpenseRow => ({
     account, section: effCtrl(account, v.controllable) ? 'controllable' : 'uncontrollable', groupName: v.section,
     current: v.current, prior: v.prior,
-    currentPct: curTotal ? v.current / curTotal : 0, priorPct: priTotal ? v.prior / priTotal : 0,
+    currentPct: grossCur ? v.current / grossCur : 0, priorPct: grossPri ? v.prior / grossPri : 0,
     diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0,
   });
   const buildSec = (section: ExpenseSection['section'], filter: (a: string, v: { controllable: boolean }) => boolean): ExpenseSection => {
     const rowsOut = all.filter(([a, v]) => filter(a, v)).map(([a, v]) => mkRow(a, v)).sort((x, y) => Math.abs(y.current) - Math.abs(x.current));
-    return { section, total: rowsOut.reduce((s, r) => s + r.current, 0), priorTotal: rowsOut.reduce((s, r) => s + r.prior, 0), rows: rowsOut };
+    const total = rowsOut.reduce((s, r) => s + r.current, 0);
+    const priorTotal = rowsOut.reduce((s, r) => s + r.prior, 0);
+    return { section, total, priorTotal, pct: grossCur ? total / grossCur : 0, priorPct: grossPri ? priorTotal / grossPri : 0, rows: rowsOut };
   };
 
   const sections = [
