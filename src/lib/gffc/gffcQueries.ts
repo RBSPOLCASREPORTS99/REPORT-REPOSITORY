@@ -461,7 +461,8 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
   for (const c of GFFC_CAT_PRICE) {
     const cur = price(salesC.agg, qtyC, c.key);
     const pri = prior ? price(salesP.agg, qtyP, c.key) : null;
-    if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label, std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true, cost: false });
+    // Grouped under a collapsible "Avg Selling Price" section (short category label).
+    if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label.replace(/^Avg Selling Price\s*—\s*/, ''), group: 'Avg Selling Price', std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true, cost: false });
   }
 
   const br = await fetchGffcBranchPnl(current, prior);
@@ -471,8 +472,9 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
     if (b === TOTAL) continue; // per-branch only
     const gs = br.byBranch[b]?.find((l) => l.key === 'gross_sales');
     if (!gs) continue;
+    const sdKey = `salesday_${b}`;
     rows.push({
-      key: `salesday_${b}`, label: `Avg Sales/Day — ${b}`, std: null,
+      key: sdKey, label: `Avg Sales/Day — ${b}`, std: std.has(sdKey) ? std.get(sdKey)! : null,
       prior: dP ? gs.prior / dP : null,
       current: dC ? gs.current / dC : null,
       decimals: 0, pct: false, peso: true, cost: false,

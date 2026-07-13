@@ -5,12 +5,15 @@
 //  - ratio:  derived num ÷ den from other parameters (computed per period, so a
 //            YTD ratio uses YTD totals, matching the Excel).
 //  - divide: another parameter ÷ a constant (e.g. bags = kilos ÷ 50).
+//  - external: value computed outside this engine (e.g. GFFC avg sales/day); only
+//              its STD is entered here.
 export type ParamSource =
   | { kind: 'manual' }
   | { kind: 'pnl'; lines: string[] }
   | { kind: 'sum'; of: string[] }
   | { kind: 'ratio'; num: string; den: string }
-  | { kind: 'divide'; of: string; by: number };
+  | { kind: 'divide'; of: string; by: number }
+  | { kind: 'external' };
 
 export interface ParamDef {
   key: string;
@@ -37,6 +40,8 @@ const R = (key: string, label: string, num: string, den: string, decimals = 2, e
 const D = (key: string, label: string, of: string, by: number, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'divide', of, by }, decimals, ...extra });
 // Visible sum of other params (a shown "Total" row, unlike the hidden SUM helper).
 const SUMV = (key: string, label: string, of: string[], decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'sum', of }, decimals, ...extra });
+// Externally-computed param whose STD (target) is still entered here.
+const E = (key: string, label: string, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'external' }, decimals, ...extra });
 // Manual rate/average params combine across months by averaging (not summing).
 const AVG: Partial<ParamDef> = { aggregate: 'avg' };
 
@@ -130,6 +135,12 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('carcass_recovery', '% Carcass Recovery', 1, { pct: true }),
       M('mcp_recovery', '% MCP Recovery', 1, { pct: true }),
       M('mcp_kilos_per_manhr', 'MCP Kilos per Man-Hr', 2),
+      // Avg Sales/Day is computed per branch in the GFFC tab; only its STD (target)
+      // is entered here (keys match the salesday_<branch> display rows).
+      E('salesday_Main Branch', 'Avg Sales/Day — Main Branch', 0, { peso: true }),
+      E('salesday_Branch 2', 'Avg Sales/Day — Branch 2', 0, { peso: true }),
+      E('salesday_Calamanade', 'Avg Sales/Day — Calamanade', 0, { peso: true }),
+      E('salesday_Meat Cutting Plant', 'Avg Sales/Day — Meat Cutting Plant', 0, { peso: true }),
     ],
   },
   BU11: {

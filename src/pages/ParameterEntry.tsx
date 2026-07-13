@@ -104,7 +104,7 @@ export default function ParameterEntry() {
                   onChange={(n) => { setValues((v) => ({ ...v, [p.key]: n })); setSaved(false); }}
                   className="w-32 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
               ) : (
-                <span className="text-right text-xs text-slate-400 dark:text-slate-500">auto ({p.source.kind === 'pnl' ? 'from P&L' : 'derived'})</span>
+                <span className="text-right text-xs text-slate-400 dark:text-slate-500">auto ({p.source.kind === 'pnl' ? 'from P&L' : p.source.kind === 'external' ? 'computed' : 'derived'})</span>
               )}
             </div>
             </Fragment>
