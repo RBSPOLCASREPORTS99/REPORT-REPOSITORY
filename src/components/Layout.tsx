@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { prefetchRoute } from '../lib/prefetch';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
+import { useWelcome } from '../contexts/WelcomeContext';
 import Logo from './Logo';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -16,6 +17,7 @@ interface NavItem { to: string; label: string; icon: string; end?: boolean }
 export default function Layout() {
   const { profile, user, signOut } = useAuth();
   const { dark, toggleDark, zoom, zoomIn, zoomOut, resetZoom, sidebarCollapsed, toggleSidebar, units, toggleUnits } = useUi();
+  const { showWelcome } = useWelcome();
   const location = useLocation();
   const [open, setOpen] = useState(false); // mobile menu
 
@@ -95,22 +97,25 @@ export default function Layout() {
         }`}
       >
         <div className={`flex items-center gap-2 border-b border-slate-100 px-3 py-3 dark:border-slate-700 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          {sidebarCollapsed ? (
-            <button onClick={toggleSidebar} title="Expand sidebar" aria-label="Expand sidebar">
-              <Logo className="h-9 w-9 shrink-0" />
-            </button>
-          ) : (
-            <>
-              <Logo className="h-9 w-9 shrink-0" />
-              <span className="leading-tight">
-                <span className="block text-sm font-bold leading-tight text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE CORP.</span>
-                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">Business Review</span>
-              </span>
-              <button onClick={toggleSidebar} title="Collapse sidebar" aria-label="Collapse sidebar"
-                className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-lg text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700">‹</button>
-            </>
+          <button onClick={showWelcome} title="Back to title screen" aria-label="Back to title screen"
+            className="shrink-0 rounded-full transition hover:opacity-80">
+            <Logo className="h-9 w-9" />
+          </button>
+          {!sidebarCollapsed && (
+            <span className="leading-tight">
+              <span className="block text-sm font-bold leading-tight text-brand-800 dark:text-brand-300">POLCAS AGRI TRADE CORP.</span>
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">Business Review</span>
+            </span>
           )}
         </div>
+
+        {/* Round green collapse/expand handle, straddling the sidebar↔content seam. */}
+        <button onClick={toggleSidebar}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="absolute -right-3 top-[4.75rem] z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand-600 text-white shadow-md transition hover:bg-brand-700 dark:border-slate-800">
+          <span className="text-sm font-bold leading-none">{sidebarCollapsed ? '›' : '‹'}</span>
+        </button>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-2">
           {items.map((it) => (

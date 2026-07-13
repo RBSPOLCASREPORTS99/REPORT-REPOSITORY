@@ -1,15 +1,11 @@
-import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Welcome from '../pages/Welcome';
+import { useWelcome } from '../contexts/WelcomeContext';
 
-const KEY = 'welcomeSeen';
-
-// Shows the Welcome title screen once per browser session (until Proceed is
-// clicked), then reveals the dashboard. Sits between auth and the app Layout.
+// Shows the Welcome title screen (until Proceed) then reveals the dashboard.
+// State lives in WelcomeContext so the sidebar logo can reopen it.
 export default function WelcomeGate() {
-  const [seen, setSeen] = useState(() => sessionStorage.getItem(KEY) === '1');
-  if (!seen) {
-    return <Welcome onProceed={() => { sessionStorage.setItem(KEY, '1'); setSeen(true); }} />;
-  }
+  const { seen, enter } = useWelcome();
+  if (!seen) return <Welcome onProceed={enter} />;
   return <Outlet />;
 }

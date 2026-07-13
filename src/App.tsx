@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { UiProvider } from './contexts/UiContext';
 import { BuLabelsProvider } from './contexts/BuLabelsContext';
 import { CombineProvider } from './contexts/CombineContext';
+import { WelcomeProvider } from './contexts/WelcomeContext';
 import { RequireAuth, RequireFinance } from './components/RouteGuards';
 import ErrorBoundary from './components/ErrorBoundary';
 import WelcomeGate from './components/WelcomeGate';
@@ -44,6 +45,7 @@ export default function App() {
       <AuthProvider>
       <BuLabelsProvider>
       <CombineProvider>
+      <WelcomeProvider>
         <ErrorBoundary>
         <Suspense fallback={<Loading />}>
           <Routes>
@@ -82,6 +84,7 @@ export default function App() {
           </Routes>
         </Suspense>
         </ErrorBoundary>
+      </WelcomeProvider>
       </CombineProvider>
       </BuLabelsProvider>
       </AuthProvider>
