@@ -70,9 +70,11 @@ export async function fetchRoiLabor(currentRangeId: string, priorRangeId?: strin
   const priP = periodOf(ranges, priorRangeId);
   const rangeIds = [currentRangeId, priorRangeId].filter((x): x is string => !!x);
 
-  // 1. POLCAS BUs from computed_pnl (₱'000 → ×1000 full pesos).
+  // 1. POLCAS BUs from computed_pnl (₱'000 → ×1000 full pesos). BU08LF (Lakatan
+  //    Farm) keeps its "Labor" input under discounting_expense (salaries_expense
+  //    is the farm's "Planting" line), so it uses that as its labor cost.
   const [{ data: pnl }, { data: ov }, truck, truckLab, gffcC, gffcP, truckLabP] = await Promise.all([
-    supabase.from('computed_pnl').select('range_id, bu_code, line_item, amount').in('range_id', rangeIds).in('line_item', ['net_income_ops', 'salaries_expense']),
+    supabase.from('computed_pnl').select('range_id, bu_code, line_item, amount').in('range_id', rangeIds).in('line_item', ['net_income_ops', 'salaries_expense', 'discounting_expense']),
     supabase.from('roi_labor_manual').select('range_id, bu_code, net_income, labor_cost').eq('range_id', currentRangeId),
     fetchTruckPnl(curP ?? { start: '', end: '' }, priP).catch(() => ({ hasData: false, net: 0, priorNet: 0 } as { hasData: boolean; net: number; priorNet: number })),
     truckLabor(curP),
@@ -81,19 +83,26 @@ export async function fetchRoiLabor(currentRangeId: string, priorRangeId?: strin
     truckLabor(priP),
   ]);
 
-  // range_id -> bu_code -> { ni, labor } in full pesos.
-  const byRange = new Map<string, Map<string, { ni: number; labor: number }>>();
+  // range_id -> bu_code -> { ni, salaries, disc } in full pesos.
+  const byRange = new Map<string, Map<string, { ni: number; salaries: number; disc: number }>>();
   for (const r of pnl ?? []) {
     const rid = r.range_id as string, code = r.bu_code as string;
     if (!byRange.has(rid)) byRange.set(rid, new Map());
     const m = byRange.get(rid)!;
-    if (!m.has(code)) m.set(code, { ni: 0, labor: 0 });
+    if (!m.has(code)) m.set(code, { ni: 0, salaries: 0, disc: 0 });
     const e = m.get(code)!;
     if (r.line_item === 'net_income_ops') e.ni = Number(r.amount) * 1000;
-    if (r.line_item === 'salaries_expense') e.labor = Number(r.amount) * 1000;
+    if (r.line_item === 'salaries_expense') e.salaries = Number(r.amount) * 1000;
+    if (r.line_item === 'discounting_expense') e.disc = Number(r.amount) * 1000;
   }
-  const cur = byRange.get(currentRangeId) ?? new Map();
-  const pri = priorRangeId ? byRange.get(priorRangeId) ?? new Map() : new Map();
+  // BU08LF's labor is its "Labor" line (discounting_expense); others use salaries.
+  const laborOf = (code: string, e: { salaries: number; disc: number }) => (code === 'BU08LF' ? e.disc : e.salaries);
+  const niLabor = (rid?: string): Map<string, { ni: number; labor: number }> => {
+    const src = rid ? byRange.get(rid) ?? new Map() : new Map();
+    return new Map([...src].map(([code, e]) => [code, { ni: e.ni, labor: laborOf(code, e) }]));
+  };
+  const cur = niLabor(currentRangeId);
+  const pri = priorRangeId ? niLabor(priorRangeId) : new Map<string, { ni: number; labor: number }>();
 
   // 2. Add BU10 (Trucking) and GFFC.
   cur.set('BU10', { ni: (truck.net || 0) * 1000, labor: truckLab * 1000 });
