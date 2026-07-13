@@ -20,7 +20,7 @@ import {
 import { COMBINE_SEP } from '../contexts/CombineContext';
 import { useAuth } from '../contexts/AuthContext';
 import ParametersTable from '../components/ParametersTable';
-import { fetchBuParameters, type ParamRow } from '../lib/params/paramQueries';
+import { fetchBuParameters, fetchParamMonthsMissing, type ParamRow } from '../lib/params/paramQueries';
 import { hasParameters } from '../lib/params/paramConfig';
 
 type View = 'pnl' | 'expenses' | 'sales' | 'parameters';
@@ -40,6 +40,7 @@ export default function BuDetail() {
   const [salesRanges, setSalesRanges] = useState<Set<string>>(new Set());
   const [salesRows, setSalesRows] = useState<SalesItemRow[]>([]);
   const [paramRows, setParamRows] = useState<ParamRow[]>([]);
+  const [paramMissing, setParamMissing] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
@@ -95,7 +96,10 @@ export default function BuDetail() {
       load = (isCombined ? fetchSalesCombined(currentId, cmp.priorId, codes) : fetchBuSales(currentId, cmp.priorId, code))
         .then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
     } else if (view === 'parameters') {
-      load = fetchBuParameters(code, currentId, cmp.priorId).then((d) => { if (myReq === reqRef.current) setParamRows(d ?? []); });
+      load = Promise.all([
+        fetchBuParameters(code, currentId, cmp.priorId),
+        fetchParamMonthsMissing(code, currentId),
+      ]).then(([d, missing]) => { if (myReq === reqRef.current) { setParamRows(d ?? []); setParamMissing(missing); } });
     } else {
       load = (isCombined ? fetchComparisonCombined(currentId, cmp.priorId, codes, method) : fetchBuComparison(currentId, cmp.priorId, code, method))
         .then((d) => { if (myReq === reqRef.current) setLines(d); });
@@ -196,7 +200,16 @@ export default function BuDetail() {
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
       ) : view === 'parameters' ? (
-        <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <div className="space-y-3">
+          {paramMissing.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              ⚠️ This {currentLabel} total is missing parameters for {paramMissing.length === 1 ? '' : 'these months: '}
+              <span className="font-semibold">{paramMissing.join(', ')}</span>. Add {paramMissing.length === 1 ? 'that month' : 'those months'} in
+              Business Parameters — entry to complete the figures.
+            </div>
+          )}
+          <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} />
+        </div>
       ) : lines.length === 0 ? (
         <p className="text-slate-400 dark:text-slate-500">No data for this business unit yet.</p>
       ) : (

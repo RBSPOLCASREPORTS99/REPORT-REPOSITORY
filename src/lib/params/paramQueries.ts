@@ -83,6 +83,24 @@ async function fetchStd(buCode: string): Promise<Map<string, number>> {
   return new Map((data ?? []).map((r) => [r.param_key as string, Number(r.value)]));
 }
 
+// For a multi-month range (YTD / quarter), the labels of the constituent months
+// that have no manual parameters entered yet for this BU — so the viewer can
+// prompt Finance to add them (the aggregate is understated until they do). A
+// single-month range returns nothing.
+export async function fetchParamMonthsMissing(buCode: string, rangeId: string): Promise<string[]> {
+  if (!BU_PARAM_CONFIG[buCode]) return [];
+  const { data: r } = await supabase.from('report_ranges').select('kind, period_start, period_end').eq('id', rangeId).maybeSingle();
+  if (!r || r.kind === 'month') return [];
+  const { data: months } = await supabase.from('report_ranges').select('id, label')
+    .eq('kind', 'month').gte('period_start', r.period_start).lte('period_end', r.period_end)
+    .order('period_start', { ascending: true });
+  const list = months ?? [];
+  if (list.length === 0) return [];
+  const { data: rows } = await supabase.from('bu_parameters').select('range_id').eq('bu_code', buCode).in('range_id', list.map((m) => m.id));
+  const have = new Set((rows ?? []).map((x) => x.range_id as string));
+  return list.filter((m) => !have.has(m.id as string)).map((m) => m.label as string);
+}
+
 // Build the Parameters comparison rows for a BU (current vs prior range).
 export async function fetchBuParameters(buCode: string, currentRangeId: string, priorRangeId?: string): Promise<ParamRow[] | null> {
   const config = BU_PARAM_CONFIG[buCode];
