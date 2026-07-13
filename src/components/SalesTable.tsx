@@ -59,9 +59,11 @@ export default function SalesTable({
       <div className="relative flex items-center justify-end">
         <button
           onClick={() => setFilterOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+          title="Filter items"
+          aria-label="Filter items"
+          className={`rounded-lg bg-slate-100 px-2 py-1 text-sm dark:bg-slate-700 ${hidden.size > 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300'}`}
         >
-          ⛃ Filter items{hidden.size > 0 ? ` (${hidden.size} hidden)` : ''}
+          ⛃
         </button>
 
         {filterOpen && (
