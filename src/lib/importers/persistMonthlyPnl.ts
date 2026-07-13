@@ -103,6 +103,17 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   await supabase.from('monthly_company_pnl').delete().eq('month_id', monthId);
   await supabase.from('monthly_company_pnl').insert({ month_id: monthId, ...company });
 
+  // 4f. Support-unit P&L (Finance / HR / Management) — their actual expenses,
+  // pulled from the matching class columns for the Simulated Support-Unit P&L.
+  await supabase.from('monthly_support_pnl').delete().eq('month_id', monthId);
+  const supportRows = [
+    { unit: 'FINANCE', col: COLS.finance },
+    { unit: 'HR', col: COLS.hr },
+    { unit: 'MANCOM', col: COLS.management },
+  ].map((s) => ({ month_id: monthId, unit: s.unit, ...extractBuInputs(pivot, { memberColumns: [s.col] }) }));
+  const { error: supErr } = await supabase.from('monthly_support_pnl').insert(supportRows);
+  if (supErr) throw supErr;
+
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
 
   // 5. re-derive all ranges for the year

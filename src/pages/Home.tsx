@@ -224,6 +224,12 @@ export default function Home() {
               <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">ROI on Labor per BU</span>
               <span className="text-xs text-slate-400 dark:text-slate-500">Net Income from Ops ÷ Total Labor Cost, ranked</span>
             </Link>
+            {[{ slug: 'finance', label: 'Finance P&L' }, { slug: 'hr', label: 'HR P&L' }, { slug: 'management', label: 'Management P&L' }].map((s) => (
+              <Link key={s.slug} to={`/support/${s.slug}`} className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{s.label}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">Simulated support-unit P&amp;L (% of revenue)</span>
+              </Link>
+            ))}
           </div>
         )}
         </>

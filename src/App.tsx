@@ -24,6 +24,7 @@ const GffcDetail = lazy(() => import('./pages/GffcDetail'));
 const CompanyPnl = lazy(() => import('./pages/CompanyPnl'));
 const RoiLabor = lazy(() => import('./pages/RoiLabor'));
 const RoiLaborEntry = lazy(() => import('./pages/RoiLaborEntry'));
+const SupportPnl = lazy(() => import('./pages/SupportPnl'));
 const ParameterEntry = lazy(() => import('./pages/ParameterEntry'));
 const Users = lazy(() => import('./pages/Users'));
 const Account = lazy(() => import('./pages/Account'));
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/gffc" element={<GffcDetail />} />
                 <Route path="/company" element={<CompanyPnl />} />
                 <Route path="/roi-labor" element={<RoiLabor />} />
+                <Route path="/support/:unit" element={<SupportPnl />} />
                 {/* Trucking simulated-P&L viewer — data is RLS-gated (Finance, or
                     a BU Head assigned BU10); the /trucking entry stays Finance-only. */}
                 <Route path="/truck-pnl" element={<TruckPnl />} />
