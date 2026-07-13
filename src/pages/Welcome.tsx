@@ -1,14 +1,26 @@
 import Logo from '../components/Logo';
+import { useUi } from '../contexts/UiContext';
 
 // Title / welcome screen shown once per session before the dashboard.
 // Executive-serif treatment (Option 1), themed to the system: the app's own
 // slate background with the corporate brand green as the accent.
 export default function Welcome({ onProceed }: { onProceed: () => void }) {
+  const { dark, toggleDark } = useUi();
   const rise = (delay: number) => ({ animationDelay: `${delay}ms` } as const);
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-slate-50 px-6 text-center dark:bg-slate-900">
       {/* Faint brand-green wash for depth — keeps the system background. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(92,145,33,0.10),transparent_70%)] dark:bg-[radial-gradient(60%_50%_at_50%_0%,rgba(142,203,63,0.10),transparent_70%)]" />
+
+      {/* Light / night mode toggle. */}
+      <button
+        onClick={toggleDark}
+        title={dark ? 'Light mode' : 'Night mode'}
+        aria-label={dark ? 'Switch to light mode' : 'Switch to night mode'}
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-lg shadow-sm backdrop-blur transition hover:bg-white dark:border-slate-700 dark:bg-slate-800/80 dark:hover:bg-slate-800"
+      >
+        {dark ? '☀️' : '🌙'}
+      </button>
 
       <div className="relative flex flex-col items-center">
         <Logo className="animate-rise h-16 w-16 shadow-sm ring-1 ring-brand-200/70 dark:ring-brand-900/60" />
