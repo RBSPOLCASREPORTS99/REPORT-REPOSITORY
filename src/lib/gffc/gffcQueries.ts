@@ -196,8 +196,23 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
     return { section, total, priorTotal, pct: grossCur ? total / grossCur : 0, priorPct: grossPri ? priorTotal / grossPri : 0, rows: rowsOut };
   };
 
+  // Salaries & Wages (incl. 13th month pay): merge every related account into a
+  // single line item rather than listing each account separately.
+  const salCur = all.filter(([a]) => isSal(a)).reduce((s, [, v]) => s + v.current, 0);
+  const salPri = all.filter(([a]) => isSal(a)).reduce((s, [, v]) => s + v.prior, 0);
+  const salariesSection: ExpenseSection = {
+    section: 'salaries', total: salCur, priorTotal: salPri,
+    pct: grossCur ? salCur / grossCur : 0, priorPct: grossPri ? salPri / grossPri : 0,
+    rows: (salCur !== 0 || salPri !== 0) ? [{
+      account: 'Salaries & Wages', section: 'controllable', groupName: 'Salaries & Wages',
+      current: salCur, prior: salPri,
+      currentPct: grossCur ? salCur / grossCur : 0, priorPct: grossPri ? salPri / grossPri : 0,
+      diff: salCur - salPri, pctDiff: salPri !== 0 ? (salCur - salPri) / salPri : 0,
+    }] : [],
+  };
+
   const sections = [
-    buildSec('salaries', (a) => isSal(a)),
+    salariesSection,
     buildSec('controllable', (a, v) => !isSal(a) && effCtrl(a, v.controllable)),
     buildSec('uncontrollable', (a, v) => !isSal(a) && !effCtrl(a, v.controllable)),
   ].filter((s) => s.rows.length > 0);
