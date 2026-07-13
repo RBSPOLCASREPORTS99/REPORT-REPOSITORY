@@ -51,7 +51,9 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
   BU0102: {
     params: [
       PNL('labor_cost', ['salaries_expense']),
-      PNL('ops_cost', ['operations_expense', 'repairs_expense']),
+      // Operating cost includes allocated Trucking Services alongside Operations
+      // and Repairs, so Operating CPK (and Production Cost per Kilo) reflect it.
+      PNL('ops_cost', ['operations_expense', 'repairs_expense', 'trucking_expense']),
       SUM('prod_plus_delivery', ['production_kilo', 'delivered_kilo']),
       SUM('total_cost', ['labor_cost', 'ops_cost']),
       M('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 0), // entered manually, not derived
