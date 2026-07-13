@@ -57,9 +57,9 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 0), // entered manually, not derived
       M('rejection_count', '# Rejection', 0),
       R('kilos_per_bag', 'Kilos per Bag', 'production_kilo', 'sacks', 1),
-      R('labor_cpk', 'Labor CPK (Prod + Delivery)', 'labor_cost', 'prod_plus_delivery', 3, { peso: true }),
-      R('operating_cpk', 'Operating CPK', 'ops_cost', 'prod_plus_delivery', 3, { peso: true }),
-      R('production_cost_per_kilo', 'Production Cost per Kilo', 'total_cost', 'prod_plus_delivery', 3, { peso: true }),
+      R('labor_cpk', 'Labor CPK (Prod + Delivery)', 'labor_cost', 'prod_plus_delivery', 2, { peso: true }),
+      R('operating_cpk', 'Operating CPK', 'ops_cost', 'prod_plus_delivery', 2, { peso: true }),
+      R('production_cost_per_kilo', 'Production Cost per Kilo', 'total_cost', 'prod_plus_delivery', 2, { peso: true }),
       M('production_kilo', 'Production in Kilo', 0),
       M('delivered_kilo', 'Delivered in Kilo', 0),
       M('production_hours', 'Production Hours', 0),
