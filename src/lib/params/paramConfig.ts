@@ -140,8 +140,17 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       R('labor_cost_per_kilo', 'Labor Cost per Kilo', 'labor_cost', 'processed_kilos', 2, { peso: true, cost: true }),
       R('ops_cost_per_kilo', 'Ops Cost per Kilo', 'ops_cost', 'processed_kilos', 2, { peso: true, cost: true }),
       R('cost_per_kilo', 'Cost per Kilo', 'total_cost', 'processed_kilos', 2, { peso: true, cost: true }),
-      M('processed_kilos', 'Kilos Processed', 0),
-      M('kilos_delivered', 'Kilos Delivered', 0),
+      // Kilos Processed (dried at MFBD) — per product, summed into the total.
+      M('proc_banana', 'Banana', 0, { group: 'Kilos Processed' }),
+      M('proc_cassava', 'Cassava', 0, { group: 'Kilos Processed' }),
+      M('proc_yellow_corn', 'Yellow Corn', 0, { group: 'Kilos Processed' }),
+      M('proc_anungal', 'Anungal', 0, { group: 'Kilos Processed' }),
+      M('proc_palay', 'Palay', 0, { group: 'Kilos Processed' }),
+      SUMV('processed_kilos', 'Total', ['proc_banana', 'proc_cassava', 'proc_yellow_corn', 'proc_anungal', 'proc_palay'], 0, { group: 'Kilos Processed' }),
+      // Kilos Delivered — per product, summed into the total.
+      M('del_yellow_corn', 'Yellow Corn', 0, { group: 'Kilos Delivered' }),
+      M('del_rice_bran', 'Rice Bran D1', 0, { group: 'Kilos Delivered' }),
+      SUMV('kilos_delivered', 'Total', ['del_yellow_corn', 'del_rice_bran'], 0, { group: 'Kilos Delivered' }),
     ],
   },
 };
