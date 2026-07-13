@@ -113,7 +113,7 @@ export default function Layout() {
         <button onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="absolute -right-3 top-[4.75rem] z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand-600 text-white shadow-md transition hover:bg-brand-700 dark:border-slate-800">
+          className="absolute -right-3 top-6 z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand-600 text-white shadow-md transition hover:bg-brand-700 dark:border-slate-800">
           <span className="text-sm font-bold leading-none">{sidebarCollapsed ? '›' : '‹'}</span>
         </button>
 
