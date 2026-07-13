@@ -50,11 +50,13 @@ export default function App() {
                 <Route path="/bu/:code" element={<BuDetail />} />
                 <Route path="/gffc" element={<GffcDetail />} />
                 <Route path="/company" element={<CompanyPnl />} />
+                {/* Trucking simulated-P&L viewer — data is RLS-gated (Finance, or
+                    a BU Head assigned BU10); the /trucking entry stays Finance-only. */}
+                <Route path="/truck-pnl" element={<TruckPnl />} />
                 <Route element={<RequireFinance />}>
                   <Route path="/import" element={<ImportWizard />} />
                   <Route path="/trucking" element={<TruckingEntry />} />
                   <Route path="/parameters" element={<ParameterEntry />} />
-                  <Route path="/truck-pnl" element={<TruckPnl />} />
                   <Route path="/farm" element={<FarmEntry />} />
                   <Route path="/publish" element={<PublishManager />} />
                   <Route path="/users" element={<Users />} />

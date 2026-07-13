@@ -11,15 +11,18 @@ const ROLE_LABELS: Record<UserRole, string> = {
   bu_head: 'BU Head (assigned BUs only)',
 };
 
-// GFFC (Chickboy Meating Place) is a separate company, assignable so a BU Head
-// can be given GFFC-only access.
-const GFFC_UNIT = { code: 'GFFC', name: 'Chickboy Meating Place', isProfitCenter: true };
+// BU10 (Trucking) and GFFC (a separate company) are assignable even though they
+// aren't standard profit centers, so a BU Head can be given access to them.
+const EXTRA_UNITS = [
+  { code: 'BU10', name: 'Trucking', isProfitCenter: false },
+  { code: 'GFFC', name: 'Chickboy Meating Place', isProfitCenter: true },
+];
 
-// Selectable BUs = the profit centers that have a P&L, plus GFFC. Assigning BU08
-// also grants its children (Farm / Packhouse) via the RLS parent rule.
-const SELECTABLE_BUS = [...BUSINESS_UNITS.filter((b) => b.isProfitCenter), GFFC_UNIT];
+// Selectable BUs = the profit centers that have a P&L, plus BU10 and GFFC.
+// Assigning BU08 also grants its children (Farm / Packhouse) via the RLS parent rule.
+const SELECTABLE_BUS = [...BUSINESS_UNITS.filter((b) => b.isProfitCenter), ...EXTRA_UNITS];
 
-const buName = (code: string) => (code === 'GFFC' ? GFFC_UNIT.name : BUSINESS_UNITS.find((b) => b.code === code)?.name ?? code);
+const buName = (code: string) => EXTRA_UNITS.find((b) => b.code === code)?.name ?? BUSINESS_UNITS.find((b) => b.code === code)?.name ?? code;
 
 const emptyForm = { email: '', full_name: '', role: 'bu_head' as UserRole, bus: [] as string[] };
 
