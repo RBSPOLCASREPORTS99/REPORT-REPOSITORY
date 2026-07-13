@@ -21,7 +21,7 @@ import { COMBINE_SEP } from '../contexts/CombineContext';
 import { useAuth } from '../contexts/AuthContext';
 import ParametersTable from '../components/ParametersTable';
 import { fetchBuParameters, fetchParamMonthsMissing, type ParamRow } from '../lib/params/paramQueries';
-import { hasParameters } from '../lib/params/paramConfig';
+import { hasParameters, hasStdColumn } from '../lib/params/paramConfig';
 
 type View = 'pnl' | 'expenses' | 'sales' | 'parameters';
 
@@ -208,7 +208,7 @@ export default function BuDetail() {
               Business Parameters — entry to complete the figures.
             </div>
           )}
-          <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} />
+          <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} showStd={hasStdColumn(code)} />
         </div>
       ) : lines.length === 0 ? (
         <p className="text-slate-400 dark:text-slate-500">No data for this business unit yet.</p>

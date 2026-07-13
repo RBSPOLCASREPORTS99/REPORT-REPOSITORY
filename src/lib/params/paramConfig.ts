@@ -27,7 +27,7 @@ export interface ParamDef {
   aggregate?: 'sum' | 'avg';
 }
 
-export interface BuParamConfig { params: ParamDef[]; }
+export interface BuParamConfig { params: ParamDef[]; noStd?: boolean; }
 
 const M = (key: string, label: string, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'manual' }, decimals, ...extra });
 const PNL = (key: string, lines: string[]): ParamDef => ({ key, label: key, source: { kind: 'pnl', lines }, hidden: true });
@@ -101,7 +101,9 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
   },
   // BU09 parameters are tracked per Hog Feeds Type (HSP / HGP / HFP): each type's
   // CPK, GPR, Production in KG and (derived) Production in Bags, plus a Total.
+  // No standards column (the source sheet has no STD for the per-type KPIs).
   BU09: {
+    noStd: true,
     params: [
       M('hsp_cpk', 'HSP', 2, { peso: true, cost: true, group: 'Hog Feeds CPK', ...AVG }),
       M('hgp_cpk', 'HGP', 2, { peso: true, cost: true, group: 'Hog Feeds CPK', ...AVG }),
@@ -130,6 +132,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
     ],
   },
   BU11: {
+    noStd: true, // the source sheet has no STD column
     params: [
       PNL('labor_cost', ['salaries_expense']),
       PNL('ops_cost', ['operations_expense', 'repairs_expense']),
@@ -144,3 +147,5 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
 };
 
 export const hasParameters = (buCode?: string): boolean => !!buCode && buCode in BU_PARAM_CONFIG;
+// Whether a BU shows the STD (standards) column at all.
+export const hasStdColumn = (buCode?: string): boolean => !!buCode && !!BU_PARAM_CONFIG[buCode] && !BU_PARAM_CONFIG[buCode].noStd;

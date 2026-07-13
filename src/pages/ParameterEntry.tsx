@@ -40,6 +40,7 @@ export default function ParameterEntry() {
   }, [rangeId, buCode]);
 
   const config = BU_PARAM_CONFIG[buCode];
+  const showStdCol = !config?.noStd;
 
   async function handleSave() {
     setSaving(true); setError(''); setSaved(false);
@@ -82,8 +83,8 @@ export default function ParameterEntry() {
       </div>
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-800">
-        <div className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
-          <span>Parameter</span><span className="text-right">STD</span><span className="text-right">Value (this period)</span>
+        <div className={`grid ${showStdCol ? 'grid-cols-[1fr_7rem_9rem]' : 'grid-cols-[1fr_9rem]'} items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500`}>
+          <span>Parameter</span>{showStdCol && <span className="text-right">STD</span>}<span className="text-right">Value (this period)</span>
         </div>
         {config.params.filter((p) => !p.hidden).map((p, i, list) => {
           const manual = p.source.kind === 'manual';
@@ -93,11 +94,11 @@ export default function ParameterEntry() {
             {showHeader && (
               <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:border-slate-700/60 dark:bg-slate-700/50 dark:text-indigo-300">{p.group}</div>
             )}
-            <div className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60">
+            <div className={`grid ${showStdCol ? 'grid-cols-[1fr_7rem_9rem]' : 'grid-cols-[1fr_9rem]'} items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60`}>
               <span className={`text-sm text-slate-700 dark:text-slate-200 ${p.group ? 'pl-4' : ''}`}>{p.label}</span>
-              <NumberInput value={std[p.key]}
+              {showStdCol && <NumberInput value={std[p.key]}
                 onChange={(n) => { setStd((s) => ({ ...s, [p.key]: n })); setSaved(false); }}
-                className="w-28 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
+                className="w-28 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />}
               {manual ? (
                 <NumberInput value={values[p.key]}
                   onChange={(n) => { setValues((v) => ({ ...v, [p.key]: n })); setSaved(false); }}
