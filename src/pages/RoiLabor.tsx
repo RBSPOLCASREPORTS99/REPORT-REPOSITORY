@@ -49,7 +49,8 @@ export default function RoiLabor() {
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] text-slate-400 dark:text-slate-500">ROI on Labor = Net Income from Ops ÷ Total Labor Cost. Auto-built from each BU's P&amp;L.</p>
         {profile?.role === 'finance' && (
-          <Link to="/roi-labor-entry" className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">✎ Override figures</Link>
+          <Link to="/roi-labor-entry" title="Override figures" aria-label="Override figures"
+            className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-600 dark:bg-slate-700 dark:text-slate-300">✎</Link>
         )}
       </div>
       {loading ? <TableSkeleton /> : <RoiLaborTable rows={rows} priorLabel={priorLabel} currentLabel={currentLabel} />}
