@@ -5,6 +5,7 @@ import { UiProvider } from './contexts/UiContext';
 import { BuLabelsProvider } from './contexts/BuLabelsContext';
 import { CombineProvider } from './contexts/CombineContext';
 import { RequireAuth, RequireFinance } from './components/RouteGuards';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -38,6 +39,7 @@ export default function App() {
       <AuthProvider>
       <BuLabelsProvider>
       <CombineProvider>
+        <ErrorBoundary>
         <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -67,6 +69,7 @@ export default function App() {
             </Route>
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </CombineProvider>
       </BuLabelsProvider>
       </AuthProvider>
