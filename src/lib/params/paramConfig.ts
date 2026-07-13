@@ -139,8 +139,6 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       // is entered here (keys match the salesday_<branch> display rows).
       E('salesday_Main Branch', 'Avg Sales/Day — Main Branch', 0, { peso: true }),
       E('salesday_Branch 2', 'Avg Sales/Day — Branch 2', 0, { peso: true }),
-      E('salesday_Calamanade', 'Avg Sales/Day — Calamanade', 0, { peso: true }),
-      E('salesday_Meat Cutting Plant', 'Avg Sales/Day — Meat Cutting Plant', 0, { peso: true }),
     ],
   },
   BU11: {

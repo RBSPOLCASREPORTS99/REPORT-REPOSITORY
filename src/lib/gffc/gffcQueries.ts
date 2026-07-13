@@ -433,23 +433,52 @@ async function gffcCategoryQty(period: Period): Promise<Record<string, number>> 
 
 const daysInPeriod = (p: Period) => (new Date(p.end).getTime() - new Date(p.start).getTime()) / 86400000 + 1;
 
+// GFFC manual KPI values for a range. These are rates (% recovery, kilos/man-hr),
+// so a multi-month range (YTD/quarter) averages the monthly entries (falling back
+// to any value stored on the aggregate range); a single month uses its own value.
+async function gffcManualByRange(rangeId: string | undefined, period: Period | undefined, keys: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!rangeId || !period || keys.length === 0) return out;
+  const months = monthsInPeriod(period.start, period.end);
+  if (months.length <= 1) {
+    const { data } = await supabase.from('bu_parameters').select('param_key, value').eq('bu_code', 'GFFC').eq('range_id', rangeId).in('param_key', keys);
+    for (const r of data ?? []) out.set(r.param_key as string, Number(r.value));
+    return out;
+  }
+  const { data: mr } = await supabase.from('report_ranges').select('id').eq('kind', 'month').gte('period_start', period.start).lte('period_end', period.end);
+  const monthIds = (mr ?? []).map((x) => x.id as string);
+  const allIds = [...new Set([...monthIds, rangeId])];
+  const { data } = await supabase.from('bu_parameters').select('range_id, param_key, value').eq('bu_code', 'GFFC').in('range_id', allIds).in('param_key', keys);
+  const monthSet = new Set(monthIds);
+  const agg = new Map<string, { sum: number; count: number; own: number | null }>();
+  for (const r of data ?? []) {
+    const k = r.param_key as string;
+    const e = agg.get(k) ?? { sum: 0, count: 0, own: null };
+    if (monthSet.has(r.range_id as string)) { e.sum += Number(r.value); e.count += 1; }
+    if ((r.range_id as string) === rangeId) e.own = Number(r.value);
+    agg.set(k, e);
+  }
+  for (const [k, e] of agg) {
+    if (e.count > 0) out.set(k, e.sum / e.count);
+    else if (e.own != null) out.set(k, e.own);
+  }
+  return out;
+}
+
 // GFFC Parameters: manual KPIs (per range) + auto average selling price per
 // category (category sales ÷ qty) + auto average sales/day per branch.
 export async function fetchGffcParameters(currentRangeId: string, priorRangeId: string | undefined, current: Period, prior?: Period): Promise<ParamRow[]> {
-  const rangeIds = [currentRangeId, priorRangeId].filter((x): x is string => !!x);
-  const [{ data: manual }, { data: stdRows }] = await Promise.all([
-    supabase.from('bu_parameters').select('range_id, param_key, value').eq('bu_code', 'GFFC').in('range_id', rangeIds),
+  const manualKeys = GFFC_MANUAL_PARAMS.map((m) => m.key);
+  const [{ data: stdRows }, curManual, priManual] = await Promise.all([
     supabase.from('bu_parameter_std').select('param_key, value').eq('bu_code', 'GFFC'),
+    gffcManualByRange(currentRangeId, current, manualKeys),
+    gffcManualByRange(priorRangeId, prior, manualKeys),
   ]);
-  const mval = (rid: string | undefined, key: string) => {
-    const r = manual?.find((x) => x.range_id === rid && x.param_key === key);
-    return r ? Number(r.value) : null;
-  };
   const std = new Map((stdRows ?? []).map((r) => [r.param_key as string, Number(r.value)]));
 
   const rows: ParamRow[] = [];
   for (const m of GFFC_MANUAL_PARAMS) {
-    rows.push({ key: m.key, label: m.label, std: std.has(m.key) ? std.get(m.key)! : null, prior: mval(priorRangeId, m.key), current: mval(currentRangeId, m.key), decimals: m.decimals, pct: m.pct, peso: false, cost: false });
+    rows.push({ key: m.key, label: m.label, std: std.has(m.key) ? std.get(m.key)! : null, prior: priManual.has(m.key) ? priManual.get(m.key)! : null, current: curManual.has(m.key) ? curManual.get(m.key)! : null, decimals: m.decimals, pct: m.pct, peso: false, cost: false });
   }
 
   const [salesC, qtyC, salesP, qtyP] = await Promise.all([
@@ -468,8 +497,10 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
   const br = await fetchGffcBranchPnl(current, prior);
   const dC = daysInPeriod(current);
   const dP = prior ? daysInPeriod(prior) : 0;
+  // Avg Sales/Day only for the retail branches (exclude Calamanade / Meat Cutting).
+  const SALESDAY_EXCLUDE = new Set([TOTAL, 'Calamanade', 'Meat Cutting Plant']);
   for (const b of br.branches) {
-    if (b === TOTAL) continue; // per-branch only
+    if (SALESDAY_EXCLUDE.has(b)) continue;
     const gs = br.byBranch[b]?.find((l) => l.key === 'gross_sales');
     if (!gs) continue;
     const sdKey = `salesday_${b}`;
