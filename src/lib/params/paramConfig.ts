@@ -54,7 +54,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       PNL('ops_cost', ['operations_expense', 'repairs_expense']),
       SUM('prod_plus_delivery', ['production_kilo', 'delivered_kilo']),
       SUM('total_cost', ['labor_cost', 'ops_cost']),
-      R('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 'production_kilo', 'production_hours', 0),
+      M('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 0), // entered manually, not derived
       M('rejection_count', '# Rejection', 0),
       R('kilos_per_bag', 'Kilos per Bag', 'production_kilo', 'sacks', 1),
       R('labor_cpk', 'Labor CPK (Prod + Delivery)', 'labor_cost', 'prod_plus_delivery', 3, { peso: true }),
