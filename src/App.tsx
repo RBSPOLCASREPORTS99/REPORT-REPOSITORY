@@ -22,6 +22,8 @@ const TruckingEntry = lazy(() => import('./pages/TruckingEntry'));
 const TruckPnl = lazy(() => import('./pages/TruckPnl'));
 const GffcDetail = lazy(() => import('./pages/GffcDetail'));
 const CompanyPnl = lazy(() => import('./pages/CompanyPnl'));
+const RoiLabor = lazy(() => import('./pages/RoiLabor'));
+const RoiLaborEntry = lazy(() => import('./pages/RoiLaborEntry'));
 const ParameterEntry = lazy(() => import('./pages/ParameterEntry'));
 const Users = lazy(() => import('./pages/Users'));
 const Account = lazy(() => import('./pages/Account'));
@@ -52,6 +54,7 @@ export default function App() {
                 <Route path="/bu/:code" element={<BuDetail />} />
                 <Route path="/gffc" element={<GffcDetail />} />
                 <Route path="/company" element={<CompanyPnl />} />
+                <Route path="/roi-labor" element={<RoiLabor />} />
                 {/* Trucking simulated-P&L viewer — data is RLS-gated (Finance, or
                     a BU Head assigned BU10); the /trucking entry stays Finance-only. */}
                 <Route path="/truck-pnl" element={<TruckPnl />} />
@@ -59,6 +62,7 @@ export default function App() {
                   <Route path="/import" element={<ImportWizard />} />
                   <Route path="/trucking" element={<TruckingEntry />} />
                   <Route path="/parameters" element={<ParameterEntry />} />
+                  <Route path="/roi-labor-entry" element={<RoiLaborEntry />} />
                   <Route path="/farm" element={<FarmEntry />} />
                   <Route path="/publish" element={<PublishManager />} />
                   <Route path="/users" element={<Users />} />

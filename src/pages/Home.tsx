@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
 import BuCard, { type CardDnd } from '../components/BuCard';
@@ -15,6 +17,8 @@ import { useCombine } from '../contexts/CombineContext';
 import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
 
 export default function Home() {
+  const { profile } = useAuth();
+  const canSeeReports = profile?.role === 'finance' || profile?.role === 'gm';
   const { refresh: refreshLabels, labelFor } = useBuLabels();
   const { groups, combine, uncombine } = useCombine();
   const [dragCode, setDragCode] = useState<string | null>(null);
@@ -209,11 +213,19 @@ export default function Home() {
           {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
         </div>
 
-        {/* Section for other (non-BU) reports — content to be added later. */}
+        {/* Section for other (non-BU) reports. */}
         <div className="flex items-center gap-3 pt-3">
           <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Other Reports</span>
           <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
         </div>
+        {canSeeReports && (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <Link to="/roi-labor" className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">ROI on Labor per BU</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">Net Income from Ops ÷ Total Labor Cost, ranked</span>
+            </Link>
+          </div>
+        )}
         </>
       )}
     </div>
