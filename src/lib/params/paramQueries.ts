@@ -13,15 +13,45 @@ export interface ParamRow {
   peso: boolean;
 }
 
+// The month-range ids that make up a range (itself if it is a single month).
+async function monthRangeIds(rangeId: string): Promise<{ ids: string[]; multi: boolean }> {
+  const { data: r } = await supabase.from('report_ranges').select('kind, period_start, period_end').eq('id', rangeId).maybeSingle();
+  if (!r || r.kind === 'month') return { ids: [rangeId], multi: false };
+  const { data: months } = await supabase.from('report_ranges').select('id')
+    .eq('kind', 'month').gte('period_start', r.period_start).lte('period_end', r.period_end);
+  const ids = (months ?? []).map((m) => m.id as string);
+  return { ids: ids.length ? ids : [rangeId], multi: true };
+}
+
 // Resolve every parameter's value for one range: manual (stored) + P&L (from
 // computed_pnl, ₱'000 → full pesos) + ratio (num ÷ den, computed last).
 async function resolveParams(rangeId: string | undefined, buCode: string, config: BuParamConfig): Promise<Map<string, number>> {
   const vals = new Map<string, number>();
   if (!rangeId) return vals;
 
-  // 1. manual values (stored per range).
-  const { data: manual } = await supabase.from('bu_parameters').select('param_key, value').eq('range_id', rangeId).eq('bu_code', buCode);
-  for (const r of manual ?? []) vals.set(r.param_key as string, Number(r.value));
+  // 1. manual values. For a multi-month range (YTD/quarter) the monthly entries
+  //    are auto-combined — additive params sum, rate params ('avg') average —
+  //    with a fallback to the range's own stored value for keys with no months.
+  const { ids: monthIds, multi } = await monthRangeIds(rangeId);
+  const aggIds = multi ? [...new Set([...monthIds, rangeId])] : monthIds;
+  const { data: manual } = await supabase.from('bu_parameters').select('range_id, param_key, value').in('range_id', aggIds).eq('bu_code', buCode);
+  const monthSet = new Set(monthIds);
+  const byKey = new Map<string, { sum: number; count: number; own: number | null }>();
+  for (const r of manual ?? []) {
+    const key = r.param_key as string;
+    const e = byKey.get(key) ?? { sum: 0, count: 0, own: null };
+    if (monthSet.has(r.range_id as string)) { e.sum += Number(r.value); e.count += 1; }
+    if ((r.range_id as string) === rangeId) e.own = Number(r.value);
+    byKey.set(key, e);
+  }
+  const aggMode = (key: string): 'sum' | 'avg' => {
+    const p = config.params.find((x) => x.key === key);
+    return p?.source.kind === 'manual' ? (p.aggregate ?? 'sum') : 'sum';
+  };
+  for (const [key, e] of byKey) {
+    if (e.count > 0) vals.set(key, aggMode(key) === 'avg' ? e.sum / e.count : e.sum);
+    else if (e.own != null) vals.set(key, e.own);
+  }
 
   // 2. P&L-sourced (sum of the given computed_pnl lines, ₱'000 → full pesos).
   const pnlKeys = config.params.filter((p): p is ParamDef & { source: { kind: 'pnl'; lines: string[] } } => p.source.kind === 'pnl');

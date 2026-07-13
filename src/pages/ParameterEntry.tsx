@@ -26,7 +26,8 @@ export default function ParameterEntry() {
 
   useEffect(() => {
     fetchRanges()
-      .then((r) => { setRanges(r); if (r.length > 0) setRangeId((id) => id || r[0].id); setLoading(false); })
+      // Enter parameters per month; YTD / quarter figures auto-combine from these.
+      .then((all) => { const r = all.filter((x) => x.kind === 'month'); setRanges(r); if (r.length > 0) setRangeId((id) => id || r[0].id); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
   }, []);
 
@@ -60,7 +61,8 @@ export default function ParameterEntry() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Business Parameters — entry</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Type each BU's operational parameters and STD (target) per period. Parameters marked
+        Type each BU's operational parameters and STD (target) per <span className="font-medium">month</span> — YTD and
+        quarter figures combine these automatically (quantities sum, rates average). Parameters marked
         <span className="font-medium"> auto</span> are computed from the P&amp;L or derived from other rows and appear in the Parameters tab.
       </p>
 

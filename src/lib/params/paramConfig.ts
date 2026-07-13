@@ -18,6 +18,9 @@ export interface ParamDef {
   decimals?: number;  // display precision
   pct?: boolean;      // render as a percentage
   peso?: boolean;     // render with ₱ prefix
+  // Manual params only: how to combine the monthly entries into a YTD/quarter
+  // value. Additive quantities 'sum' (default); rates/averages 'avg'.
+  aggregate?: 'sum' | 'avg';
 }
 
 export interface BuParamConfig { params: ParamDef[]; }
@@ -26,6 +29,8 @@ const M = (key: string, label: string, decimals = 0, extra: Partial<ParamDef> = 
 const PNL = (key: string, lines: string[]): ParamDef => ({ key, label: key, source: { kind: 'pnl', lines }, hidden: true });
 const SUM = (key: string, of: string[]): ParamDef => ({ key, label: key, source: { kind: 'sum', of }, hidden: true });
 const R = (key: string, label: string, num: string, den: string, decimals = 2, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'ratio', num, den }, decimals, ...extra });
+// Manual rate/average params combine across months by averaging (not summing).
+const AVG: Partial<ParamDef> = { aggregate: 'avg' };
 
 // Only BUs listed here get a Parameters tab. The P&L-line mappings (Labor =
 // Salaries & Wages, Ops = Operations + Repairs, etc.) replicate the Excel's
@@ -34,15 +39,15 @@ const R = (key: string, label: string, num: string, den: string, decimals = 2, e
 export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
   BU07: {
     params: [
-      M('growing_cost_per_kilo', 'Growing Cost per Kilo', 2, { peso: true }),
-      M('avg_grower_price', 'Average Grower Hogs Price', 2, { peso: true }),
+      M('growing_cost_per_kilo', 'Growing Cost per Kilo', 2, { peso: true, ...AVG }),
+      M('avg_grower_price', 'Average Grower Hogs Price', 2, { peso: true, ...AVG }),
       PNL('ops_cost', ['operations_expense']),
       R('ops_cost_per_kilo', 'Operations Cost per Kilo', 'ops_cost', 'harvested_kilos', 2, { peso: true }),
-      M('feeds_cost_per_kilo', 'Feeds Cost per Hogs Kilo', 2, { peso: true }),
-      M('sold_feeds_ppk', 'Sold Feeds PPK', 2, { peso: true }),
-      M('adg', 'Average Daily Gain', 3),
-      M('fcr', 'Feed Conversion Ratio', 2),
-      M('mortality_pct', '% Mortality (harvested pens)', 1, { pct: true }),
+      M('feeds_cost_per_kilo', 'Feeds Cost per Hogs Kilo', 2, { peso: true, ...AVG }),
+      M('sold_feeds_ppk', 'Sold Feeds PPK', 2, { peso: true, ...AVG }),
+      M('adg', 'Average Daily Gain', 3, AVG),
+      M('fcr', 'Feed Conversion Ratio', 2, AVG),
+      M('mortality_pct', '% Mortality (harvested pens)', 1, { pct: true, ...AVG }),
       M('harvested_heads', 'Harvested Hogs in Heads', 0),
       M('harvested_kilos', 'Harvested Hogs in Kilos', 0),
       R('avg_weight', 'Average Weight per Hog (kg)', 'harvested_kilos', 'harvested_heads', 1),
@@ -56,7 +61,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       PNL('ops_cost', ['operations_expense', 'repairs_expense', 'trucking_expense']),
       SUM('prod_plus_delivery', ['production_kilo', 'delivered_kilo']),
       SUM('total_cost', ['labor_cost', 'ops_cost']),
-      M('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 0), // entered manually, not derived
+      M('prod_kilos_per_manhour', 'Prod Kilos per Man-Hours', 0, AVG), // entered manually, not derived
       M('rejection_count', '# Rejection', 0),
       R('kilos_per_bag', 'Kilos per Bag', 'production_kilo', 'sacks', 1),
       R('labor_cpk', 'Labor CPK (Prod + Delivery)', 'labor_cost', 'prod_plus_delivery', 2, { peso: true }),
@@ -76,11 +81,11 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       PNL('trucking_cost', ['trucking_expense']),
       R('lumber_cost_per_pallet', 'Lumber Cost per Pallet', 'lumber_cost', 'accepted_delivery', 2, { peso: true }),
       R('operating_cost_per_pallet', 'Operating Cost per Pallet', 'ops_cost', 'accepted_delivery', 2, { peso: true }),
-      M('overhead_cost_per_pallet', 'Overhead Cost per Pallet', 2, { peso: true }),
+      M('overhead_cost_per_pallet', 'Overhead Cost per Pallet', 2, { peso: true, ...AVG }),
       R('labor_cost_per_pallet', 'Labor Cost per Pallet', 'labor_cost', 'accepted_delivery', 2, { peso: true }),
       R('trucking_cost_per_pallet', 'Trucking Cost per Pallet', 'trucking_cost', 'accepted_delivery', 2, { peso: true }),
-      M('cost_per_pallet', 'Cost per Pallet', 2, { peso: true }),
-      M('board_foot_per_pallet', 'Board Foot per Pallet', 2),
+      M('cost_per_pallet', 'Cost per Pallet', 2, { peso: true, ...AVG }),
+      M('board_foot_per_pallet', 'Board Foot per Pallet', 2, AVG),
       M('delivery', 'Delivery (pallets)', 0),
       M('accepted_delivery', 'Accepted Delivery', 0),
       M('rejection_count', '# Rejection', 0),
@@ -91,7 +96,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
     params: [
       PNL('prod_cost', ['cogs', 'operations_expense', 'salaries_expense']),
       R('hog_feeds_cpk', 'Hog Feeds CPK', 'prod_cost', 'production_kg', 2, { peso: true }),
-      M('hog_feeds_gpr', 'Hog Feeds GPR (if sold to LPG)', 2, { peso: true }),
+      M('hog_feeds_gpr', 'Hog Feeds GPR (if sold to LPG)', 2, { peso: true, ...AVG }),
       M('production_kg', 'Hog Feeds Production in KG', 0),
       M('production_bag', 'Hog Feeds Production in Bags', 0),
     ],
