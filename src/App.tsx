@@ -25,6 +25,7 @@ const CompanyPnl = lazy(() => import('./pages/CompanyPnl'));
 const RoiLabor = lazy(() => import('./pages/RoiLabor'));
 const RoiLaborEntry = lazy(() => import('./pages/RoiLaborEntry'));
 const SupportPnl = lazy(() => import('./pages/SupportPnl'));
+const SupportPnlEntry = lazy(() => import('./pages/SupportPnlEntry'));
 const ParameterEntry = lazy(() => import('./pages/ParameterEntry'));
 const Users = lazy(() => import('./pages/Users'));
 const Account = lazy(() => import('./pages/Account'));
@@ -65,6 +66,7 @@ export default function App() {
                   <Route path="/trucking" element={<TruckingEntry />} />
                   <Route path="/parameters" element={<ParameterEntry />} />
                   <Route path="/roi-labor-entry" element={<RoiLaborEntry />} />
+                  <Route path="/support-entry" element={<SupportPnlEntry />} />
                   <Route path="/farm" element={<FarmEntry />} />
                   <Route path="/publish" element={<PublishManager />} />
                   <Route path="/users" element={<Users />} />

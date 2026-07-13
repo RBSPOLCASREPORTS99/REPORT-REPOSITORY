@@ -5,6 +5,7 @@ import { loadBuConfigs } from '../pnl/loadBuConfigs';
 import { TRUCKS, truckPivotColumn, extractTruckAccounts } from '../pnl/truckConfig';
 import { extractBuInputs, extractPools, extractBu10Salaries, extractCogsVariance, type TruckingInputs } from '../pnl/computeBuPnl';
 import { COLS } from '../pnl/buConfig';
+import { SERVICE_BUS } from '../supportQueries';
 import { deriveRanges } from '../pnl/deriveRanges';
 import { monthLabel } from '../format';
 
@@ -113,6 +114,12 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   ].map((s) => ({ month_id: monthId, unit: s.unit, ...extractBuInputs(pivot, { memberColumns: [s.col] }) }));
   const { error: supErr } = await supabase.from('monthly_support_pnl').insert(supportRows);
   if (supErr) throw supErr;
+
+  // 4g. per-BU revenue for the support-unit services breakdown (% method).
+  await supabase.from('monthly_support_bu_revenue').delete().eq('month_id', monthId);
+  const buRevRows = SERVICE_BUS.map((b) => ({ month_id: monthId, bu_code: b.code, gross_sales: extractBuInputs(pivot, { memberColumns: b.cols }).gross_sales }));
+  const { error: brErr } = await supabase.from('monthly_support_bu_revenue').insert(buRevRows);
+  if (brErr) throw brErr;
 
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batch.id);
 

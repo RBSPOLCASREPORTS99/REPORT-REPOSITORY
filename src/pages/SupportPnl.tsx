@@ -61,15 +61,21 @@ export default function SupportPnl() {
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">Revenue = % of company revenue; expenses actual from the P&amp;L-per-Class import.</p>
-        <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          % of Revenue
-          {profile?.role === 'finance' ? (
-            <input value={pctText} onChange={(e) => setPctText(e.target.value)} onBlur={savePct}
-              className="w-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
-          ) : <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{((res?.pct ?? 0) * 100).toLocaleString(undefined, { maximumFractionDigits: 3 })}</span>}
-          %
-        </label>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">Revenue = % of revenue (or per transaction / PAX); expenses actual from the P&amp;L-per-Class import.</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            % of Revenue
+            {profile?.role === 'finance' ? (
+              <input value={pctText} onChange={(e) => setPctText(e.target.value)} onBlur={savePct}
+                className="w-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
+            ) : <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200">{((res?.pct ?? 0) * 100).toLocaleString(undefined, { maximumFractionDigits: 3 })}</span>}
+            %
+          </label>
+          {profile?.role === 'finance' && (
+            <Link to="/support-entry" title="Method & inputs" aria-label="Method and inputs"
+              className="rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-600 dark:bg-slate-700 dark:text-slate-300">✎</Link>
+          )}
+        </div>
       </div>
 
       {loading ? <TableSkeleton /> : !res?.hasData ? (
