@@ -42,7 +42,8 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
     params: [
       M('growing_cost_per_kilo', 'Growing Cost per Kilo', 2, { peso: true, cost: true, ...AVG }),
       M('avg_grower_price', 'Average Grower Hogs Price', 2, { peso: true, ...AVG }),
-      PNL('ops_cost', ['operations_expense']),
+      // Operations Cost = Operations + allocated Trucking Services + Salaries & Wages.
+      PNL('ops_cost', ['operations_expense', 'trucking_expense', 'salaries_expense']),
       R('ops_cost_per_kilo', 'Operations Cost per Kilo', 'ops_cost', 'harvested_kilos', 2, { peso: true, cost: true }),
       M('feeds_cost_per_kilo', 'Feeds Cost per Hogs Kilo', 2, { peso: true, cost: true, ...AVG }),
       M('sold_feeds_ppk', 'Sold Feeds PPK', 2, { peso: true, ...AVG }),
