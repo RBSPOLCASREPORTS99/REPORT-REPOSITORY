@@ -137,8 +137,17 @@ export async function fetchSupportPnl(unit: SupportUnit, currentRangeId: string,
   ]);
 
   const excl = new Set(exclude);
-  // Per-BU service income = revenue×% (pct) or count×rate (per_txn / per_pax).
-  const serviceOf = (basis: Map<string, number>, code: string) => (excl.has(code) ? 0 : (basis.get(code) ?? 0) * (method === 'pct' ? pct : rate));
+  // Everything is emitted in FULL pesos (the shared P&L table expects full pesos).
+  // Revenue basis (bu_revenue) is ₱'000, so the % method ×1000; per-txn/per-PAX
+  // rates are already full pesos. Expenses are ₱'000, so ×1000.
+  const K = 1000;
+  const serviceOf = (basis: Map<string, number>, code: string) => {
+    if (excl.has(code)) return 0;
+    const b = basis.get(code) ?? 0;
+    return method === 'pct' ? b * pct * K : b * rate;
+  };
+  const eC = { admin: expC.admin * K, finance: expC.finance * K, operations: expC.operations * K, repairs: expC.repairs * K, salaries: expC.salaries * K, other: expC.other * K };
+  const eP = { admin: expP.admin * K, finance: expP.finance * K, operations: expP.operations * K, repairs: expP.repairs * K, salaries: expP.salaries * K, other: expP.other * K };
 
   const L = (key: string, label: string, kind: SupportLineKind, current: number, prior: number, cost?: boolean): SupportLine => ({ key, label, kind, current, prior, cost });
   const serviceLines = SERVICE_BUS
@@ -147,23 +156,23 @@ export async function fetchSupportPnl(unit: SupportUnit, currentRangeId: string,
   const revenueC = serviceLines.reduce((s, l) => s + l.current, 0);
   const revenueP = serviceLines.reduce((s, l) => s + l.prior, 0);
 
-  const totExpC = expC.admin + expC.finance + expC.operations + expC.repairs + expC.salaries;
-  const totExpP = expP.admin + expP.finance + expP.operations + expP.repairs + expP.salaries;
-  const netC = revenueC - totExpC + expC.other;
-  const netP = revenueP - totExpP + expP.other;
+  const totExpC = eC.admin + eC.finance + eC.operations + eC.repairs + eC.salaries;
+  const totExpP = eP.admin + eP.finance + eP.operations + eP.repairs + eP.salaries;
+  const netC = revenueC - totExpC + eC.other;
+  const netP = revenueP - totExpP + eP.other;
 
   const lines: SupportLine[] = [
     ...serviceLines,
     L('gross_sales', 'Gross Sales — Services', 'gross', revenueC, revenueP),
     L('cost_of_services', 'Cost of Services', 'cogs', 0, 0, true),
     L('gross_income', 'Gross Income', 'gross_income', revenueC, revenueP),
-    L('admin_expense', 'Admin Expense', 'expense', expC.admin, expP.admin, true),
-    L('finance_expense', 'Finance Expense', 'expense', expC.finance, expP.finance, true),
-    L('operations_expense', 'Operations Expense', 'expense', expC.operations, expP.operations, true),
-    L('repairs_expense', 'Repairs/Maint. Expense', 'expense', expC.repairs, expP.repairs, true),
-    L('salaries_expense', 'Salaries & Wages', 'expense', expC.salaries, expP.salaries, true),
+    L('admin_expense', 'Admin Expense', 'expense', eC.admin, eP.admin, true),
+    L('finance_expense', 'Finance Expense', 'expense', eC.finance, eP.finance, true),
+    L('operations_expense', 'Operations Expense', 'expense', eC.operations, eP.operations, true),
+    L('repairs_expense', 'Repairs/Maint. Expense', 'expense', eC.repairs, eP.repairs, true),
+    L('salaries_expense', 'Salaries & Wages', 'expense', eC.salaries, eP.salaries, true),
     L('total_expense', 'Total Expense', 'total', totExpC, totExpP, true),
-    L('other_income', 'Other Income', 'other', expC.other, expP.other),
+    L('other_income', 'Other Income', 'other', eC.other, eP.other),
     L('net_income', 'Net Income', 'net', netC, netP),
     L('net_income_pct', 'Net Income %', 'pct', revenueC ? netC / revenueC : 0, revenueP ? netP / revenueP : 0),
   ];
