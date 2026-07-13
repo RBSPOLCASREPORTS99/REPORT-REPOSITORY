@@ -11,11 +11,15 @@ const ROLE_LABELS: Record<UserRole, string> = {
   bu_head: 'BU Head (assigned BUs only)',
 };
 
-// Selectable BUs = the profit centers that have a P&L. Assigning BU08 also
-// grants its children (Farm / Packhouse) via the RLS parent rule.
-const SELECTABLE_BUS = BUSINESS_UNITS.filter((b) => b.isProfitCenter);
+// GFFC (Chickboy Meating Place) is a separate company, assignable so a BU Head
+// can be given GFFC-only access.
+const GFFC_UNIT = { code: 'GFFC', name: 'Chickboy Meating Place', isProfitCenter: true };
 
-const buName = (code: string) => BUSINESS_UNITS.find((b) => b.code === code)?.name ?? code;
+// Selectable BUs = the profit centers that have a P&L, plus GFFC. Assigning BU08
+// also grants its children (Farm / Packhouse) via the RLS parent rule.
+const SELECTABLE_BUS = [...BUSINESS_UNITS.filter((b) => b.isProfitCenter), GFFC_UNIT];
+
+const buName = (code: string) => (code === 'GFFC' ? GFFC_UNIT.name : BUSINESS_UNITS.find((b) => b.code === code)?.name ?? code);
 
 const emptyForm = { email: '', full_name: '', role: 'bu_head' as UserRole, bus: [] as string[] };
 
