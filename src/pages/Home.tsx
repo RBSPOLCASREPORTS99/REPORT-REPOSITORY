@@ -208,6 +208,12 @@ export default function Home() {
           {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} index={cards.length} />}
           {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
         </div>
+
+        {/* Section for other (non-BU) reports — content to be added later. */}
+        <div className="flex items-center gap-3 pt-3">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Other Reports</span>
+          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+        </div>
         </>
       )}
     </div>
