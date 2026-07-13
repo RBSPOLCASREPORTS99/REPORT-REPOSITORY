@@ -109,8 +109,14 @@ export default function SupportPnl() {
         <ExpenseTable sections={sections} priorLabel={priorLabel} currentLabel={currentLabel}
           canEdit={isFinance}
           onReclassify={async (account, section) => {
-            if (!meta) return;
-            try { await saveExpenseSection(supportOverrideKey(meta.unit, account), section); reload(); } catch (e) { setError((e as Error).message); }
+            if (!meta || !cmp?.currentId) return;
+            // Quiet refetch (no loading skeleton) so the table keeps its expanded
+            // state and the account visibly moves between C / NC.
+            try {
+              await saveExpenseSection(supportOverrideKey(meta.unit, account), section);
+              const e = await fetchSupportExpenses(meta.unit, cmp.currentId, cmp.priorId);
+              setSections(e.sections);
+            } catch (e) { setError((e as Error).message); }
           }} />
       ) : !res?.hasData ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">No data for this period. Import the monthly P&amp;L (which now captures Finance / HR / Management expenses).</p>
