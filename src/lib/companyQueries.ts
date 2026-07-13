@@ -48,9 +48,9 @@ async function sumPeriod(period: CompanyPeriod): Promise<CompanyInputs | null> {
   return agg;
 }
 
-export async function fetchCompanyPnl(current: CompanyPeriod, prior?: CompanyPeriod): Promise<{ hasData: boolean; lines: ComparisonLine[]; net: number; priorNet: number }> {
+export async function fetchCompanyPnl(current: CompanyPeriod, prior?: CompanyPeriod): Promise<{ hasData: boolean; lines: ComparisonLine[]; net: number; priorNet: number; grossSales: number }> {
   const [cur, pri] = await Promise.all([sumPeriod(current), prior ? sumPeriod(prior) : Promise.resolve(null)]);
-  if (!cur) return { hasData: false, lines: [], net: 0, priorNet: 0 };
+  if (!cur) return { hasData: false, lines: [], net: 0, priorNet: 0, grossSales: 0 };
   const p = pri ?? ZERO;
 
   const gsC = cur.gross_sales, gsP = p.gross_sales;
@@ -84,5 +84,5 @@ export async function fetchCompanyPnl(current: CompanyPeriod, prior?: CompanyPer
     line('net_income', netC, netP),
     line('net_income_pct', gsC !== 0 ? netC / gsC : 0, gsP !== 0 ? netP / gsP : 0, true),
   ];
-  return { hasData: true, lines, net: netC, priorNet: netP };
+  return { hasData: true, lines, net: netC, priorNet: netP, grossSales: gsC };
 }

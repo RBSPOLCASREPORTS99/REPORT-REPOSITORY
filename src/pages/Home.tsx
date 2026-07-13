@@ -14,7 +14,7 @@ import { fetchCompanyPnl } from '../lib/companyQueries';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import { useCombine } from '../contexts/CombineContext';
-import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
+import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type BuMetric, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
 
 export default function Home() {
   const { profile } = useAuth();
@@ -28,8 +28,9 @@ export default function Home() {
   const [cards, setCards] = useState<BuCardData[]>([]);
   const [truck, setTruck] = useState<TruckPnlResult | null>(null);
   const [gffc, setGffc] = useState<GffcPnlResult | null>(null);
-  const [company, setCompany] = useState<{ net: number; priorNet: number } | null>(null);
+  const [company, setCompany] = useState<{ net: number; priorNet: number; grossSales: number } | null>(null);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
+  const [buMetric, setBuMetric] = useState<BuMetric>('net_income');
   const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0); // bump to re-fetch
@@ -119,7 +120,7 @@ export default function Home() {
       { start: curR.period_start, end: curR.period_end },
       priR ? { start: priR.period_start, end: priR.period_end } : undefined,
     )
-      .then((c) => { if (!cancelled) setCompany(c.hasData ? { net: c.net, priorNet: c.priorNet } : null); })
+      .then((c) => { if (!cancelled) setCompany(c.hasData ? { net: c.net, priorNet: c.priorNet, grossSales: c.grossSales } : null); })
       .catch(() => { if (!cancelled) setCompany(null); });
     return () => { cancelled = true; };
   }, [cmp?.currentId, cmp?.priorId, ranges, tick]);
@@ -136,13 +137,19 @@ export default function Home() {
     .map((g) => {
       const members = cards.filter((c) => g.includes(c.buCode));
       if (members.length < 2) return null;
-      const netIncome = members.reduce((s, m) => s + m.netIncome, 0);
-      const diff = members.reduce((s, m) => s + m.diff, 0);
+      const sum = (get: (m: BuCardData) => number) => members.reduce((s, m) => s + get(m), 0);
+      const netIncome = sum((m) => m.netIncome);
+      const diff = sum((m) => m.diff);
       const prior = netIncome - diff;
+      const netIncomeOps = sum((m) => m.netIncomeOps);
+      const opsDiff = sum((m) => m.opsDiff);
+      const opsPrior = netIncomeOps - opsDiff;
       const data: CombinedCardData = {
         codes: members.map((m) => m.buCode),
         labels: members.map((m) => labelFor(m.buCode)),
         netIncome, diff, pctDiff: prior !== 0 ? diff / prior : 0,
+        netIncomeOps, opsDiff, opsPctDiff: opsPrior !== 0 ? opsDiff / opsPrior : 0,
+        grossSales: sum((m) => m.grossSales),
       };
       return { key: data.codes.join('+'), data };
     })
@@ -174,9 +181,15 @@ export default function Home() {
         <div className="flex flex-1 justify-center">
           <SetMonthSelect ranges={ranges} />
         </div>
-        <button onClick={refresh} title="Reload data"
-          className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-          ↻ Refresh
+        <select value={buMetric} onChange={(e) => setBuMetric(e.target.value as BuMetric)}
+          title="Value shown in each BU box"
+          className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <option value="net_income">Net Income</option>
+          <option value="net_income_ops">Net Income from Ops</option>
+        </select>
+        <button onClick={refresh} title="Reload data" aria-label="Refresh"
+          className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-base font-medium leading-none text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+          ↻
         </button>
       </div>
 
@@ -201,13 +214,13 @@ export default function Home() {
         {/* Finer tracks (2× the columns, every card spans 2) so the company
             Total P&L card can span 4 — i.e. 2× a normal BU box. */}
         <div className="grid grid-cols-4 items-start gap-2.5 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 [&>*]:col-span-2">
-          {company && <CompanyCard net={company.net} priorNet={company.priorNet} priorLabel={cmp?.priorLabel} index={0} />}
+          {company && <CompanyCard net={company.net} priorNet={company.priorNet} grossSales={company.grossSales} priorLabel={cmp?.priorLabel} index={0} />}
           {groupCards.map((gc, i) => (
-            <CombinedCard key={gc.key} data={gc.data} priorLabel={cmp?.priorLabel} index={i}
+            <CombinedCard key={gc.key} data={gc.data} priorLabel={cmp?.priorLabel} metric={buMetric} index={i}
               onUncombine={() => uncombine(gc.data.codes[0])} dnd={dndFor(gc.data.codes[0])} />
           ))}
           {standalone.map((bu, i) => (
-            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} index={groupCards.length + i} dnd={dndFor(bu.buCode)} />
+            <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} metric={buMetric} index={groupCards.length + i} dnd={dndFor(bu.buCode)} />
           ))}
           {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} index={cards.length} />}
           {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}

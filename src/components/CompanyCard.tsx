@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatPercent } from '../lib/format';
 import { useUi } from '../contexts/UiContext';
 
 // Home-grid card for the company-wide Total P&L (POLCAS AGRI TRADE CORP.).
 // Opens the company P&L screen (/company). Values are ₱ '000.
-export default function CompanyCard({ net, priorNet, priorLabel, index = 0 }: { net: number; priorNet: number; priorLabel?: string; index?: number }) {
+export default function CompanyCard({ net, priorNet, grossSales, priorLabel, index = 0 }: { net: number; priorNet: number; grossSales: number; priorLabel?: string; index?: number }) {
   const { units } = useUi();
   const diff = net - priorNet;
   const up = diff >= 0;
   const loss = net < 0;
+  const margin = grossSales !== 0 ? net / grossSales : null;
+  const pctDiff = priorNet !== 0 ? diff / priorNet : 0;
   const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
   return (
     <Link
@@ -18,23 +20,35 @@ export default function CompanyCard({ net, priorNet, priorLabel, index = 0 }: { 
     >
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">POLCAS AGRI TRADE CORP. · Total P&amp;L</span>
       <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Company net income</span>
-      <span
-        className={`text-2xl font-bold tabular-nums ${
-          loss ? 'text-rose-600 dark:text-rose-400' : 'bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent dark:from-emerald-300 dark:to-teal-300'
-        }`}
-      >
-        {money(net, true)}
-      </span>
-      {priorLabel && (
-        <div className="mt-1 flex items-center gap-1.5">
-          <span
-            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-              up ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
-            }`}
-          >
-            {up ? '▲' : '▼'} {money(Math.abs(diff))}
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={`text-2xl font-bold tabular-nums ${
+            loss ? 'text-rose-600 dark:text-rose-400' : 'bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent dark:from-emerald-300 dark:to-teal-300'
+          }`}
+        >
+          {money(net, true)}
+        </span>
+        {margin !== null && (
+          <span className="shrink-0 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+            {formatPercent(margin)}<span className="ml-0.5 text-[9px] font-normal text-slate-400 dark:text-slate-500">of sales</span>
           </span>
-          <span className="truncate text-[10px] text-slate-400 dark:text-slate-500">vs {priorLabel}</span>
+        )}
+      </div>
+      {priorLabel && (
+        <div className="mt-1 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                up ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
+              }`}
+            >
+              {up ? '▲' : '▼'} {money(Math.abs(diff))}
+            </span>
+            <span className="truncate text-[10px] text-slate-400 dark:text-slate-500">vs {priorLabel}</span>
+          </div>
+          <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {up ? '▲' : '▼'} {formatPercent(Math.abs(pctDiff))} change
+          </span>
         </div>
       )}
     </Link>

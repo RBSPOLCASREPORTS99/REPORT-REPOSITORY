@@ -101,29 +101,77 @@ async function netIncomeByBu(rangeId: string, method: AllocMethod = 'gross_sales
   return net;
 }
 
-export interface BuCardData {
+export type BuMetric = 'net_income' | 'net_income_ops';
+
+// Common shape shared by BU boxes and combined boxes — enough to render either
+// the Net Income or the Net Income from Ops view (value, margin, diff, %diff).
+export interface CardMetricInput {
+  netIncome: number; diff: number; pctDiff: number;
+  netIncomeOps: number; opsDiff: number; opsPctDiff: number;
+  grossSales: number;
+}
+
+// Resolve which figures a card shows for the selected metric. `margin` is the
+// value as a % of gross sales (null when gross sales is 0 / unknown).
+export function pickMetric(metric: BuMetric, d: CardMetricInput): { value: number; margin: number | null; diff: number; pctDiff: number } {
+  const ops = metric === 'net_income_ops';
+  const value = ops ? d.netIncomeOps : d.netIncome;
+  return {
+    value,
+    margin: d.grossSales !== 0 ? value / d.grossSales : null,
+    diff: ops ? d.opsDiff : d.diff,
+    pctDiff: ops ? d.opsPctDiff : d.pctDiff,
+  };
+}
+
+export interface BuCardData extends CardMetricInput {
   buCode: string;
   buName: string;
-  netIncome: number;
-  diff: number;
-  pctDiff: number;
+}
+
+// Per-BU line items (gross_sales, net_income_ops) for a range — method-independent
+// (both are computed before support-center allocation), read straight from computed_pnl.
+async function linesByBu(rangeId: string, items: string[]): Promise<Map<string, Record<string, number>>> {
+  const { data, error } = await supabase
+    .from('computed_pnl')
+    .select('bu_code, line_item, amount')
+    .eq('range_id', rangeId)
+    .in('line_item', items);
+  if (error) throw error;
+  const out = new Map<string, Record<string, number>>();
+  for (const r of data ?? []) {
+    const code = r.bu_code as string;
+    if (!out.has(code)) out.set(code, {});
+    out.get(code)![r.line_item as string] = r.amount as number;
+  }
+  return out;
 }
 
 export async function fetchBuCards(currentRangeId: string, priorRangeId?: string, method: AllocMethod = 'gross_sales'): Promise<BuCardData[]> {
   const nameByCode = new Map(BUSINESS_UNITS.map((bu) => [bu.code, bu.name]));
-  const [cur, pri] = await Promise.all([
+  const [cur, pri, curLines, priLines] = await Promise.all([
     netIncomeByBu(currentRangeId, method),
     priorRangeId ? netIncomeByBu(priorRangeId, method) : Promise.resolve(new Map<string, number>()),
+    linesByBu(currentRangeId, ['gross_sales', 'net_income_ops']),
+    priorRangeId ? linesByBu(priorRangeId, ['gross_sales', 'net_income_ops']) : Promise.resolve(new Map<string, Record<string, number>>()),
   ]);
   return [...cur.entries()]
     .map(([buCode, netIncome]) => {
       const prior = pri.get(buCode) ?? 0;
+      const cl = curLines.get(buCode) ?? {};
+      const pl = priLines.get(buCode) ?? {};
+      const opsCur = cl.net_income_ops ?? 0;
+      const opsPri = pl.net_income_ops ?? 0;
       return {
         buCode,
         buName: nameByCode.get(buCode) ?? buCode,
         netIncome,
         diff: netIncome - prior,
         pctDiff: prior !== 0 ? (netIncome - prior) / prior : 0,
+        grossSales: cl.gross_sales ?? 0,
+        netIncomeOps: opsCur,
+        opsDiff: opsCur - opsPri,
+        opsPctDiff: opsPri !== 0 ? (opsCur - opsPri) / opsPri : 0,
       };
     })
     .sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));
