@@ -143,7 +143,8 @@ export default function Home() {
       return { key: data.codes.join('+'), data };
     })
     .filter((x): x is { key: string; data: CombinedCardData } => x !== null);
-  const standalone = cards.filter((c) => !groupedCodes.has(c.buCode));
+  // Auto-hide BUs with zero Net Income (no transactions this period, or closed).
+  const standalone = cards.filter((c) => !groupedCodes.has(c.buCode) && c.netIncome !== 0);
 
   const dndFor = (code: string): CardDnd => ({
     onDragStart: () => setDragCode(code),
