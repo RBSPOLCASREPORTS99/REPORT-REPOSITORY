@@ -17,9 +17,11 @@ export default function Welcome({ onProceed }: { onProceed: () => void }) {
           Welcome to
         </p>
 
-        <h1 style={rise(120)} className="animate-rise mt-1 text-balance font-serif text-4xl font-bold leading-[1.04] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl dark:text-slate-100">
-          POLCAS
-          <span className="block bg-gradient-to-r from-brand-700 to-brand-500 bg-clip-text text-transparent dark:from-brand-300 dark:to-brand-500">
+        <h1 style={rise(120)} className="animate-rise mt-1 text-balance font-serif font-bold leading-[1.05] tracking-tight">
+          <span className="block text-3xl text-slate-900 sm:text-4xl lg:text-5xl dark:text-slate-100">
+            POLCAS AGRI TRADE CORP.
+          </span>
+          <span className="mt-1 block bg-gradient-to-r from-brand-700 to-brand-500 bg-clip-text text-4xl text-transparent sm:text-5xl lg:text-6xl dark:from-brand-300 dark:to-brand-500">
             Business Review
           </span>
         </h1>
@@ -39,10 +41,6 @@ export default function Welcome({ onProceed }: { onProceed: () => void }) {
           Enter dashboard
         </button>
       </div>
-
-      <p className="absolute bottom-6 left-0 right-0 font-serif text-[11px] uppercase tracking-[0.32em] text-slate-400 dark:text-slate-600">
-        POLCAS Agri Trade Corp.
-      </p>
     </div>
   );
 }
