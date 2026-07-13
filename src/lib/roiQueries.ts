@@ -59,31 +59,29 @@ async function truckLabor(period: { start: string; end: string } | undefined): P
   return (sal ?? []).reduce((s, r) => s + Number(r.amount), 0);
 }
 
-const periodOf = (ranges: RangeRow[], id?: string) => {
-  const r = ranges.find((x) => x.id === id);
-  return r ? { start: r.period_start, end: r.period_end } : undefined;
-};
-
 export async function fetchRoiLabor(currentRangeId: string, priorRangeId?: string): Promise<RoiRow[]> {
   const ranges = await fetchRanges();
-  const curP = periodOf(ranges, currentRangeId);
-  const priP = periodOf(ranges, priorRangeId);
-  const rangeIds = [currentRangeId, priorRangeId].filter((x): x is string => !!x);
+  const curRange = ranges.find((r) => r.id === currentRangeId);
+  const priRange = ranges.find((r) => r.id === priorRangeId);
+  const curP = curRange ? { start: curRange.period_start, end: curRange.period_end } : undefined;
+  const priP = priRange ? { start: priRange.period_start, end: priRange.period_end } : undefined;
+  // The month ranges a range covers (itself if a single month). YTD/quarter thus
+  // aggregate their months, so per-month manual overrides carry into the total.
+  const monthRangesIn = (r?: RangeRow) => (!r ? [] : r.kind === 'month' ? [r] : ranges.filter((x) => x.kind === 'month' && x.period_start >= r.period_start && x.period_end <= r.period_end));
+  const curMR = monthRangesIn(curRange);
+  const priMR = monthRangesIn(priRange);
+  const monthIds = [...new Set([...curMR, ...priMR].map((r) => r.id))];
 
-  // 1. POLCAS BUs from computed_pnl (₱'000 → ×1000 full pesos). BU08LF (Lakatan
-  //    Farm) keeps its "Labor" input under discounting_expense (salaries_expense
-  //    is the farm's "Planting" line), so it uses that as its labor cost.
-  const [{ data: pnl }, { data: ov }, truck, truckLab, gffcC, gffcP, truckLabP] = await Promise.all([
-    supabase.from('computed_pnl').select('range_id, bu_code, line_item, amount').in('range_id', rangeIds).in('line_item', ['net_income_ops', 'salaries_expense', 'discounting_expense']),
-    supabase.from('roi_labor_manual').select('range_id, bu_code, net_income, labor_cost').eq('range_id', currentRangeId),
+  // 1. POLCAS BUs from computed_pnl per constituent month (₱'000 → ×1000 full
+  //    pesos). BU08LF's labor is its "Labor" line (discounting_expense).
+  const [{ data: pnl }, { data: ovMonthly }, { data: ovAgg }, truck, truckLab, gffcC, gffcP, truckLabP] = await Promise.all([
+    supabase.from('computed_pnl').select('range_id, bu_code, line_item, amount').in('range_id', monthIds).in('line_item', ['net_income_ops', 'salaries_expense', 'discounting_expense']),
+    supabase.from('roi_labor_manual').select('range_id, bu_code, net_income, labor_cost').in('range_id', monthIds),
+    supabase.from('roi_labor_manual').select('bu_code, net_income, labor_cost').eq('range_id', currentRangeId),
     fetchTruckPnl(curP ?? { start: '', end: '' }, priP).catch(() => ({ hasData: false, net: 0, priorNet: 0 } as { hasData: boolean; net: number; priorNet: number })),
-    truckLabor(curP),
-    gffcNiLabor(curP),
-    gffcNiLabor(priP),
-    truckLabor(priP),
+    truckLabor(curP), gffcNiLabor(curP), gffcNiLabor(priP), truckLabor(priP),
   ]);
 
-  // range_id -> bu_code -> { ni, salaries, disc } in full pesos.
   const byRange = new Map<string, Map<string, { ni: number; salaries: number; disc: number }>>();
   for (const r of pnl ?? []) {
     const rid = r.range_id as string, code = r.bu_code as string;
@@ -95,28 +93,52 @@ export async function fetchRoiLabor(currentRangeId: string, priorRangeId?: strin
     if (r.line_item === 'salaries_expense') e.salaries = Number(r.amount) * 1000;
     if (r.line_item === 'discounting_expense') e.disc = Number(r.amount) * 1000;
   }
-  // BU08LF's labor is its "Labor" line (discounting_expense); others use salaries.
+  // Per-month manual overrides (full pesos): range_id -> bu -> { net_income, labor_cost }.
+  const ovBy = new Map<string, Map<string, { net_income: number | null; labor_cost: number | null }>>();
+  for (const r of ovMonthly ?? []) {
+    const rid = r.range_id as string;
+    if (!ovBy.has(rid)) ovBy.set(rid, new Map());
+    ovBy.get(rid)!.set(r.bu_code as string, { net_income: r.net_income as number | null, labor_cost: r.labor_cost as number | null });
+  }
   const laborOf = (code: string, e: { salaries: number; disc: number }) => (code === 'BU08LF' ? e.disc : e.salaries);
-  const niLabor = (rid?: string): Map<string, { ni: number; labor: number }> => {
-    const src = rid ? byRange.get(rid) ?? new Map() : new Map();
-    return new Map([...src].map(([code, e]) => [code, { ni: e.ni, labor: laborOf(code, e) }]));
+
+  // Sum a range's months: value = Σ (monthOverride ?? monthAuto); also the pure
+  // auto sum (for the entry form's placeholder).
+  const aggregate = (mrs: RangeRow[]) => {
+    const out = new Map<string, { ni: number; labor: number; autoNi: number; autoLabor: number }>();
+    const codes = new Set<string>();
+    for (const mr of mrs) for (const c of byRange.get(mr.id)?.keys() ?? []) codes.add(c);
+    for (const code of codes) {
+      let ni = 0, labor = 0, autoNi = 0, autoLabor = 0;
+      for (const mr of mrs) {
+        const auto = byRange.get(mr.id)?.get(code) ?? { ni: 0, salaries: 0, disc: 0 };
+        const aNi = auto.ni, aLabor = laborOf(code, auto);
+        const o = ovBy.get(mr.id)?.get(code);
+        autoNi += aNi; autoLabor += aLabor;
+        ni += o?.net_income != null ? Number(o.net_income) : aNi;
+        labor += o?.labor_cost != null ? Number(o.labor_cost) : aLabor;
+      }
+      out.set(code, { ni, labor, autoNi, autoLabor });
+    }
+    return out;
   };
-  const cur = niLabor(currentRangeId);
-  const pri = priorRangeId ? niLabor(priorRangeId) : new Map<string, { ni: number; labor: number }>();
+  const cur = aggregate(curMR);
+  const pri = aggregate(priMR);
 
-  // 2. Add BU10 (Trucking) and GFFC.
-  cur.set('BU10', { ni: (truck.net || 0) * 1000, labor: truckLab * 1000 });
-  pri.set('BU10', { ni: (truck.priorNet || 0) * 1000, labor: truckLabP * 1000 });
-  cur.set('GFFC', gffcC);
-  pri.set('GFFC', gffcP);
+  // 2. BU10 (Trucking) and GFFC — period auto (no per-month override tracked).
+  const set2 = (m: typeof cur, code: string, ni: number, labor: number) => m.set(code, { ni, labor, autoNi: ni, autoLabor: labor });
+  set2(cur, 'BU10', (truck.net || 0) * 1000, truckLab * 1000);
+  set2(pri, 'BU10', (truck.priorNet || 0) * 1000, truckLabP * 1000);
+  set2(cur, 'GFFC', gffcC.ni, gffcC.labor);
+  set2(pri, 'GFFC', gffcP.ni, gffcP.labor);
 
-  // 3. Overrides (current range only).
-  const overrides = new Map((ov ?? []).map((r) => [r.bu_code as string, r]));
+  // 3. A manual override set directly on the viewed range wins over the month sum.
+  const overrides = new Map((ovAgg ?? []).map((r) => [r.bu_code as string, r]));
 
   const codes = [...new Set([...cur.keys(), ...pri.keys()])];
   const rows = codes.map((code) => {
-    const c = cur.get(code) ?? { ni: 0, labor: 0 };
-    const p = pri.get(code) ?? { ni: 0, labor: 0 };
+    const c = cur.get(code) ?? { ni: 0, labor: 0, autoNi: 0, autoLabor: 0 };
+    const p = pri.get(code) ?? { ni: 0, labor: 0, autoNi: 0, autoLabor: 0 };
     const o = overrides.get(code);
     const netIncome = o?.net_income != null ? Number(o.net_income) : c.ni;
     const laborCost = o?.labor_cost != null ? Number(o.labor_cost) : c.labor;
@@ -124,8 +146,8 @@ export async function fetchRoiLabor(currentRangeId: string, priorRangeId?: strin
       buCode: code, label: labelFor(code),
       netIncome, laborCost, roi: roi(netIncome, laborCost), rank: 0,
       priorNetIncome: p.ni, priorLaborCost: p.labor, priorRoi: roi(p.ni, p.labor), priorRank: 0,
-      autoNetIncome: c.ni, autoLaborCost: c.labor,
-      overridden: !!o && (o.net_income != null || o.labor_cost != null),
+      autoNetIncome: c.autoNi, autoLaborCost: c.autoLabor,
+      overridden: (!!o && (o.net_income != null || o.labor_cost != null)) || c.ni !== c.autoNi || c.labor !== c.autoLabor,
     };
   }).filter((r) => r.netIncome !== 0 || r.laborCost !== 0 || r.priorNetIncome !== 0 || r.priorLaborCost !== 0);
 
