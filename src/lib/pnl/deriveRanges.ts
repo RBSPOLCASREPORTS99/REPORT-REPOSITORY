@@ -128,9 +128,10 @@ async function materializeRange(
     for (const item of PNL_LINE_ITEMS) {
       const amount = side[item.key] ?? 0;
       // For the variance BUs, split COGS: Cost of Goods Sold (= Total − variance),
-      // the variance line, then Total Cost of Goods Sold (= Total COGS). Gross
-      // Income is unchanged (still Gross Sales − Total COGS).
-      if (item.key === 'cogs' && cfg.buCode in COGS_VARIANCE_LABELS && variance !== 0) {
+      // the variance line, then Total Cost of Goods Sold (= Total COGS). Always
+      // emit all three (even when the variance is 0) so Total COGS is never blank.
+      // Gross Income is unchanged (still Gross Sales − Total COGS).
+      if (item.key === 'cogs' && cfg.buCode in COGS_VARIANCE_LABELS) {
         push('cogs', amount - variance);
         push('cogs_variance', variance);
         push('cogs_total', amount);
