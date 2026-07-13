@@ -6,6 +6,7 @@ import { BuLabelsProvider } from './contexts/BuLabelsContext';
 import { CombineProvider } from './contexts/CombineContext';
 import { RequireAuth, RequireFinance } from './components/RouteGuards';
 import ErrorBoundary from './components/ErrorBoundary';
+import WelcomeGate from './components/WelcomeGate';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -50,6 +51,8 @@ export default function App() {
             <Route element={<RequireAuth />}>
               {/* Full-screen present view lives outside the Layout chrome. */}
               <Route path="/present" element={<PresentMode />} />
+              {/* Welcome title screen gates the dashboard once per session. */}
+              <Route element={<WelcomeGate />}>
               <Route element={<Layout />}>
                 <Route path="/" element={<Home />} />
                 <Route path="/account" element={<Account />} />
@@ -73,6 +76,7 @@ export default function App() {
                   <Route path="/bu-names" element={<BuNames />} />
                   <Route path="/item-units" element={<ItemUnits />} />
                 </Route>
+              </Route>
               </Route>
             </Route>
           </Routes>
