@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { formatPercent } from '../lib/format';
 import { useColHighlight } from '../lib/useColHighlight';
 import type { ParamRow } from '../lib/params/paramQueries';
@@ -8,7 +8,17 @@ import type { ParamRow } from '../lib/params/paramQueries';
 // for BUs that don't track standards (showStd = false).
 export default function ParametersTable({ rows, priorLabel, currentLabel, showStd = true }: { rows: ParamRow[]; priorLabel: string; currentLabel: string; showStd?: boolean }) {
   const { tableProps, cellCls } = useColHighlight();
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (g: string) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    return next;
+  });
   if (rows.length === 0) return <p className="text-slate-400 dark:text-slate-500">No parameters for this period yet.</p>;
+
+  // Each group's Total row (shown on the header when the group is collapsed).
+  const totalByGroup = new Map<string, ParamRow>();
+  for (const r of rows) if (r.group && r.groupTotal) totalByGroup.set(r.group, r);
 
   const fmt = (v: number | null, r: ParamRow) => {
     if (v == null) return '—';
@@ -24,6 +34,24 @@ export default function ParametersTable({ rows, priorLabel, currentLabel, showSt
   const cDiff = showStd ? 4 : 3;
   const nCols = showStd ? 5 : 4;
 
+  // The value cells (STD / prior / current / %DIFF) for a row — reused for the
+  // group's Total shown on a collapsed header.
+  const valueCells = (r: ParamRow) => {
+    const pctDiff = r.prior != null && r.prior !== 0 && r.current != null ? (r.current - r.prior) / r.prior : null;
+    const increased = (pctDiff ?? 0) >= 0;
+    const favorable = r.cost ? !increased : increased;
+    return (
+      <>
+        {showStd && <td className={`px-3 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(1)}`}>{fmt(r.std, r)}</td>}
+        <td className={`px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(cPrior)}`}>{fmt(r.prior, r)}</td>
+        <td className={`px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 ${cellCls(cCur)}`}>{fmt(r.current, r)}</td>
+        <td className={`px-3 py-2.5 text-right tabular-nums ${pctDiff == null ? 'text-slate-400 dark:text-slate-500' : favorable ? 'text-green-600' : 'text-red-600'} ${cellCls(cDiff)}`}>
+          {pctDiff == null ? '—' : `${increased ? '▲' : '▼'} ${formatPercent(pctDiff)}`}
+        </td>
+      </>
+    );
+  };
+
   return (
     <div className="max-h-[72vh] overflow-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-800 dark:ring-0">
       <table className="min-w-full text-sm" {...tableProps}>
@@ -38,27 +66,27 @@ export default function ParametersTable({ rows, priorLabel, currentLabel, showSt
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const pctDiff = r.prior != null && r.prior !== 0 && r.current != null ? (r.current - r.prior) / r.prior : null;
-            const increased = (pctDiff ?? 0) >= 0;
-            // For a cost, an increase is unfavourable (red); otherwise up is good.
-            const favorable = r.cost ? !increased : increased;
-            const showHeader = !!r.group && r.group !== rows[i - 1]?.group;
+            const first = !!r.group && r.group !== rows[i - 1]?.group;
+            const groupCollapsed = !!r.group && collapsed.has(r.group);
+            const total = r.group ? totalByGroup.get(r.group) : undefined;
             return (
               <Fragment key={r.key}>
-              {showHeader && (
-                <tr className="border-b border-slate-200 bg-slate-100/80 dark:border-slate-700/60 dark:bg-slate-700/50">
-                  <td colSpan={nCols} className={`sticky left-0 bg-slate-100 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:bg-slate-700 dark:text-indigo-300 ${cellCls(0)}`}>{r.group}</td>
+              {first && (
+                <tr onClick={() => toggleGroup(r.group!)}
+                  className="cursor-pointer select-none border-b border-slate-200 bg-slate-100/80 dark:border-slate-700/60 dark:bg-slate-700/50">
+                  <td {...(groupCollapsed && total ? {} : { colSpan: nCols })}
+                    className={`sticky left-0 bg-slate-100 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:bg-slate-700 dark:text-indigo-300 ${cellCls(0)}`}>
+                    <span className="mr-1 inline-block w-3 text-indigo-500">{groupCollapsed ? '▸' : '▾'}</span>{r.group}
+                  </td>
+                  {groupCollapsed && total && valueCells(total)}
                 </tr>
               )}
-              <tr className="border-b border-slate-200 dark:border-slate-700/60">
-                <td className={`sticky left-0 bg-white px-4 py-2.5 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${r.group ? 'pl-8' : ''} ${cellCls(0)}`}>{r.label}</td>
-                {showStd && <td className={`px-3 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(1)}`}>{fmt(r.std, r)}</td>}
-                <td className={`px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(cPrior)}`}>{fmt(r.prior, r)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 ${cellCls(cCur)}`}>{fmt(r.current, r)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${pctDiff == null ? 'text-slate-400 dark:text-slate-500' : favorable ? 'text-green-600' : 'text-red-600'} ${cellCls(cDiff)}`}>
-                  {pctDiff == null ? '—' : `${increased ? '▲' : '▼'} ${formatPercent(pctDiff)}`}
-                </td>
-              </tr>
+              {!groupCollapsed && (
+                <tr className="border-b border-slate-200 dark:border-slate-700/60">
+                  <td className={`sticky left-0 bg-white px-4 py-2.5 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${r.group ? 'pl-8' : ''} ${cellCls(0)}`}>{r.label}</td>
+                  {valueCells(r)}
+                </tr>
+              )}
               </Fragment>
             );
           })}

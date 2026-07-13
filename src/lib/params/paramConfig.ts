@@ -22,6 +22,7 @@ export interface ParamDef {
   peso?: boolean;     // render with ₱ prefix
   cost?: boolean;     // a cost: an increase is unfavourable (%DIFF shown red)
   group?: string;     // section header this row sits under (e.g. per feed type)
+  groupTotal?: boolean; // the group's Total row (shown on the header when collapsed)
   // Manual params only: how to combine the monthly entries into a YTD/quarter
   // value. Additive quantities 'sum' (default); rates/averages 'avg'.
   aggregate?: 'sum' | 'avg';
@@ -114,11 +115,11 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('hsp_prod_kg', 'HSP', 0, { group: 'Hog Feeds Production in KG' }),
       M('hgp_prod_kg', 'HGP', 0, { group: 'Hog Feeds Production in KG' }),
       M('hfp_prod_kg', 'HFP', 0, { group: 'Hog Feeds Production in KG' }),
-      SUMV('total_prod_kg', 'Total', ['hsp_prod_kg', 'hgp_prod_kg', 'hfp_prod_kg'], 0, { group: 'Hog Feeds Production in KG' }),
+      SUMV('total_prod_kg', 'Total', ['hsp_prod_kg', 'hgp_prod_kg', 'hfp_prod_kg'], 0, { group: 'Hog Feeds Production in KG', groupTotal: true }),
       D('hsp_prod_bag', 'HSP', 'hsp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
       D('hgp_prod_bag', 'HGP', 'hgp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
       D('hfp_prod_bag', 'HFP', 'hfp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
-      D('total_prod_bag', 'Total', 'total_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
+      D('total_prod_bag', 'Total', 'total_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags', groupTotal: true }),
     ],
   },
   // GFFC (Chickboy Meating Place) — manual operational KPIs only; the auto
@@ -146,11 +147,11 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('proc_yellow_corn', 'Yellow Corn', 0, { group: 'Kilos Processed' }),
       M('proc_anungal', 'Anungal', 0, { group: 'Kilos Processed' }),
       M('proc_palay', 'Palay', 0, { group: 'Kilos Processed' }),
-      SUMV('processed_kilos', 'Total', ['proc_banana', 'proc_cassava', 'proc_yellow_corn', 'proc_anungal', 'proc_palay'], 0, { group: 'Kilos Processed' }),
+      SUMV('processed_kilos', 'Total', ['proc_banana', 'proc_cassava', 'proc_yellow_corn', 'proc_anungal', 'proc_palay'], 0, { group: 'Kilos Processed', groupTotal: true }),
       // Kilos Delivered — per product, summed into the total.
       M('del_yellow_corn', 'Yellow Corn', 0, { group: 'Kilos Delivered' }),
       M('del_rice_bran', 'Rice Bran D1', 0, { group: 'Kilos Delivered' }),
-      SUMV('kilos_delivered', 'Total', ['del_yellow_corn', 'del_rice_bran'], 0, { group: 'Kilos Delivered' }),
+      SUMV('kilos_delivered', 'Total', ['del_yellow_corn', 'del_rice_bran'], 0, { group: 'Kilos Delivered', groupTotal: true }),
     ],
   },
 };
