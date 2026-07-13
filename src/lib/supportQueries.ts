@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { fetchRanges, type RangeRow } from './queries';
+import { fetchRanges, fetchExpenseSectionOverrides, type RangeRow, type ExpenseSection, type ExpenseRow } from './queries';
 
 // Simulated Support-Unit P&L (Finance / HR / Management). Revenue is simulated as
 // a % of company revenue (excluding any configured BUs); expenses are the unit's
@@ -98,10 +98,12 @@ async function serviceBasis(period: { start: string; end: string }, unit: Suppor
   return out;
 }
 
-// ---- Expenses tab (per-account detail, grouped by section) ----
-export interface SupportExpRow { account: string; current: number; prior: number; diff: number; pctDiff: number }
-export interface SupportExpSection { section: string; total: number; priorTotal: number; rows: SupportExpRow[] }
-export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: string, priorRangeId?: string): Promise<{ hasData: boolean; sections: SupportExpSection[] }> {
+// ---- Expenses tab: grouped Salaries & Wages / Controllable / Non-controllable,
+// with Finance-reclassify (like the BUs). Overrides namespaced per unit so a
+// same-named account doesn't collide across units.
+export const supportOverrideKey = (unit: SupportUnit, account: string) => `${unit}:${account}`;
+
+export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: string, priorRangeId?: string): Promise<{ hasData: boolean; sections: ExpenseSection[] }> {
   const ranges = await fetchRanges();
   const curP = periodOf(ranges, currentRangeId);
   const priP = periodOf(ranges, priorRangeId);
@@ -109,7 +111,10 @@ export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: st
   const curMonths = monthsInPeriod(curP.start, curP.end);
   const priMonths = priP ? monthsInPeriod(priP.start, priP.end) : [];
   const years = [...new Set([...curMonths, ...priMonths].map((x) => x.year))];
-  const { data: pm } = await supabase.from('pnl_months').select('id, year, month').in('year', years);
+  const [{ data: pm }, overrides] = await Promise.all([
+    supabase.from('pnl_months').select('id, year, month').in('year', years),
+    fetchExpenseSectionOverrides(),
+  ]);
   const idYm = new Map((pm ?? []).map((m) => [m.id as string, `${m.year}-${m.month}`]));
   const curSet = new Set(curMonths.map((x) => `${x.year}-${x.month}`));
   const priSet = new Set(priMonths.map((x) => `${x.year}-${x.month}`));
@@ -117,26 +122,39 @@ export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: st
   if (ids.length === 0) return { hasData: false, sections: [] };
   const { data } = await supabase.from('monthly_support_expense').select('month_id, section, account, amount').eq('unit', unit).in('month_id', ids);
   const K = 1000;
+  // Aggregate per account (keeping the QB section to detect salaries).
   const acc = new Map<string, { section: string; current: number; prior: number }>();
   for (const r of data ?? []) {
     const ym = idYm.get(r.month_id as string); if (!ym) continue;
-    const key = `${r.section}||${r.account}`;
-    if (!acc.has(key)) acc.set(key, { section: r.section as string, current: 0, prior: 0 });
-    const e = acc.get(key)!;
+    const account = r.account as string;
+    if (!acc.has(account)) acc.set(account, { section: r.section as string, current: 0, prior: 0 });
+    const e = acc.get(account)!;
     if (curSet.has(ym)) e.current += Number(r.amount) * K;
     if (priSet.has(ym)) e.prior += Number(r.amount) * K;
   }
-  const bySection = new Map<string, SupportExpRow[]>();
-  for (const [key, v] of acc) {
-    if (v.current === 0 && v.prior === 0) continue;
-    const account = key.split('||')[1];
-    if (!bySection.has(v.section)) bySection.set(v.section, []);
-    bySection.get(v.section)!.push({ account, current: v.current, prior: v.prior, diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0 });
-  }
-  const sections = [...bySection.entries()].map(([section, rows]) => {
-    rows.sort((a, b) => b.current - a.current);
-    return { section, total: rows.reduce((s, r) => s + r.current, 0), priorTotal: rows.reduce((s, r) => s + r.prior, 0), rows };
-  }).sort((a, b) => b.total - a.total);
+  const all = [...acc.entries()].filter(([, v]) => v.current !== 0 || v.prior !== 0);
+  const grossCur = all.reduce((s, [, v]) => s + v.current, 0);
+  const grossPri = all.reduce((s, [, v]) => s + v.prior, 0);
+
+  const isSal = (section: string, account: string) => /salar|wage|13th\s*month/i.test(section) || /salar|wage|13th\s*month/i.test(account);
+  const effCtrl = (account: string) => { const o = overrides.get(supportOverrideKey(unit, account).toUpperCase()); return o ? o === 'controllable' : true; };
+
+  const mkRow = (account: string, v: { section: string; current: number; prior: number }): ExpenseRow => ({
+    account, section: effCtrl(account) ? 'controllable' : 'uncontrollable', groupName: v.section,
+    current: v.current, prior: v.prior,
+    currentPct: grossCur ? v.current / grossCur : 0, priorPct: grossPri ? v.prior / grossPri : 0,
+    diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0,
+  });
+  const buildSec = (section: ExpenseSection['section'], filter: (a: string, v: { section: string }) => boolean): ExpenseSection => {
+    const rows = all.filter(([a, v]) => filter(a, v)).map(([a, v]) => mkRow(a, v)).sort((x, y) => Math.abs(y.current) - Math.abs(x.current));
+    const total = rows.reduce((s, r) => s + r.current, 0), priorTotal = rows.reduce((s, r) => s + r.prior, 0);
+    return { section, total, priorTotal, pct: grossCur ? total / grossCur : 0, priorPct: grossPri ? priorTotal / grossPri : 0, rows };
+  };
+  const sections = [
+    buildSec('salaries', (a, v) => isSal(v.section, a)),
+    buildSec('controllable', (a, v) => !isSal(v.section, a) && effCtrl(a)),
+    buildSec('uncontrollable', (a, v) => !isSal(v.section, a) && !effCtrl(a)),
+  ].filter((s) => s.rows.length > 0);
   return { hasData: sections.length > 0, sections };
 }
 

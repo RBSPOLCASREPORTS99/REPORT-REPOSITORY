@@ -3,10 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
 import GffcPnlTable from '../components/GffcPnlTable';
-import SupportExpenseTable from '../components/SupportExpenseTable';
+import ExpenseTable from '../components/ExpenseTable';
 import { TableSkeleton } from '../components/Skeleton';
-import { fetchRanges, type RangeRow } from '../lib/queries';
-import { fetchSupportPnl, fetchSupportExpenses, saveSupportPct, saveSupportConfig, unitBySlug, UNIT_METHODS, type SupportPnlResult, type SupportExpSection, type SupportMethod } from '../lib/supportQueries';
+import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection } from '../lib/queries';
+import { fetchSupportPnl, fetchSupportExpenses, saveSupportPct, saveSupportConfig, supportOverrideKey, unitBySlug, UNIT_METHODS, type SupportPnlResult, type SupportMethod } from '../lib/supportQueries';
 import type { GffcPnlLine } from '../lib/gffc/gffcQueries';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -20,7 +20,7 @@ export default function SupportPnl() {
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [view, setView] = useState<'pnl' | 'expenses'>('pnl');
   const [res, setRes] = useState<SupportPnlResult | null>(null);
-  const [sections, setSections] = useState<SupportExpSection[]>([]);
+  const [sections, setSections] = useState<ExpenseSection[]>([]);
   const [pctText, setPctText] = useState('');
   const [rateText, setRateText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -106,7 +106,12 @@ export default function SupportPnl() {
       </div>
 
       {loading ? <TableSkeleton /> : view === 'expenses' ? (
-        <SupportExpenseTable sections={sections} priorLabel={priorLabel} currentLabel={currentLabel} />
+        <ExpenseTable sections={sections} priorLabel={priorLabel} currentLabel={currentLabel}
+          canEdit={isFinance}
+          onReclassify={async (account, section) => {
+            if (!meta) return;
+            try { await saveExpenseSection(supportOverrideKey(meta.unit, account), section); reload(); } catch (e) { setError((e as Error).message); }
+          }} />
       ) : !res?.hasData ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">No data for this period. Import the monthly P&amp;L (which now captures Finance / HR / Management expenses).</p>
       ) : (
