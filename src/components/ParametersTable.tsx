@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { formatPercent } from '../lib/format';
 import { useColHighlight } from '../lib/useColHighlight';
 import type { ParamRow } from '../lib/params/paramQueries';
@@ -30,14 +31,21 @@ export default function ParametersTable({ rows, priorLabel, currentLabel }: { ro
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {rows.map((r, i) => {
             const pctDiff = r.prior != null && r.prior !== 0 && r.current != null ? (r.current - r.prior) / r.prior : null;
             const increased = (pctDiff ?? 0) >= 0;
             // For a cost, an increase is unfavourable (red); otherwise up is good.
             const favorable = r.cost ? !increased : increased;
+            const showHeader = !!r.group && r.group !== rows[i - 1]?.group;
             return (
-              <tr key={r.key} className="border-b border-slate-200 dark:border-slate-700/60">
-                <td className={`sticky left-0 bg-white px-4 py-2.5 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${cellCls(0)}`}>{r.label}</td>
+              <Fragment key={r.key}>
+              {showHeader && (
+                <tr className="border-b border-slate-200 bg-slate-100/80 dark:border-slate-700/60 dark:bg-slate-700/50">
+                  <td colSpan={5} className={`sticky left-0 bg-slate-100 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:bg-slate-700 dark:text-indigo-300 ${cellCls(0)}`}>{r.group}</td>
+                </tr>
+              )}
+              <tr className="border-b border-slate-200 dark:border-slate-700/60">
+                <td className={`sticky left-0 bg-white px-4 py-2.5 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${r.group ? 'pl-8' : ''} ${cellCls(0)}`}>{r.label}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(1)}`}>{fmt(r.std, r)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(2)}`}>{fmt(r.prior, r)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 ${cellCls(3)}`}>{fmt(r.current, r)}</td>
@@ -45,6 +53,7 @@ export default function ParametersTable({ rows, priorLabel, currentLabel }: { ro
                   {pctDiff == null ? '—' : `${increased ? '▲' : '▼'} ${formatPercent(pctDiff)}`}
                 </td>
               </tr>
+              </Fragment>
             );
           })}
         </tbody>

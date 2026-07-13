@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchRanges, type RangeRow } from '../lib/queries';
 import { useBuLabels } from '../contexts/BuLabelsContext';
@@ -85,11 +85,16 @@ export default function ParameterEntry() {
         <div className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 dark:border-slate-700 dark:text-slate-500">
           <span>Parameter</span><span className="text-right">STD</span><span className="text-right">Value (this period)</span>
         </div>
-        {config.params.filter((p) => !p.hidden).map((p) => {
+        {config.params.filter((p) => !p.hidden).map((p, i, list) => {
           const manual = p.source.kind === 'manual';
+          const showHeader = !!p.group && p.group !== list[i - 1]?.group;
           return (
-            <div key={p.key} className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60">
-              <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
+            <Fragment key={p.key}>
+            {showHeader && (
+              <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:border-slate-700/60 dark:bg-slate-700/50 dark:text-indigo-300">{p.group}</div>
+            )}
+            <div className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60">
+              <span className={`text-sm text-slate-700 dark:text-slate-200 ${p.group ? 'pl-4' : ''}`}>{p.label}</span>
               <NumberInput value={std[p.key]}
                 onChange={(n) => { setStd((s) => ({ ...s, [p.key]: n })); setSaved(false); }}
                 className="w-28 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
@@ -101,6 +106,7 @@ export default function ParameterEntry() {
                 <span className="text-right text-xs text-slate-400 dark:text-slate-500">auto ({p.source.kind === 'pnl' ? 'from P&L' : 'derived'})</span>
               )}
             </div>
+            </Fragment>
           );
         })}
       </div>

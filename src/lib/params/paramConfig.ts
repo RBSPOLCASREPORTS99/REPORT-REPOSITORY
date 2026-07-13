@@ -21,6 +21,7 @@ export interface ParamDef {
   pct?: boolean;      // render as a percentage
   peso?: boolean;     // render with ₱ prefix
   cost?: boolean;     // a cost: an increase is unfavourable (%DIFF shown red)
+  group?: string;     // section header this row sits under (e.g. per feed type)
   // Manual params only: how to combine the monthly entries into a YTD/quarter
   // value. Additive quantities 'sum' (default); rates/averages 'avg'.
   aggregate?: 'sum' | 'avg';
@@ -33,6 +34,8 @@ const PNL = (key: string, lines: string[]): ParamDef => ({ key, label: key, sour
 const SUM = (key: string, of: string[]): ParamDef => ({ key, label: key, source: { kind: 'sum', of }, hidden: true });
 const R = (key: string, label: string, num: string, den: string, decimals = 2, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'ratio', num, den }, decimals, ...extra });
 const D = (key: string, label: string, of: string, by: number, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'divide', of, by }, decimals, ...extra });
+// Visible sum of other params (a shown "Total" row, unlike the hidden SUM helper).
+const SUMV = (key: string, label: string, of: string[], decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'sum', of }, decimals, ...extra });
 // Manual rate/average params combine across months by averaging (not summing).
 const AVG: Partial<ParamDef> = { aggregate: 'avg' };
 
@@ -96,12 +99,24 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       R('pct_rejection', '% Rejection', 'rejection_count', 'delivery', 1, { pct: true }),
     ],
   },
+  // BU09 parameters are tracked per Hog Feeds Type (HSP / HGP / HFP): each type's
+  // CPK, GPR, Production in KG and (derived) Production in Bags, plus a Total.
   BU09: {
     params: [
-      M('hog_feeds_cpk', 'Hog Feeds CPK', 2, { peso: true, cost: true, ...AVG }), // entered manually
-      M('hog_feeds_gpr', 'Hog Feeds GPR (if sold to LPG)', 2, { peso: true, ...AVG }),
-      M('production_kg', 'Hog Feeds Production in KG', 0),
-      D('production_bag', 'Hog Feeds Production in Bags', 'production_kg', 50, 0), // kilos ÷ 50 per bag
+      M('hsp_cpk', 'HSP', 2, { peso: true, cost: true, group: 'Hog Feeds CPK', ...AVG }),
+      M('hgp_cpk', 'HGP', 2, { peso: true, cost: true, group: 'Hog Feeds CPK', ...AVG }),
+      M('hfp_cpk', 'HFP', 2, { peso: true, cost: true, group: 'Hog Feeds CPK', ...AVG }),
+      M('hsp_gpr', 'HSP', 1, { pct: true, group: 'Hog Feeds GPR (if sold to LPG)', ...AVG }),
+      M('hgp_gpr', 'HGP', 1, { pct: true, group: 'Hog Feeds GPR (if sold to LPG)', ...AVG }),
+      M('hfp_gpr', 'HFP', 1, { pct: true, group: 'Hog Feeds GPR (if sold to LPG)', ...AVG }),
+      M('hsp_prod_kg', 'HSP', 0, { group: 'Hog Feeds Production in KG' }),
+      M('hgp_prod_kg', 'HGP', 0, { group: 'Hog Feeds Production in KG' }),
+      M('hfp_prod_kg', 'HFP', 0, { group: 'Hog Feeds Production in KG' }),
+      SUMV('total_prod_kg', 'Total', ['hsp_prod_kg', 'hgp_prod_kg', 'hfp_prod_kg'], 0, { group: 'Hog Feeds Production in KG' }),
+      D('hsp_prod_bag', 'HSP', 'hsp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
+      D('hgp_prod_bag', 'HGP', 'hgp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
+      D('hfp_prod_bag', 'HFP', 'hfp_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
+      D('total_prod_bag', 'Total', 'total_prod_kg', 50, 0, { group: 'Hog Feeds Production in Bags' }),
     ],
   },
   // GFFC (Chickboy Meating Place) — manual operational KPIs only; the auto
