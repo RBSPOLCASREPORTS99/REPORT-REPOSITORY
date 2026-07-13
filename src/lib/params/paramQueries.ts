@@ -11,6 +11,7 @@ export interface ParamRow {
   decimals: number;
   pct: boolean;
   peso: boolean;
+  cost: boolean; // an increase is unfavourable (%DIFF shown red)
 }
 
 // The month-range ids that make up a range (itself if it is a single month).
@@ -119,6 +120,7 @@ export async function fetchBuParameters(buCode: string, currentRangeId: string, 
     decimals: p.decimals ?? 2,
     pct: !!p.pct,
     peso: !!p.peso,
+    cost: !!p.cost,
   }));
 }
 

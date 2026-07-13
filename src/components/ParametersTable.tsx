@@ -32,15 +32,17 @@ export default function ParametersTable({ rows, priorLabel, currentLabel }: { ro
         <tbody>
           {rows.map((r) => {
             const pctDiff = r.prior != null && r.prior !== 0 && r.current != null ? (r.current - r.prior) / r.prior : null;
-            const up = (pctDiff ?? 0) >= 0;
+            const increased = (pctDiff ?? 0) >= 0;
+            // For a cost, an increase is unfavourable (red); otherwise up is good.
+            const favorable = r.cost ? !increased : increased;
             return (
               <tr key={r.key} className="border-b border-slate-200 dark:border-slate-700/60">
                 <td className={`sticky left-0 bg-white px-4 py-2.5 text-left text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${cellCls(0)}`}>{r.label}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(1)}`}>{fmt(r.std, r)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400 ${cellCls(2)}`}>{fmt(r.prior, r)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums font-medium text-slate-900 dark:text-slate-100 ${cellCls(3)}`}>{fmt(r.current, r)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${pctDiff == null ? 'text-slate-400 dark:text-slate-500' : up ? 'text-green-600' : 'text-red-600'} ${cellCls(4)}`}>
-                  {pctDiff == null ? '—' : `${up ? '▲' : '▼'} ${formatPercent(pctDiff)}`}
+                <td className={`px-3 py-2.5 text-right tabular-nums ${pctDiff == null ? 'text-slate-400 dark:text-slate-500' : favorable ? 'text-green-600' : 'text-red-600'} ${cellCls(4)}`}>
+                  {pctDiff == null ? '—' : `${increased ? '▲' : '▼'} ${formatPercent(pctDiff)}`}
                 </td>
               </tr>
             );

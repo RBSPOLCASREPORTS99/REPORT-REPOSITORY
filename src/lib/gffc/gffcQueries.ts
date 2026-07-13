@@ -449,7 +449,7 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
 
   const rows: ParamRow[] = [];
   for (const m of GFFC_MANUAL_PARAMS) {
-    rows.push({ key: m.key, label: m.label, std: std.has(m.key) ? std.get(m.key)! : null, prior: mval(priorRangeId, m.key), current: mval(currentRangeId, m.key), decimals: m.decimals, pct: m.pct, peso: false });
+    rows.push({ key: m.key, label: m.label, std: std.has(m.key) ? std.get(m.key)! : null, prior: mval(priorRangeId, m.key), current: mval(currentRangeId, m.key), decimals: m.decimals, pct: m.pct, peso: false, cost: false });
   }
 
   const [salesC, qtyC, salesP, qtyP] = await Promise.all([
@@ -461,7 +461,7 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
   for (const c of GFFC_CAT_PRICE) {
     const cur = price(salesC.agg, qtyC, c.key);
     const pri = prior ? price(salesP.agg, qtyP, c.key) : null;
-    if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label, std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true });
+    if (cur != null || pri != null) rows.push({ key: `price_${c.key}`, label: c.label, std: null, prior: pri, current: cur, decimals: 2, pct: false, peso: true, cost: false });
   }
 
   const br = await fetchGffcBranchPnl(current, prior);
@@ -475,7 +475,7 @@ export async function fetchGffcParameters(currentRangeId: string, priorRangeId: 
       key: `salesday_${b}`, label: `Avg Sales/Day — ${b}`, std: null,
       prior: dP ? gs.prior / dP : null,
       current: dC ? gs.current / dC : null,
-      decimals: 0, pct: false, peso: true,
+      decimals: 0, pct: false, peso: true, cost: false,
     });
   }
   return rows;
