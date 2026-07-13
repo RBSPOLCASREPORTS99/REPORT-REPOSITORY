@@ -20,7 +20,7 @@ export default function CompanyCard({ net, priorNet, grossSales, priorLabel, ind
     >
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">POLCAS AGRI TRADE CORP. · Total P&amp;L</span>
       <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Company net income</span>
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="relative flex min-h-[2rem] items-center">
         <span
           className={`text-2xl font-bold tabular-nums ${
             loss ? 'text-rose-600 dark:text-rose-400' : 'bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent dark:from-emerald-300 dark:to-teal-300'
@@ -29,8 +29,8 @@ export default function CompanyCard({ net, priorNet, grossSales, priorLabel, ind
           {money(net, true)}
         </span>
         {margin !== null && (
-          <span className="shrink-0 whitespace-nowrap text-right text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
-            {formatPercent(margin)}<span className="ml-0.5 text-[9px] font-normal text-slate-400 dark:text-slate-500">of sales</span>
+          <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-sm font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+            {formatPercent(margin)}<span className="ml-0.5 text-[10px] font-normal text-slate-400 dark:text-slate-500">of sales</span>
           </span>
         )}
       </div>

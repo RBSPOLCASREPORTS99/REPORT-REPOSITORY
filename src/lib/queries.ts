@@ -753,6 +753,8 @@ export interface TruckPnlResult {
   net: number;                         // fleet Simulated Net Income (for the Home card)
   priorNet: number;
   netChg: number;
+  grossSales: number;                  // fleet Trucking Income (for the % of sales)
+  priorGrossSales: number;
   expensesMissing: boolean;            // income imported but no per-truck expenses yet
 }
 
@@ -775,7 +777,7 @@ function truckMonths(start: string, end: string): { year: number; month: number 
 // Simulated P&L per Truck for a current period vs an optional prior period
 // (same YTD/QTR/Month comparisons as the BUs). All figures in ₱'000.
 export async function fetchTruckPnl(current: TruckPeriod, prior?: TruckPeriod): Promise<TruckPnlResult> {
-  const empty: TruckPnlResult = { hasData: false, trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0, expensesMissing: false };
+  const empty: TruckPnlResult = { hasData: false, trucks: [], pnl: {}, net: 0, priorNet: 0, netChg: 0, grossSales: 0, priorGrossSales: 0, expensesMissing: false };
   const { data: months } = await supabase.from('pnl_months').select('id, year, month');
   if (!months || months.length === 0) return empty;
   const idByYm = new Map((months as { id: string; year: number; month: number }[]).map((m) => [`${m.year}-${m.month}`, m.id]));
@@ -870,6 +872,7 @@ export async function fetchTruckPnl(current: TruckPeriod, prior?: TruckPeriod): 
   for (const code of truckCodes) pnl[code] = buildLines([code]);
 
   const netLine = pnl.TOTAL.find((l) => l.kind === 'net')!;
+  const incomeLine = pnl.TOTAL.find((l) => l.kind === 'income')!;
   return {
     hasData: true,
     trucks: truckCodes,
@@ -877,6 +880,8 @@ export async function fetchTruckPnl(current: TruckPeriod, prior?: TruckPeriod): 
     net: netLine.current,
     priorNet: netLine.prior,
     netChg: netLine.chg,
+    grossSales: incomeLine.current,
+    priorGrossSales: incomeLine.prior,
     expensesMissing: truckCodes.some((c) => incomeSum(curIds, c) !== 0) && !expRows.some((r) => curIds.has(r.month_id)),
   };
 }

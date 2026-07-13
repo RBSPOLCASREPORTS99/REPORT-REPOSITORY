@@ -222,8 +222,8 @@ export default function Home() {
           {standalone.map((bu, i) => (
             <BuCard key={bu.buCode} bu={bu} priorLabel={cmp?.priorLabel} metric={buMetric} index={groupCards.length + i} dnd={dndFor(bu.buCode)} />
           ))}
-          {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} index={cards.length} />}
-          {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} priorLabel={cmp?.priorLabel} index={cards.length + 1} />}
+          {truck?.hasData && <TruckingCard truck={truck} priorLabel={cmp?.priorLabel} metric={buMetric} index={cards.length} />}
+          {gffc?.hasData && <GffcCard net={gffc.net} priorNet={gffc.priorNet} netOps={gffc.netOps} priorNetOps={gffc.priorNetOps} grossSales={gffc.grossSales} priorLabel={cmp?.priorLabel} metric={buMetric} index={cards.length + 1} />}
         </div>
 
         {/* Section for other (non-BU) reports. */}

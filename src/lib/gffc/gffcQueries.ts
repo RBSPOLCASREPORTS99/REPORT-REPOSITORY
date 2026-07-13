@@ -23,6 +23,10 @@ export interface GffcPnlResult {
   lines: GffcPnlLine[];
   net: number;
   priorNet: number;
+  netOps: number;        // Net Income from Ops (before Other Income)
+  priorNetOps: number;
+  grossSales: number;    // for the % of sales
+  priorGrossSales: number;
   simulatedPrior?: boolean; // prior YTD was simulated from Aug–Dec 2025
 }
 
@@ -80,7 +84,8 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
   const totalExpense = (a: Record<string, number>) => GFFC_EXPENSE_KEYS.reduce((s, k) => s + (a[k] ?? 0), 0);
   const grossIncome = (a: Record<string, number>) => grossSales(a) - (a.cogs ?? 0);
   const otherIncome = (a: Record<string, number>) => a.other_income ?? 0;
-  const net = (a: Record<string, number>) => grossIncome(a) - totalExpense(a) + otherIncome(a);
+  const netOps = (a: Record<string, number>) => grossIncome(a) - totalExpense(a);
+  const net = (a: Record<string, number>) => netOps(a) + otherIncome(a);
 
   const line = (key: string, label: string, kind: GffcLineKind, cf: (a: Record<string, number>) => number, cost?: boolean): GffcPnlLine =>
     ({ key, label, kind, current: cf(cur), prior: cf(pri), cost });
@@ -105,7 +110,12 @@ export async function fetchGffcPnl(current: Period, prior?: Period): Promise<Gff
     line('net_income_pct', 'Net Income %', 'pct', (a) => (grossSales(a) !== 0 ? net(a) / grossSales(a) : 0)),
   ];
 
-  return { hasData: c.hasData, lines, net: net(cur), priorNet: net(pri), simulatedPrior };
+  return {
+    hasData: c.hasData, lines, net: net(cur), priorNet: net(pri),
+    netOps: netOps(cur), priorNetOps: netOps(pri),
+    grossSales: grossSales(cur), priorGrossSales: grossSales(pri),
+    simulatedPrior,
+  };
 }
 
 function periodMonths(p: Period) {
