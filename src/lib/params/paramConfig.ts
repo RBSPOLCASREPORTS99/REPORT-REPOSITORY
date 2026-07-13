@@ -98,8 +98,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
   },
   BU09: {
     params: [
-      PNL('prod_cost', ['cogs', 'operations_expense', 'salaries_expense']),
-      R('hog_feeds_cpk', 'Hog Feeds CPK', 'prod_cost', 'production_kg', 2, { peso: true, cost: true }),
+      M('hog_feeds_cpk', 'Hog Feeds CPK', 2, { peso: true, cost: true, ...AVG }), // entered manually
       M('hog_feeds_gpr', 'Hog Feeds GPR (if sold to LPG)', 2, { peso: true, ...AVG }),
       M('production_kg', 'Hog Feeds Production in KG', 0),
       D('production_bag', 'Hog Feeds Production in Bags', 'production_kg', 50, 0), // kilos ÷ 50 per bag
