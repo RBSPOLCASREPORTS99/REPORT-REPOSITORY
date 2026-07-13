@@ -30,7 +30,14 @@ export const unitBySlug = (slug?: string) => SUPPORT_UNITS.find((u) => u.slug ==
 
 export type SupportLineKind = 'category' | 'gross' | 'cogs' | 'gross_income' | 'expense' | 'total' | 'other' | 'net' | 'pct';
 export interface SupportLine { key: string; label: string; kind: SupportLineKind; current: number; prior: number; cost?: boolean }
-export interface SupportPnlResult { hasData: boolean; lines: SupportLine[]; net: number; priorNet: number; pct: number }
+export interface SupportPnlResult { hasData: boolean; lines: SupportLine[]; net: number; priorNet: number; pct: number; method: SupportMethod; rate: number }
+
+// Methods available per unit (Management is % of revenue only).
+export const UNIT_METHODS: Record<SupportUnit, { value: SupportMethod; label: string }[]> = {
+  FINANCE: [{ value: 'pct', label: '% of Revenue' }, { value: 'per_txn', label: 'Per # Transaction' }],
+  HR: [{ value: 'pct', label: '% of Revenue' }, { value: 'per_pax', label: 'Per PAX (EE)' }],
+  MANCOM: [{ value: 'pct', label: '% of Revenue' }],
+};
 
 const monthsInPeriod = (start: string, end: string) => {
   const [sy, sm] = start.split('-').map(Number);
@@ -91,6 +98,48 @@ async function serviceBasis(period: { start: string; end: string }, unit: Suppor
   return out;
 }
 
+// ---- Expenses tab (per-account detail, grouped by section) ----
+export interface SupportExpRow { account: string; current: number; prior: number; diff: number; pctDiff: number }
+export interface SupportExpSection { section: string; total: number; priorTotal: number; rows: SupportExpRow[] }
+export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: string, priorRangeId?: string): Promise<{ hasData: boolean; sections: SupportExpSection[] }> {
+  const ranges = await fetchRanges();
+  const curP = periodOf(ranges, currentRangeId);
+  const priP = periodOf(ranges, priorRangeId);
+  if (!curP) return { hasData: false, sections: [] };
+  const curMonths = monthsInPeriod(curP.start, curP.end);
+  const priMonths = priP ? monthsInPeriod(priP.start, priP.end) : [];
+  const years = [...new Set([...curMonths, ...priMonths].map((x) => x.year))];
+  const { data: pm } = await supabase.from('pnl_months').select('id, year, month').in('year', years);
+  const idYm = new Map((pm ?? []).map((m) => [m.id as string, `${m.year}-${m.month}`]));
+  const curSet = new Set(curMonths.map((x) => `${x.year}-${x.month}`));
+  const priSet = new Set(priMonths.map((x) => `${x.year}-${x.month}`));
+  const ids = (pm ?? []).map((m) => m.id as string);
+  if (ids.length === 0) return { hasData: false, sections: [] };
+  const { data } = await supabase.from('monthly_support_expense').select('month_id, section, account, amount').eq('unit', unit).in('month_id', ids);
+  const K = 1000;
+  const acc = new Map<string, { section: string; current: number; prior: number }>();
+  for (const r of data ?? []) {
+    const ym = idYm.get(r.month_id as string); if (!ym) continue;
+    const key = `${r.section}||${r.account}`;
+    if (!acc.has(key)) acc.set(key, { section: r.section as string, current: 0, prior: 0 });
+    const e = acc.get(key)!;
+    if (curSet.has(ym)) e.current += Number(r.amount) * K;
+    if (priSet.has(ym)) e.prior += Number(r.amount) * K;
+  }
+  const bySection = new Map<string, SupportExpRow[]>();
+  for (const [key, v] of acc) {
+    if (v.current === 0 && v.prior === 0) continue;
+    const account = key.split('||')[1];
+    if (!bySection.has(v.section)) bySection.set(v.section, []);
+    bySection.get(v.section)!.push({ account, current: v.current, prior: v.prior, diff: v.current - v.prior, pctDiff: v.prior !== 0 ? (v.current - v.prior) / v.prior : 0 });
+  }
+  const sections = [...bySection.entries()].map(([section, rows]) => {
+    rows.sort((a, b) => b.current - a.current);
+    return { section, total: rows.reduce((s, r) => s + r.current, 0), priorTotal: rows.reduce((s, r) => s + r.prior, 0), rows };
+  }).sort((a, b) => b.total - a.total);
+  return { hasData: sections.length > 0, sections };
+}
+
 // ---- manual per-BU counts entry ----
 export async function loadSupportCounts(year: number, month: number, unit: SupportUnit): Promise<Record<string, number>> {
   const { data } = await supabase.from('support_bu_count').select('bu_code, count').eq('year', year).eq('month', month).eq('unit', unit);
@@ -127,7 +176,7 @@ export async function fetchSupportPnl(unit: SupportUnit, currentRangeId: string,
   const priP = periodOf(ranges, priorRangeId);
   const cfg = await fetchSupportConfig(unit);
   const { pct, exclude, method, rate } = cfg;
-  if (!curP) return { hasData: false, lines: [], net: 0, priorNet: 0, pct };
+  if (!curP) return { hasData: false, lines: [], net: 0, priorNet: 0, pct, method, rate };
 
   const [basisC, basisP, expC, expP] = await Promise.all([
     serviceBasis(curP, unit, method),
@@ -161,20 +210,24 @@ export async function fetchSupportPnl(unit: SupportUnit, currentRangeId: string,
   const netC = revenueC - totExpC + eC.other;
   const netP = revenueP - totExpP + eP.other;
 
-  const lines: SupportLine[] = [
-    ...serviceLines,
-    L('gross_sales', 'Gross Sales — Services', 'gross', revenueC, revenueP),
-    L('cost_of_services', 'Cost of Services', 'cogs', 0, 0, true),
-    L('gross_income', 'Gross Income', 'gross_income', revenueC, revenueP),
+  // Expense groups auto-sorted biggest-first by current amount (like the BU P&L).
+  const expenseLines = [
     L('admin_expense', 'Admin Expense', 'expense', eC.admin, eP.admin, true),
     L('finance_expense', 'Finance Expense', 'expense', eC.finance, eP.finance, true),
     L('operations_expense', 'Operations Expense', 'expense', eC.operations, eP.operations, true),
     L('repairs_expense', 'Repairs/Maint. Expense', 'expense', eC.repairs, eP.repairs, true),
     L('salaries_expense', 'Salaries & Wages', 'expense', eC.salaries, eP.salaries, true),
+  ].sort((a, b) => b.current - a.current);
+  const lines: SupportLine[] = [
+    ...serviceLines,
+    L('gross_sales', 'Gross Sales — Services', 'gross', revenueC, revenueP),
+    L('cost_of_services', 'Cost of Services', 'cogs', 0, 0, true),
+    L('gross_income', 'Gross Income', 'gross_income', revenueC, revenueP),
+    ...expenseLines,
     L('total_expense', 'Total Expense', 'total', totExpC, totExpP, true),
     L('other_income', 'Other Income', 'other', eC.other, eP.other),
     L('net_income', 'Net Income', 'net', netC, netP),
     L('net_income_pct', 'Net Income %', 'pct', revenueC ? netC / revenueC : 0, revenueP ? netP / revenueP : 0),
   ];
-  return { hasData: expC.hasData || revenueC !== 0, lines, net: netC, priorNet: netP, pct };
+  return { hasData: expC.hasData || revenueC !== 0, lines, net: netC, priorNet: netP, pct, method, rate };
 }

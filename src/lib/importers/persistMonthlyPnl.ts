@@ -107,13 +107,24 @@ export async function persistMonthlyPnl(args: MonthlyPersistArgs): Promise<{ mon
   // 4f. Support-unit P&L (Finance / HR / Management) — their actual expenses,
   // pulled from the matching class columns for the Simulated Support-Unit P&L.
   await supabase.from('monthly_support_pnl').delete().eq('month_id', monthId);
-  const supportRows = [
+  const supportUnits = [
     { unit: 'FINANCE', col: COLS.finance },
     { unit: 'HR', col: COLS.hr },
     { unit: 'MANCOM', col: COLS.management },
-  ].map((s) => ({ month_id: monthId, unit: s.unit, ...extractBuInputs(pivot, { memberColumns: [s.col] }) }));
+  ];
+  const supportRows = supportUnits.map((s) => ({ month_id: monthId, unit: s.unit, ...extractBuInputs(pivot, { memberColumns: [s.col] }) }));
   const { error: supErr } = await supabase.from('monthly_support_pnl').insert(supportRows);
   if (supErr) throw supErr;
+
+  // 4f-2. per-account expense detail for the support units (their Expenses tab).
+  await supabase.from('monthly_support_expense').delete().eq('month_id', monthId);
+  const supExpRows = supportUnits.flatMap((s) =>
+    extractTruckAccounts(pivot, s.col).filter((a) => a.section !== 'Cost of Goods Sold').map((a) => ({ month_id: monthId, unit: s.unit, section: a.section, account: a.account, amount: a.amount })),
+  );
+  for (let i = 0; i < supExpRows.length; i += 500) {
+    const { error: seErr } = await supabase.from('monthly_support_expense').insert(supExpRows.slice(i, i + 500));
+    if (seErr) throw seErr;
+  }
 
   // 4g. per-BU revenue for the support-unit services breakdown (% method).
   await supabase.from('monthly_support_bu_revenue').delete().eq('month_id', monthId);
