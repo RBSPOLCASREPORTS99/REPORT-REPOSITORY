@@ -10,8 +10,9 @@ export default function ParametersTable({ rows, priorLabel, currentLabel }: { ro
 
   const fmt = (v: number | null, r: ParamRow) => {
     if (v == null) return '—';
-    if (r.pct) return `${(v * 100).toFixed(r.decimals)}%`;
-    const s = v.toLocaleString('en-PH', { minimumFractionDigits: r.decimals, maximumFractionDigits: r.decimals });
+    const opts = { minimumFractionDigits: r.decimals, maximumFractionDigits: r.decimals } as const;
+    if (r.pct) return `${(v * 100).toLocaleString('en-PH', opts)}%`;
+    const s = v.toLocaleString('en-PH', opts);
     return r.peso ? `₱${s}` : s;
   };
   const headCls = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';

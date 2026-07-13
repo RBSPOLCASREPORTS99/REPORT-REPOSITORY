@@ -26,7 +26,7 @@ export function formatMoney(value: number, base: Units, units: Units, peso = fal
 
 export function formatPercent(value: number): string {
   const pct = value * 100;
-  const abs = Math.abs(pct).toFixed(1);
+  const abs = Math.abs(pct).toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return value < 0 ? `(${abs}%)` : `${abs}%`;
 }
 

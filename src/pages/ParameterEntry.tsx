@@ -5,6 +5,7 @@ import { useBuLabels } from '../contexts/BuLabelsContext';
 import { BU_PARAM_CONFIG } from '../lib/params/paramConfig';
 import { loadBuParameterInputs, loadBuParameterStd, saveBuParameters, saveBuParameterStd } from '../lib/params/paramQueries';
 import { GridSkeleton, Skeleton } from '../components/Skeleton';
+import NumberInput from '../components/NumberInput';
 
 // Finance screen to type the manual parameters + STD targets per BU per period.
 // P&L-sourced and derived (ratio) parameters compute automatically in the
@@ -38,7 +39,6 @@ export default function ParameterEntry() {
   }, [rangeId, buCode]);
 
   const config = BU_PARAM_CONFIG[buCode];
-  const num = (raw: string) => (raw === '' ? 0 : Number(raw));
 
   async function handleSave() {
     setSaving(true); setError(''); setSaved(false);
@@ -88,12 +88,12 @@ export default function ParameterEntry() {
           return (
             <div key={p.key} className="grid grid-cols-[1fr_7rem_9rem] items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60">
               <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
-              <input type="number" inputMode="decimal" value={std[p.key] ?? ''} placeholder="0"
-                onChange={(e) => { setStd((s) => ({ ...s, [p.key]: num(e.target.value) })); setSaved(false); }}
+              <NumberInput value={std[p.key]}
+                onChange={(n) => { setStd((s) => ({ ...s, [p.key]: n })); setSaved(false); }}
                 className="w-28 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
               {manual ? (
-                <input type="number" inputMode="decimal" value={values[p.key] ?? ''} placeholder="0"
-                  onChange={(e) => { setValues((v) => ({ ...v, [p.key]: num(e.target.value) })); setSaved(false); }}
+                <NumberInput value={values[p.key]}
+                  onChange={(n) => { setValues((v) => ({ ...v, [p.key]: n })); setSaved(false); }}
                   className="w-32 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />
               ) : (
                 <span className="text-right text-xs text-slate-400 dark:text-slate-500">auto ({p.source.kind === 'pnl' ? 'from P&L' : 'derived'})</span>
