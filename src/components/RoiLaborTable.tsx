@@ -7,8 +7,13 @@ export default function RoiLaborTable({ rows, priorLabel, currentLabel }: { rows
   const { tableProps, cellCls } = useColHighlight();
   if (rows.length === 0) return <p className="text-slate-400 dark:text-slate-500">No ROI data for this period yet.</p>;
 
-  const peso = (v: number) => `₱${Math.round(v).toLocaleString('en-PH')}`;
-  const roiFmt = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  // Accounting format: negatives in parentheses.
+  const peso = (v: number) => (v < 0 ? `₱(${Math.round(-v).toLocaleString('en-PH')})` : `₱${Math.round(v).toLocaleString('en-PH')}`);
+  const roiFmt = (v: number | null) => {
+    if (v == null) return '—';
+    const s = Math.abs(v).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return v < 0 ? `(${s})` : s;
+  };
   const th = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
 
   const totNi = rows.reduce((s, r) => s + r.netIncome, 0);

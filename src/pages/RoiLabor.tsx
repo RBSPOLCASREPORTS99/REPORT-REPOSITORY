@@ -6,6 +6,7 @@ import RoiLaborTable from '../components/RoiLaborTable';
 import { TableSkeleton } from '../components/Skeleton';
 import { fetchRanges, type RangeRow } from '../lib/queries';
 import { fetchRoiLabor, type RoiRow } from '../lib/roiQueries';
+import { useAuth } from '../contexts/AuthContext';
 
 // ROI on Labor per BU — ranked highest-first, with YTD / QTR / Month comparisons.
 export default function RoiLabor() {
@@ -15,6 +16,7 @@ export default function RoiLabor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const reqRef = useRef(0);
+  const { profile } = useAuth();
 
   useEffect(() => { fetchRanges().then(setRanges).catch((e) => { setError(e.message); setLoading(false); }); }, []);
 
@@ -44,7 +46,12 @@ export default function RoiLabor() {
         <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
       </div>
 
-      <p className="text-[11px] text-slate-400 dark:text-slate-500">ROI on Labor = Net Income from Ops ÷ Total Labor Cost. Auto-built from each BU's P&amp;L; Finance can override figures in Business Parameters.</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">ROI on Labor = Net Income from Ops ÷ Total Labor Cost. Auto-built from each BU's P&amp;L.</p>
+        {profile?.role === 'finance' && (
+          <Link to="/roi-labor-entry" className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">✎ Override figures</Link>
+        )}
+      </div>
       {loading ? <TableSkeleton /> : <RoiLaborTable rows={rows} priorLabel={priorLabel} currentLabel={currentLabel} />}
     </div>
   );

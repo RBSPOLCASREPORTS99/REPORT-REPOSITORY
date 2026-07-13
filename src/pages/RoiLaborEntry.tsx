@@ -53,7 +53,7 @@ export default function RoiLaborEntry() {
   if (loading) return <div className="space-y-4"><Skeleton className="h-6 w-64" /><GridSkeleton /></div>;
   if (ranges.length === 0) return <p className="text-slate-400 dark:text-slate-500">Import a monthly P&L first to create periods.</p>;
 
-  const peso = (v: number) => `₱${Math.round(v).toLocaleString('en-PH')}`;
+  const peso = (v: number) => (v < 0 ? `₱(${Math.round(-v).toLocaleString('en-PH')})` : `₱${Math.round(v).toLocaleString('en-PH')}`);
   const inputCls = 'w-36 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none';
 
   return (
