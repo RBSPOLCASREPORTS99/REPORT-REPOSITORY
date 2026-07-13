@@ -68,6 +68,14 @@ async function resolveParams(rangeId: string | undefined, buCode: string, config
     if (p.source.kind === 'sum') vals.set(p.key, p.source.of.reduce((s, k) => s + (vals.get(k) ?? 0), 0));
   }
 
+  // 3b. constant-divisor params (e.g. bags = kilos ÷ 50).
+  for (const p of config.params) {
+    if (p.source.kind === 'divide') {
+      const v = vals.get(p.source.of) ?? 0;
+      vals.set(p.key, p.source.by !== 0 ? v / p.source.by : 0);
+    }
+  }
+
   // 4. ratios (num ÷ den), last.
   for (const p of config.params) {
     if (p.source.kind === 'ratio') {

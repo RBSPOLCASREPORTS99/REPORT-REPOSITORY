@@ -4,11 +4,13 @@
 //  - sum:    sum of other parameters.
 //  - ratio:  derived num ÷ den from other parameters (computed per period, so a
 //            YTD ratio uses YTD totals, matching the Excel).
+//  - divide: another parameter ÷ a constant (e.g. bags = kilos ÷ 50).
 export type ParamSource =
   | { kind: 'manual' }
   | { kind: 'pnl'; lines: string[] }
   | { kind: 'sum'; of: string[] }
-  | { kind: 'ratio'; num: string; den: string };
+  | { kind: 'ratio'; num: string; den: string }
+  | { kind: 'divide'; of: string; by: number };
 
 export interface ParamDef {
   key: string;
@@ -30,6 +32,7 @@ const M = (key: string, label: string, decimals = 0, extra: Partial<ParamDef> = 
 const PNL = (key: string, lines: string[]): ParamDef => ({ key, label: key, source: { kind: 'pnl', lines }, hidden: true });
 const SUM = (key: string, of: string[]): ParamDef => ({ key, label: key, source: { kind: 'sum', of }, hidden: true });
 const R = (key: string, label: string, num: string, den: string, decimals = 2, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'ratio', num, den }, decimals, ...extra });
+const D = (key: string, label: string, of: string, by: number, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'divide', of, by }, decimals, ...extra });
 // Manual rate/average params combine across months by averaging (not summing).
 const AVG: Partial<ParamDef> = { aggregate: 'avg' };
 
@@ -99,7 +102,7 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       R('hog_feeds_cpk', 'Hog Feeds CPK', 'prod_cost', 'production_kg', 2, { peso: true, cost: true }),
       M('hog_feeds_gpr', 'Hog Feeds GPR (if sold to LPG)', 2, { peso: true, ...AVG }),
       M('production_kg', 'Hog Feeds Production in KG', 0),
-      M('production_bag', 'Hog Feeds Production in Bags', 0),
+      D('production_bag', 'Hog Feeds Production in Bags', 'production_kg', 50, 0), // kilos ÷ 50 per bag
     ],
   },
   // GFFC (Chickboy Meating Place) — manual operational KPIs only; the auto
