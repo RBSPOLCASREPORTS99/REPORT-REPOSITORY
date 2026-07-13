@@ -179,7 +179,7 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
   const isSal = (account: string) => /salar|wage|13th\s*month/i.test(account);
   // Finance can reclassify Controllable ↔ Non-controllable; the override wins.
   const effCtrl = (account: string, base: boolean) => {
-    const o = overrides.get(gffcOverrideKey(account).toUpperCase());
+    const o = overrides.get(gffcOverrideKey(account));
     return o ? o === 'controllable' : base;
   };
 

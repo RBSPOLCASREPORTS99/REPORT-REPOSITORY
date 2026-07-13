@@ -137,7 +137,7 @@ export async function fetchSupportExpenses(unit: SupportUnit, currentRangeId: st
   const grossPri = all.reduce((s, [, v]) => s + v.prior, 0);
 
   const isSal = (section: string, account: string) => /salar|wage|13th\s*month/i.test(section) || /salar|wage|13th\s*month/i.test(account);
-  const effCtrl = (account: string) => { const o = overrides.get(supportOverrideKey(unit, account).toUpperCase()); return o ? o === 'controllable' : true; };
+  const effCtrl = (account: string) => { const o = overrides.get(supportOverrideKey(unit, account)); return o ? o === 'controllable' : true; };
 
   const mkRow = (account: string, v: { section: string; current: number; prior: number }): ExpenseRow => ({
     account, section: effCtrl(account) ? 'controllable' : 'uncontrollable', groupName: v.section,
