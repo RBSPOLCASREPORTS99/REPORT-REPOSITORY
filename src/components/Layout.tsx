@@ -4,6 +4,7 @@ import { prefetchRoute } from '../lib/prefetch';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { useWelcome } from '../contexts/WelcomeContext';
+import UserManualModal from './UserManualModal';
 import Logo from './Logo';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -20,6 +21,7 @@ export default function Layout() {
   const { showWelcome } = useWelcome();
   const location = useLocation();
   const [open, setOpen] = useState(false); // mobile menu
+  const [manualOpen, setManualOpen] = useState(false); // user-manual modal
 
   useEffect(() => setOpen(false), [location.pathname]);
 
@@ -127,6 +129,13 @@ export default function Layout() {
               {!sidebarCollapsed && <span className="truncate">{it.label}</span>}
             </NavLink>
           ))}
+          {isFinance && (
+            <button onClick={() => setManualOpen(true)} title={sidebarCollapsed ? 'User Manual' : undefined}
+              className={`w-full ${navLinkCls(false, sidebarCollapsed)}`}>
+              <span className="text-base leading-none">📖</span>
+              {!sidebarCollapsed && <span className="truncate">User Manual</span>}
+            </button>
+          )}
         </nav>
 
         <div className="border-t border-slate-100 p-2 dark:border-slate-700">
@@ -179,6 +188,12 @@ export default function Layout() {
                     <span>{it.label}</span>
                   </NavLink>
                 ))}
+                {isFinance && (
+                  <button onClick={() => { setManualOpen(true); setOpen(false); }} className={`w-full ${navLinkCls(false)}`}>
+                    <span className="text-base leading-none">📖</span>
+                    <span>User Manual</span>
+                  </button>
+                )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                 {controls(true)}
                 <div className="px-2 pt-1">
@@ -194,6 +209,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <UserManualModal open={manualOpen} onClose={() => setManualOpen(false)} />
     </div>
   );
 }
