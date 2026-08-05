@@ -513,6 +513,44 @@ export async function fetchBuBudget(currentRangeId: string, codes: string[]): Pr
   return { sections, budgetMonths };
 }
 
+// ---- Expenses ↔ P&L reconciliation --------------------------------------
+// The Expenses tab (from the QB Expense Data import) and the P&L expense lines
+// (from the P&L-by-Class import) are two separate files; they should tie out
+// when both come from the same QuickBooks snapshot. This compares each expense
+// category to its P&L line so Finance can spot a month whose two imports are out
+// of sync (e.g. Salaries). Triggering is on the TOTAL, so benign allowance
+// grouping (which just shifts between categories and nets to zero) doesn't flag.
+const RECON_CATS: { label: string; pnl: string; match: (g: string) => boolean }[] = [
+  { label: 'Salaries & Wages', pnl: 'salaries_expense', match: (g) => /salar|wage/i.test(g) },
+  { label: 'Finance', pnl: 'discounting_expense', match: (g) => /finance/i.test(g) },
+  { label: 'Operations', pnl: 'operations_expense', match: (g) => /operation/i.test(g) },
+  { label: 'Repairs/Maintenance', pnl: 'repairs_expense', match: (g) => /repair|mainten/i.test(g) },
+  { label: 'Admin', pnl: 'admin_expense', match: (g) => /admin/i.test(g) },
+];
+
+export interface ReconRow { label: string; expenses: number; pnl: number; diff: number }
+export interface ReconResult { rows: ReconRow[]; totalDiff: number; totalPnl: number }
+
+export async function fetchExpenseReconciliation(currentRangeId: string, codes: string[]): Promise<ReconResult> {
+  const [maps, pnl] = await Promise.all([
+    Promise.all(codes.map((c) => expensesByAccount(currentRangeId, c))).then(mergeExpMaps),
+    supabase.from('computed_pnl').select('line_item, amount').eq('range_id', currentRangeId)
+      .in('bu_code', codes).in('line_item', RECON_CATS.map((c) => c.pnl)),
+  ]);
+  const pnlByLine = new Map<string, number>();
+  for (const r of pnl.data ?? []) pnlByLine.set(r.line_item as string, (pnlByLine.get(r.line_item as string) ?? 0) + Number(r.amount) * 1000);
+  const rows: ReconRow[] = RECON_CATS.map((c) => {
+    const expenses = [...maps.values()].filter((v) => c.match(v.groupName)).reduce((s, v) => s + v.amount, 0);
+    const p = pnlByLine.get(c.pnl) ?? 0;
+    return { label: c.label, expenses, pnl: p, diff: expenses - p };
+  });
+  return {
+    rows,
+    totalPnl: rows.reduce((s, r) => s + r.pnl, 0),
+    totalDiff: rows.reduce((s, r) => s + r.diff, 0),
+  };
+}
+
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
 export async function rangesWithExpenses(): Promise<Set<string>> {
   const { data, error } = await supabase.rpc('ranges_with_expenses');

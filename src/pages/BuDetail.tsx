@@ -13,9 +13,9 @@ import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
   fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
-  saveExpenseSection, fetchBuBudget,
+  saveExpenseSection, fetchBuBudget, fetchExpenseReconciliation,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
-  type SalesItemRow,
+  type SalesItemRow, type ReconResult,
 } from '../lib/queries';
 import { COMBINE_SEP } from '../contexts/CombineContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +37,7 @@ export default function BuDetail() {
   const [view, setView] = useState<View>('pnl');
   const [expenseRanges, setExpenseRanges] = useState<Set<string>>(new Set());
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
+  const [recon, setRecon] = useState<ReconResult | null>(null);
   const [budget, setBudget] = useState<ExpenseSection[]>([]);
   const [budgetMonths, setBudgetMonths] = useState(0);
   const [salesRanges, setSalesRanges] = useState<Set<string>>(new Set());
@@ -93,8 +94,10 @@ export default function BuDetail() {
     setLoading(true);
     let load: Promise<unknown>;
     if (view === 'expenses') {
-      load = (isCombined ? fetchExpensesCombined(currentId, cmp.priorId, codes) : fetchBuExpenses(currentId, cmp.priorId, code))
-        .then((d) => { if (myReq === reqRef.current) setExpenses(d); });
+      load = Promise.all([
+        isCombined ? fetchExpensesCombined(currentId, cmp.priorId, codes) : fetchBuExpenses(currentId, cmp.priorId, code),
+        fetchExpenseReconciliation(currentId, isCombined ? codes : [code]),
+      ]).then(([d, r]) => { if (myReq === reqRef.current) { setExpenses(d); setRecon(r); } });
     } else if (view === 'budget') {
       load = fetchBuBudget(currentId, isCombined ? codes : [code]).then((d) => {
         if (myReq === reqRef.current) { setBudget(d.sections); setBudgetMonths(d.budgetMonths); }
@@ -190,21 +193,39 @@ export default function BuDetail() {
       {loading ? (
         <TableSkeleton />
       ) : view === 'expenses' ? (
-        <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
-          canEdit={profile?.role === 'finance'}
-          onReclassify={async (account, section) => {
-            try {
-              await saveExpenseSection(account, section);
-              // Refetch quietly (no loading skeleton) so the table stays mounted
-              // and the collapse state is preserved.
-              if (currentId && cmp) {
-                const d = isCombined
-                  ? await fetchExpensesCombined(currentId, cmp.priorId, codes)
-                  : await fetchBuExpenses(currentId, cmp.priorId, code!);
-                setExpenses(d);
-              }
-            } catch (e) { setError((e as Error).message); }
-          }} />
+        <div className="space-y-3">
+          {(() => {
+            // Flag when the Expenses "Salaries & Wages" detail doesn't tie to the
+            // P&L Salaries line for this period — a sign the month's Expense Data
+            // and P&L-by-Class imports are out of sync. Only Salaries is checked:
+            // it maps 1:1 between the two files, whereas Operations / Finance carry
+            // structural grouping differences that would false-alarm.
+            const sal = recon?.rows.find((r) => r.label === 'Salaries & Wages');
+            if (!sal || Math.abs(sal.diff) <= Math.max(5000, 0.02 * sal.pnl)) return null;
+            const peso = (v: number) => `₱${Math.round(v).toLocaleString('en-PH')}`;
+            return (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                <p className="font-semibold tabular-nums">⚠ Salaries &amp; Wages don’t tie to the P&amp;L for {currentLabel}: Expenses {peso(sal.expenses)} vs P&amp;L {peso(sal.pnl)} ({sal.diff >= 0 ? '+' : '−'}{peso(Math.abs(sal.diff))}).</p>
+                <p className="mt-0.5 text-[13px] text-amber-800 dark:text-amber-300/90">This month’s Expense Data and P&amp;L-by-Class imports look out of sync — re-import both from the same QuickBooks export.</p>
+              </div>
+            );
+          })()}
+          <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
+            canEdit={profile?.role === 'finance'}
+            onReclassify={async (account, section) => {
+              try {
+                await saveExpenseSection(account, section);
+                // Refetch quietly (no loading skeleton) so the table stays mounted
+                // and the collapse state is preserved.
+                if (currentId && cmp) {
+                  const d = isCombined
+                    ? await fetchExpensesCombined(currentId, cmp.priorId, codes)
+                    : await fetchBuExpenses(currentId, cmp.priorId, code!);
+                  setExpenses(d);
+                }
+              } catch (e) { setError((e as Error).message); }
+            }} />
+        </div>
       ) : view === 'budget' ? (
         <div className="space-y-3">
           {budgetMonths === 0 && (
