@@ -4,6 +4,9 @@ import ComparisonControl, { type ComparisonState } from '../components/Compariso
 import SetMonthSelect from '../components/SetMonthSelect';
 import { TableSkeleton } from '../components/Skeleton';
 import { fetchRanges, fetchTruckPnl, type RangeRow, type TruckPnlResult, type TruckPeriod } from '../lib/queries';
+import ParametersTable from '../components/ParametersTable';
+import { fetchBuParameters, type ParamRow } from '../lib/params/paramQueries';
+import { hasStdColumn } from '../lib/params/paramConfig';
 import { useUi } from '../contexts/UiContext';
 import { formatMoney, formatPercent } from '../lib/format';
 
@@ -16,6 +19,9 @@ export default function TruckPnl() {
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [data, setData] = useState<TruckPnlResult | null>(null);
   const [selected, setSelected] = useState('TOTAL');
+  const [view, setView] = useState<'pnl' | 'parameters'>('pnl');
+  const [paramRows, setParamRows] = useState<ParamRow[] | null>(null);
+  const [paramLoading, setParamLoading] = useState(false);
   // Collapsible sections: a subtotal's account rows are hidden until expanded
   // (all collapsed by default, like the BU P&L). Keyed by the subtotal label.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -49,6 +55,19 @@ export default function TruckPnl() {
       .finally(() => { if (myReq === reqRef.current) setLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cmp, ranges]);
+
+  // BU10 Parameters (kilos / fuel / maintenance / trips / km) — resolved by the
+  // shared parameter engine for the selected comparison (Month / YTD / Quarter).
+  useEffect(() => {
+    if (view !== 'parameters' || !cmp?.currentId) return;
+    let cancelled = false;
+    setParamLoading(true);
+    fetchBuParameters('BU10', cmp.currentId, cmp.priorId)
+      .then((r) => { if (!cancelled) setParamRows(r); })
+      .catch(() => { if (!cancelled) setParamRows(null); })
+      .finally(() => { if (!cancelled) setParamLoading(false); });
+    return () => { cancelled = true; };
+  }, [view, cmp?.currentId, cmp?.priorId]);
 
   const money = (v: number) => formatMoney(v, 'thousands', units);
   const chgCls = (v: number, cost?: boolean) => ((cost ? v <= 0 : v >= 0) ? 'text-green-600' : 'text-red-600');
@@ -87,7 +106,17 @@ export default function TruckPnl() {
             <SetMonthSelect ranges={ranges} />
           </div>
         </div>
-        <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+            {(['pnl', 'parameters'] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                {v === 'pnl' ? 'P&L' : 'Parameters'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40">{error}</p>}
@@ -97,7 +126,13 @@ export default function TruckPnl() {
         </p>
       )}
 
-      {loading ? (
+      {view === 'parameters' ? (
+        paramLoading || paramRows === null ? (
+          <TableSkeleton />
+        ) : (
+          <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} showStd={hasStdColumn('BU10')} />
+        )
+      ) : loading ? (
         <TableSkeleton />
       ) : !data?.hasData ? (
         <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">

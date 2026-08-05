@@ -31,6 +31,8 @@ export interface ParamDef {
   aggregate?: 'sum' | 'avg';
 }
 
+import { BU10_TRUCKS, bu10KmplKey } from './bu10Config';
+
 export interface BuParamConfig { params: ParamDef[]; noStd?: boolean; }
 
 const M = (key: string, label: string, decimals = 0, extra: Partial<ParamDef> = {}): ParamDef => ({ key, label, source: { kind: 'manual' }, decimals, ...extra });
@@ -139,6 +141,33 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       // is entered here (keys match the salesday_<branch> display rows).
       E('salesday_Main Branch', 'Avg Sales/Day — Main Branch', 0, { peso: true }),
       E('salesday_Branch 2', 'Avg Sales/Day — Branch 2', 0, { peso: true }),
+    ],
+  },
+  // BU10 Trucking — KPIs from the TRUCKING DASHBOARD. The base quantities are
+  // auto-populated from the dashboard's weekly "Parameters Data" (aggregated into
+  // months, stored like manual rows); the KPIs are ratios recomputed per period.
+  // "Per week" metrics = period total ÷ number of weeks in the period.
+  BU10: {
+    params: [
+      // Hidden monthly base quantities (summed across a multi-month range).
+      M('del_kilos', 'Kilos Delivered', 0, { hidden: true }),
+      M('fuel_cost', 'Fuel Cost', 0, { hidden: true }),
+      M('maint_cost', 'Maintenance Cost', 0, { hidden: true }),
+      M('payroll', 'Payroll', 0, { hidden: true }),
+      M('trips', 'Trips', 0, { hidden: true }),
+      M('km_run', 'Kilometer Run', 0, { hidden: true }),
+      M('weeks', 'Weeks', 0, { hidden: true }),
+      SUM('total_op_cost', ['payroll', 'fuel_cost', 'maint_cost']),
+      R('trucking_cost_per_kilo', 'Trucking Cost per Kilo', 'total_op_cost', 'del_kilos', 2, { peso: true, cost: true }),
+      R('trucking_cost_per_km', 'Trucking Cost per KM', 'total_op_cost', 'km_run', 2, { peso: true, cost: true }),
+      R('fuel_cost_per_kilo', 'Fuel Cost per Kilo', 'fuel_cost', 'del_kilos', 2, { peso: true, cost: true }),
+      R('maint_cost_per_kilo', 'Maintenance Cost per Kilo', 'maint_cost', 'del_kilos', 2, { peso: true, cost: true }),
+      // Kilometer per Liter — per truck (monthly average; averaged across a range).
+      ...BU10_TRUCKS.map((t) => M(bu10KmplKey(t.code), `${t.code} ${t.plate}`, 2, { group: 'Kilometer per Liter', ...AVG })),
+      R('kilos_delivered_wk', 'Kilos Delivered per Week', 'del_kilos', 'weeks', 0),
+      M('ave_trips_wk', 'Average Trips/Truck/Week', 1, AVG),
+      R('trips_per_week', 'Trips per Week', 'trips', 'weeks', 0),
+      R('km_run_per_week', 'Kilometer Run per Week', 'km_run', 'weeks', 0),
     ],
   },
   BU11: {

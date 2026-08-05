@@ -14,6 +14,8 @@ import { isExpenseTxWorkbook, parseExpenseTransactions, type ParsedExpenseTx } f
 import { isSalesTxWorkbook, parseSalesTransactions, type ParsedSalesTx } from '../lib/importers/parseSalesTransactions';
 import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDashboard } from '../lib/importers/parseTruckingDashboard';
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
+import { parseTruckingParameters, type Bu10MonthParams } from '../lib/importers/parseTruckingParameters';
+import { persistTruckingParameters } from '../lib/importers/persistTruckingParameters';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
 import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, parseGffcSalesByItem, isGffcSalesByItemWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { parseBuParameterStd, isBuParametersWorkbook, type BuStdImport } from '../lib/importers/parseParameters';
@@ -67,6 +69,7 @@ export default function ImportWizard() {
   const [importedAt, setImportedAt] = useState<string | null>(null);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
+  const [truckParams, setTruckParams] = useState<Bu10MonthParams[]>([]);
   const [dashMonthExists, setDashMonthExists] = useState(false);
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
   const [gffcExpense, setGffcExpense] = useState<GffcExpenseRow[]>([]);
@@ -182,6 +185,7 @@ export default function ImportWizard() {
         const parsed = parseTruckingDashboard(buf);
         if (parsed.months.length === 0) { setParseError('No dated month columns found in the TRUCKING DASHBOARD (Sales per Truck / Sales per BU).'); return; }
         setDashboard(parsed);
+        setTruckParams(parseTruckingParameters(wb)); // BU10 Parameters (if the sheet is present)
         setYear(parsed.months[0].year);
         setMonth(parsed.months[0].month);
         setStep('dashboard');
@@ -265,6 +269,8 @@ export default function ImportWizard() {
     try {
       const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
       if (res.truckMonths === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
+      // Also store the BU10 Parameters (kilos/fuel/maint/trips/km) per month.
+      if (truckParams.length) await persistTruckingParameters(truckParams);
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -522,6 +528,9 @@ export default function ImportWizard() {
         <div className="space-y-1 rounded-2xl bg-white p-4 text-sm shadow-sm dark:bg-slate-800">
           <p className="text-slate-700 dark:text-slate-200"><span className="font-medium">{truckCount}</span> trucks · income total <span className="font-medium">₱{formatThousands(truckTotal / 1000)}k</span></p>
           <p className="text-slate-700 dark:text-slate-200">Per-BU trucking allocation total <span className="font-medium">{formatThousands(buTotal)}k</span> — auto-fills the P&amp;L trucking</p>
+          {truckParams.length > 0 && (
+            <p className="text-slate-700 dark:text-slate-200">BU10 Parameters: <span className="font-medium">{truckParams.length} months</span> of kilos / fuel / maintenance / trips / km — shown on BU10 → Parameters (needs each month's P&amp;L imported)</p>
+          )}
           {truckCount === 0 && <p className="text-amber-700 dark:text-amber-400">No truck income found for this month — pick another month.</p>}
         </div>
         {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
