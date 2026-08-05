@@ -229,6 +229,60 @@ export async function fetchGffcExpenses(current: Period, prior?: Period): Promis
   return { hasData: sections.length > 0, sections };
 }
 
+// ---- Exp. vs Budget (GFFC) ----------------------------------------------
+// Budget per account = (Jan-May 2026 actual / 5) x 80%, per month from July 2026.
+// Compares the current period's Actual against Budget; Salaries & Wages excluded.
+const BUDGET_BASE_YM = new Set(['2026-1', '2026-2', '2026-3', '2026-4', '2026-5']);
+const isBudgetMonth = (y: number, m: number) => y > 2026 || (y === 2026 && m >= 7);
+
+export async function fetchGffcBudget(current: Period): Promise<{ sections: ExpenseSection[]; budgetMonths: number }> {
+  const curMonths = monthsInPeriod(current.start, current.end);
+  const years = [...new Set([2026, ...curMonths.map((x) => x.year)])];
+  const [{ data }, overrides, curSum] = await Promise.all([
+    supabase.from('gffc_monthly_expense').select('year, month, account, section, controllable, amount').in('year', years),
+    fetchExpenseSectionOverrides(),
+    sumPeriod(current),
+  ]);
+  const grossCur = GFFC_CATEGORIES.reduce((s, x) => s + (curSum.agg[x.key] ?? 0), 0);
+  const curSet = new Set(curMonths.map((x) => `${x.year}-${x.month}`));
+  const budgetMonths = curMonths.filter((x) => isBudgetMonth(x.year, x.month)).length;
+
+  const acc = new Map<string, { section: string; controllable: boolean; actual: number; base: number }>();
+  for (const r of (data ?? []) as ExpRow[]) {
+    const key = r.account;
+    if (!acc.has(key)) acc.set(key, { section: r.section, controllable: r.controllable, actual: 0, base: 0 });
+    const e = acc.get(key)!;
+    const ym = `${r.year}-${r.month}`;
+    if (curSet.has(ym)) e.actual += Number(r.amount);
+    if (BUDGET_BASE_YM.has(ym)) e.base += Number(r.amount);
+  }
+
+  const isSal = (a: string) => /salar|wage|13th\s*month/i.test(a);
+  const effCtrl = (a: string, base: boolean) => { const o = overrides.get(gffcOverrideKey(a)); return o ? o === 'controllable' : base; };
+  const all = [...acc.entries()].filter(([a, v]) => !isSal(a) && (v.actual !== 0 || v.base !== 0));
+
+  const mkRow = ([account, v]: [string, { section: string; controllable: boolean; actual: number; base: number }]): ExpenseRow => {
+    const budget = (v.base / 5) * 0.8 * budgetMonths;
+    return {
+      account, section: effCtrl(account, v.controllable) ? 'controllable' : 'uncontrollable', groupName: v.section,
+      current: v.actual, prior: budget,
+      currentPct: grossCur ? v.actual / grossCur : 0, priorPct: grossCur ? budget / grossCur : 0,
+      diff: v.actual - budget, pctDiff: budget !== 0 ? (v.actual - budget) / budget : 0,
+    };
+  };
+  const build = (section: ExpenseSection['section'], keep: (a: string, v: { controllable: boolean }) => boolean): ExpenseSection => {
+    const rowsOut = all.filter(([a, v]) => keep(a, v)).map(mkRow).sort((x, y) => Math.abs(y.current) - Math.abs(x.current));
+    const total = rowsOut.reduce((s, r) => s + r.current, 0);
+    const priorTotal = rowsOut.reduce((s, r) => s + r.prior, 0);
+    return { section, total, priorTotal, pct: grossCur ? total / grossCur : 0, priorPct: grossCur ? priorTotal / grossCur : 0, rows: rowsOut };
+  };
+  const sections = [
+    build('controllable', (a, v) => effCtrl(a, v.controllable)),
+    build('uncontrollable', (a, v) => !effCtrl(a, v.controllable)),
+  ].filter((s) => s.rows.length > 0);
+  return { sections, budgetMonths };
+}
+
 // ---- Sales by Qty -----------------------------------------------------------
 interface SaleRow { year: number; month: number; item: string; uom: string; qty: number }
 

@@ -945,3 +945,69 @@ export async function fetchTruckPnl(current: TruckPeriod, prior?: TruckPeriod): 
     expensesMissing: truckCodes.some((c) => incomeSum(curIds, c) !== 0) && !expRows.some((r) => curIds.has(r.month_id)),
   };
 }
+
+// Exp. vs Budget for BU10 (Trucking). Aggregates the per-truck expense accounts
+// (Admin / Finance / Operations / Repairs — Salaries and COGS excluded) across
+// all trucks, then compares the current period's Actual to the Budget. Truck
+// amounts are ₱'000, so ×1000 to full pesos to match the expense table.
+export const truckOverrideKey = (account: string) => `BU10:${account}`;
+const TRUCK_BUDGET_SECTIONS = new Set(['Admin Expenses', 'Finance Expenses', 'Operations Expenses', 'Repairs/Maintenance']);
+
+export async function fetchTruckBudget(current: TruckPeriod): Promise<BudgetResult> {
+  const { data: months } = await supabase.from('pnl_months').select('id, year, month');
+  const idByYm = new Map(((months ?? []) as { id: string; year: number; month: number }[]).map((m) => [`${m.year}-${m.month}`, m.id]));
+  const curYm = truckMonths(current.start, current.end);
+  const curIds = new Set(curYm.map((x) => idByYm.get(`${x.year}-${x.month}`)).filter((x): x is string => !!x));
+  const baseIds = new Set([1, 2, 3, 4, 5].map((m) => idByYm.get(`2026-${m}`)).filter((x): x is string => !!x));
+  const budgetMonths = curYm.filter((x) => x.year > 2026 || (x.year === 2026 && x.month >= 7)).length;
+  const allIds = [...new Set([...curIds, ...baseIds])];
+  if (allIds.length === 0) return { sections: [], budgetMonths };
+
+  const [{ data: exp }, { data: inc }, overrides, stored] = await Promise.all([
+    supabase.from('monthly_truck_expense').select('month_id, section, account, amount').in('month_id', allIds),
+    supabase.from('monthly_truck_income').select('month_id, income').in('month_id', [...curIds]),
+    fetchExpenseSectionOverrides(),
+    fetchStoredExpenseClassification(),
+  ]);
+  const grossCur = ((inc ?? []) as { income: number }[]).reduce((s, r) => s + Number(r.income), 0) * 1000;
+
+  const acc = new Map<string, { actual: number; base: number }>();
+  for (const r of (exp ?? []) as { month_id: string; section: string; account: string; amount: number }[]) {
+    if (!TRUCK_BUDGET_SECTIONS.has(r.section)) continue;
+    if (!acc.has(r.account)) acc.set(r.account, { actual: 0, base: 0 });
+    const e = acc.get(r.account)!;
+    const amt = Number(r.amount) * 1000; // ₱'000 → full pesos
+    if (curIds.has(r.month_id)) e.actual += amt;
+    if (baseIds.has(r.month_id)) e.base += amt;
+  }
+  const classOf = (account: string): 'controllable' | 'uncontrollable' =>
+    overrides.get(truckOverrideKey(account)) ?? stored.get(account.toUpperCase())?.section ?? 'controllable';
+
+  const rows: ExpenseRow[] = [...acc.entries()]
+    .filter(([, v]) => v.actual !== 0 || v.base !== 0)
+    .map(([account, v]) => {
+      const budget = (v.base / 5) * 0.8 * budgetMonths;
+      return {
+        account, section: classOf(account), groupName: '',
+        current: v.actual, prior: budget,
+        currentPct: grossCur ? v.actual / grossCur : 0, priorPct: grossCur ? budget / grossCur : 0,
+        diff: v.actual - budget, pctDiff: budget !== 0 ? (v.actual - budget) / budget : 0,
+      };
+    });
+  const build = (section: ExpenseSectionKey, keep: (r: ExpenseRow) => boolean): ExpenseSection => {
+    const rowsOut = rows.filter(keep).sort((a, b) => Math.abs(b.current) - Math.abs(a.current));
+    return {
+      section,
+      total: rowsOut.reduce((s, r) => s + r.current, 0),
+      priorTotal: rowsOut.reduce((s, r) => s + r.prior, 0),
+      pct: grossCur ? rowsOut.reduce((s, r) => s + r.current, 0) / grossCur : 0,
+      priorPct: grossCur ? rowsOut.reduce((s, r) => s + r.prior, 0) / grossCur : 0,
+      rows: rowsOut,
+    };
+  };
+  const sections = [
+    build('controllable', (r) => r.section === 'controllable'),
+    build('uncontrollable', (r) => r.section === 'uncontrollable'),
+  ].filter((s) => s.rows.length > 0);
+  return { sections, budgetMonths };
+}

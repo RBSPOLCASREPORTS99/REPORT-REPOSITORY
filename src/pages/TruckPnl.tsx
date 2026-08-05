@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import ComparisonControl, { type ComparisonState } from '../components/ComparisonControl';
 import SetMonthSelect from '../components/SetMonthSelect';
 import { TableSkeleton } from '../components/Skeleton';
-import { fetchRanges, fetchTruckPnl, type RangeRow, type TruckPnlResult, type TruckPeriod } from '../lib/queries';
+import { fetchRanges, fetchTruckPnl, fetchTruckBudget, saveExpenseSection, truckOverrideKey, type RangeRow, type TruckPnlResult, type TruckPeriod, type ExpenseSection } from '../lib/queries';
 import ParametersTable from '../components/ParametersTable';
+import ExpenseTable from '../components/ExpenseTable';
 import { fetchBuParameters, type ParamRow } from '../lib/params/paramQueries';
 import { hasStdColumn } from '../lib/params/paramConfig';
 import { useUi } from '../contexts/UiContext';
+import { useAuth } from '../contexts/AuthContext';
 import { formatMoney, formatPercent } from '../lib/format';
 
 // Simulated P&L per Truck (BU10). Income from the TRUCKING DASHBOARD, expenses
@@ -15,13 +17,17 @@ import { formatMoney, formatPercent } from '../lib/format';
 // comparisons as the BUs; pick one truck (or Total).
 export default function TruckPnl() {
   const { units } = useUi();
+  const { profile } = useAuth();
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [data, setData] = useState<TruckPnlResult | null>(null);
   const [selected, setSelected] = useState('TOTAL');
-  const [view, setView] = useState<'pnl' | 'parameters'>('pnl');
+  const [view, setView] = useState<'pnl' | 'budget' | 'parameters'>('pnl');
   const [paramRows, setParamRows] = useState<ParamRow[] | null>(null);
   const [paramLoading, setParamLoading] = useState(false);
+  const [budget, setBudget] = useState<ExpenseSection[] | null>(null);
+  const [budgetMonths, setBudgetMonths] = useState(0);
+  const [budgetLoading, setBudgetLoading] = useState(false);
   // Collapsible sections: a subtotal's account rows are hidden until expanded
   // (all collapsed by default, like the BU P&L). Keyed by the subtotal label.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -69,6 +75,21 @@ export default function TruckPnl() {
     return () => { cancelled = true; };
   }, [view, cmp?.currentId, cmp?.priorId]);
 
+  // Exp. vs Budget for BU10 — actual expense accounts vs the computed budget.
+  const loadBudget = () => {
+    const cur = periodOf(cmp?.currentId);
+    if (!cur) return Promise.resolve();
+    return fetchTruckBudget(cur).then((b) => { setBudget(b.sections); setBudgetMonths(b.budgetMonths); });
+  };
+  useEffect(() => {
+    if (view !== 'budget' || !cmp?.currentId) return;
+    let cancelled = false;
+    setBudgetLoading(true);
+    loadBudget().catch(() => { if (!cancelled) setBudget([]); }).finally(() => { if (!cancelled) setBudgetLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, cmp?.currentId, ranges]);
+
   const money = (v: number) => formatMoney(v, 'thousands', units);
   const chgCls = (v: number, cost?: boolean) => ((cost ? v <= 0 : v >= 0) ? 'text-green-600' : 'text-red-600');
   const numCls = (v: number) => (v < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100');
@@ -109,10 +130,10 @@ export default function TruckPnl() {
         <div className="flex flex-wrap items-center gap-2">
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
           <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
-            {(['pnl', 'parameters'] as const).map((v) => (
+            {(['pnl', 'budget', 'parameters'] as const).map((v) => (
               <button key={v} onClick={() => setView(v)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                {v === 'pnl' ? 'P&L' : 'Parameters'}
+                {v === 'pnl' ? 'P&L' : v === 'budget' ? 'Exp. vs Budget' : 'Parameters'}
               </button>
             ))}
           </div>
@@ -131,6 +152,27 @@ export default function TruckPnl() {
           <TableSkeleton />
         ) : (
           <ParametersTable rows={paramRows} priorLabel={priorLabel} currentLabel={currentLabel} showStd={hasStdColumn('BU10')} />
+        )
+      ) : view === 'budget' ? (
+        budgetLoading || budget === null ? (
+          <TableSkeleton />
+        ) : (
+          <div className="space-y-3">
+            {budgetMonths === 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                ⚠️ Budgets start July 2026. The selected period has no July 2026-onward months, so Budget shows as zero.
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              Budget per account = (Jan–May 2026 actual ÷ 5) × 80%, per month from July 2026. Salaries &amp; Wages and COGS excluded. DIFF is Actual − Budget (over budget in red).
+            </p>
+            <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
+              canEdit={profile?.role === 'finance'}
+              onReclassify={async (account, section) => {
+                try { await saveExpenseSection(truckOverrideKey(account), section); await loadBudget(); }
+                catch (e) { setError((e as Error).message); }
+              }} />
+          </div>
         )
       ) : loading ? (
         <TableSkeleton />

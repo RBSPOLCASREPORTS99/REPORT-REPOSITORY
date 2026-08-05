@@ -9,14 +9,14 @@ import GffcSalesQtyTable from '../components/GffcSalesQtyTable';
 import ParametersTable from '../components/ParametersTable';
 import { TableSkeleton } from '../components/Skeleton';
 import { fetchRanges, saveExpenseSection, type RangeRow, type ExpenseSection, type TrendPoint } from '../lib/queries';
-import { fetchGffcPnl, fetchGffcExpenses, fetchGffcSalesGrouped, fetchGffcBranchPnl, fetchGffcParameters, fetchGffcTrend, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type GffcSalesGrouped, type Period } from '../lib/gffc/gffcQueries';
+import { fetchGffcPnl, fetchGffcExpenses, fetchGffcBudget, fetchGffcSalesGrouped, fetchGffcBranchPnl, fetchGffcParameters, fetchGffcTrend, gffcOverrideKey, type GffcPnlLine, type GffcBranchResult, type GffcSalesGrouped, type Period } from '../lib/gffc/gffcQueries';
 
 const TrendChart = lazy(() => import('../components/TrendChart'));
 import { useAuth } from '../contexts/AuthContext';
 import type { ParamRow } from '../lib/params/paramQueries';
 import { GFFC_LABEL } from '../lib/gffc/gffcConfig';
 
-type View = 'pnl' | 'branch' | 'expenses' | 'sales' | 'params';
+type View = 'pnl' | 'branch' | 'expenses' | 'budget' | 'sales' | 'params';
 
 // GFFC - Chickboy Meating Place company screen: Total P&L / Expense Report /
 // Sales by Qty, with the shared YTD / QTR / Month comparisons.
@@ -26,6 +26,8 @@ export default function GffcDetail() {
   const [view, setView] = useState<View>('pnl');
   const [lines, setLines] = useState<GffcPnlLine[]>([]);
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
+  const [budget, setBudget] = useState<ExpenseSection[]>([]);
+  const [budgetMonths, setBudgetMonths] = useState(0);
   const [sales, setSales] = useState<GffcSalesGrouped>({ hasData: false, categories: [], grandCur: 0, grandPri: 0 });
   const [expAvail, setExpAvail] = useState(false);
   const [salesAvail, setSalesAvail] = useState(false);
@@ -56,12 +58,13 @@ export default function GffcDetail() {
     const pri = periodOf(cmp.priorId);
     const myReq = ++reqRef.current;
     setLoading(true);
-    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSalesGrouped(cur, pri), fetchGffcBranchPnl(cur, pri), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri)])
-      .then(([p, e, s, br, pm]) => {
+    Promise.all([fetchGffcPnl(cur, pri), fetchGffcExpenses(cur, pri), fetchGffcSalesGrouped(cur, pri), fetchGffcBranchPnl(cur, pri), fetchGffcParameters(cmp.currentId!, cmp.priorId, cur, pri), fetchGffcBudget(cur)])
+      .then(([p, e, s, br, pm, bg]) => {
         if (myReq !== reqRef.current) return;
         setLines(p.hasData ? p.lines : []);
         setSimulated(!!p.simulatedPrior && p.hasData);
         setExpenses(e.sections); setExpAvail(e.hasData);
+        setBudget(bg.sections); setBudgetMonths(bg.budgetMonths);
         setSales(s); setSalesAvail(s.hasData);
         setBranch(br);
         setParams(pm);
@@ -87,6 +90,7 @@ export default function GffcDetail() {
   const paramsAvail = params.some((r) => r.current != null || r.std != null);
   useEffect(() => {
     if (view === 'expenses' && !expAvail) setView('pnl');
+    if (view === 'budget' && !expAvail) setView('pnl');
     if (view === 'sales' && !salesAvail) setView('pnl');
     if (view === 'branch' && !branchAvail) setView('pnl');
     if (view === 'params' && !paramsAvail) setView('pnl');
@@ -131,12 +135,13 @@ export default function GffcDetail() {
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
           {(expAvail || salesAvail || branchAvail || paramsAvail) && (
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
-              {(['pnl', 'branch', 'expenses', 'sales', 'params'] as View[]).map((v) => {
+              {(['pnl', 'branch', 'expenses', 'budget', 'sales', 'params'] as View[]).map((v) => {
                 if (v === 'branch' && !branchAvail) return null;
                 if (v === 'expenses' && !expAvail) return null;
+                if (v === 'budget' && !expAvail) return null;
                 if (v === 'sales' && !salesAvail) return null;
                 if (v === 'params' && !paramsAvail) return null;
-                const label = v === 'pnl' ? 'P&L' : v === 'branch' ? 'Per Branch' : v === 'expenses' ? 'Expenses' : v === 'sales' ? 'Sales Qty' : 'Parameters';
+                const label = v === 'pnl' ? 'P&L' : v === 'branch' ? 'Per Branch' : v === 'expenses' ? 'Expenses' : v === 'budget' ? 'Exp. vs Budget' : v === 'sales' ? 'Sales Qty' : 'Parameters';
                 return (
                   <button key={v} onClick={() => setView(v)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -161,6 +166,26 @@ export default function GffcDetail() {
               if (cur) { const e = await fetchGffcExpenses(cur, periodOf(cmp?.priorId)); setExpenses(e.sections); }
             } catch (e) { setError((e as Error).message); }
           }} />
+      ) : view === 'budget' ? (
+        <div className="space-y-3">
+          {budgetMonths === 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              ⚠️ Budgets start July 2026. The selected period has no July 2026-onward months, so Budget shows as zero.
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            Budget per account = (Jan–May 2026 actual ÷ 5) × 80%, per month from July 2026. Salaries &amp; Wages excluded. DIFF is Actual − Budget (over budget in red).
+          </p>
+          <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
+            canEdit={profile?.role === 'finance'}
+            onReclassify={async (account, section) => {
+              try {
+                await saveExpenseSection(gffcOverrideKey(account), section);
+                const cur = periodOf(cmp?.currentId);
+                if (cur) { const b = await fetchGffcBudget(cur); setBudget(b.sections); setBudgetMonths(b.budgetMonths); }
+              } catch (e) { setError((e as Error).message); }
+            }} />
+        </div>
       ) : view === 'sales' ? (
         <GffcSalesQtyTable data={sales} priorLabel={priorLabel} currentLabel={currentLabel} />
       ) : view === 'branch' ? (
