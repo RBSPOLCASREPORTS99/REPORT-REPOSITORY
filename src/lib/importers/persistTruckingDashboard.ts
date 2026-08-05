@@ -27,6 +27,18 @@ export async function persistTruckingDashboard(args: DashboardPersistArgs): Prom
   });
 
   // 1. Store the FULL Sales-per-BU allocation history (all months) for reference.
+  // Delete the months present FIRST, so a BU whose allocation dropped to 0 clears
+  // its old row — otherwise the upsert (which skips zeros) would leave a stale
+  // non-zero value that then pre-fills the P&L import grid.
+  const monthsByYear = new Map<number, Set<number>>();
+  for (const m of parsed.months) {
+    if (!monthsByYear.has(m.year)) monthsByYear.set(m.year, new Set());
+    monthsByYear.get(m.year)!.add(m.month);
+  }
+  for (const [y, ms] of monthsByYear) {
+    const { error } = await supabase.from('monthly_bu_alloc').delete().eq('year', y).in('month', [...ms]);
+    if (error) throw error;
+  }
   const allocRows: { year: number; month: number; bu_code: string; amount: number }[] = [];
   for (const m of parsed.months) {
     const alloc = parsed.buAlloc.get(m.serial) ?? {};
