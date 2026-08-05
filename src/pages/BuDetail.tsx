@@ -13,7 +13,7 @@ import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
   fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
-  saveExpenseSection,
+  saveExpenseSection, fetchBuBudget,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
   type SalesItemRow,
 } from '../lib/queries';
@@ -23,7 +23,7 @@ import ParametersTable from '../components/ParametersTable';
 import { fetchBuParameters, fetchParamMonthsMissing, type ParamRow } from '../lib/params/paramQueries';
 import { hasParameters, hasStdColumn } from '../lib/params/paramConfig';
 
-type View = 'pnl' | 'expenses' | 'sales' | 'parameters';
+type View = 'pnl' | 'expenses' | 'budget' | 'sales' | 'parameters';
 
 export default function BuDetail() {
   const { code } = useParams<{ code: string }>();
@@ -37,6 +37,8 @@ export default function BuDetail() {
   const [view, setView] = useState<View>('pnl');
   const [expenseRanges, setExpenseRanges] = useState<Set<string>>(new Set());
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
+  const [budget, setBudget] = useState<ExpenseSection[]>([]);
+  const [budgetMonths, setBudgetMonths] = useState(0);
   const [salesRanges, setSalesRanges] = useState<Set<string>>(new Set());
   const [salesRows, setSalesRows] = useState<SalesItemRow[]>([]);
   const [paramRows, setParamRows] = useState<ParamRow[]>([]);
@@ -80,6 +82,7 @@ export default function BuDetail() {
 
   useEffect(() => {
     if (view === 'expenses' && !expensesAvailable) setView('pnl');
+    if (view === 'budget' && !expensesAvailable) setView('pnl');
     if (view === 'sales' && !salesAvailable) setView('pnl');
     if (view === 'parameters' && !paramsAvailable) setView('pnl');
   }, [expensesAvailable, salesAvailable, paramsAvailable, view]);
@@ -92,6 +95,10 @@ export default function BuDetail() {
     if (view === 'expenses') {
       load = (isCombined ? fetchExpensesCombined(currentId, cmp.priorId, codes) : fetchBuExpenses(currentId, cmp.priorId, code))
         .then((d) => { if (myReq === reqRef.current) setExpenses(d); });
+    } else if (view === 'budget') {
+      load = fetchBuBudget(currentId, isCombined ? codes : [code]).then((d) => {
+        if (myReq === reqRef.current) { setBudget(d.sections); setBudgetMonths(d.budgetMonths); }
+      });
     } else if (view === 'sales') {
       load = (isCombined ? fetchSalesCombined(currentId, cmp.priorId, codes) : fetchBuSales(currentId, cmp.priorId, code))
         .then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
@@ -157,11 +164,12 @@ export default function BuDetail() {
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
           {(expensesAvailable || salesAvailable || paramsAvailable) && (
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60 sm:ml-[9%]">
-              {(['pnl', 'expenses', 'sales', 'parameters'] as View[]).map((v) => {
+              {(['pnl', 'expenses', 'budget', 'sales', 'parameters'] as View[]).map((v) => {
                 if (v === 'expenses' && !expensesAvailable) return null;
+                if (v === 'budget' && !expensesAvailable) return null;
                 if (v === 'sales' && !salesAvailable) return null;
                 if (v === 'parameters' && !paramsAvailable) return null;
-                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : v === 'sales' ? 'Sales Qty' : 'Parameters';
+                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : v === 'budget' ? 'Exp. vs Budget' : v === 'sales' ? 'Sales Qty' : 'Parameters';
                 return (
                   <button key={v} onClick={() => setView(v)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -197,6 +205,28 @@ export default function BuDetail() {
               }
             } catch (e) { setError((e as Error).message); }
           }} />
+      ) : view === 'budget' ? (
+        <div className="space-y-3">
+          {budgetMonths === 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              ⚠️ Budgets start July 2026. The selected period has no July 2026-onward months, so Budget shows as zero.
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            Budget per account = (Jan–May 2026 actual ÷ 5) × 80%, per month from July 2026. Salaries &amp; Wages excluded. DIFF is Actual − Budget (over budget in red).
+          </p>
+          <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
+            canEdit={profile?.role === 'finance'}
+            onReclassify={async (account, section) => {
+              try {
+                await saveExpenseSection(account, section);
+                if (currentId) {
+                  const d = await fetchBuBudget(currentId, isCombined ? codes : [code!]);
+                  setBudget(d.sections); setBudgetMonths(d.budgetMonths);
+                }
+              } catch (e) { setError((e as Error).message); }
+            }} />
+        </div>
       ) : view === 'sales' ? (
         <SalesTable rows={salesRows} priorLabel={priorLabel} currentLabel={currentLabel} buCode={code} />
       ) : view === 'parameters' ? (

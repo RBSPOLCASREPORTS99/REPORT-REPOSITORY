@@ -453,6 +453,66 @@ export async function fetchExpensesCombined(currentRangeId: string, priorRangeId
   return buildExpenseSections(cur, pri, grossCur, grossPri, overrides);
 }
 
+// ---- Exp. vs Budget -----------------------------------------------------
+// Budget per expense account, effective from July 2026:
+//   (Jan–May 2026 actual per account ÷ 5) × 80% = budget per month.
+// The Salaries & Wages group is excluded. The tab compares the current period's
+// ACTUAL against this BUDGET (× the number of budgeted months in the period).
+const BUDGET_BASELINE_START = '2026-01-01';
+const BUDGET_BASELINE_END = '2026-05-31';
+const BUDGET_START = '2026-07-01';
+const BUDGET_BASELINE_MONTHS = 5;
+const BUDGET_FACTOR = 0.8;
+
+export interface BudgetResult { sections: ExpenseSection[]; budgetMonths: number }
+
+// Jan–May 2026 actual expense per account, summed across the given BUs.
+async function budgetBaselineByAccount(codes: string[]): Promise<ExpMap> {
+  const { data: rr } = await supabase.from('report_ranges').select('id')
+    .eq('kind', 'month').gte('period_start', BUDGET_BASELINE_START).lte('period_start', BUDGET_BASELINE_END);
+  const ids = (rr ?? []).map((r) => r.id as string);
+  if (ids.length === 0) return new Map();
+  const { data } = await supabase.from('expense_lines').select('account, section, group_name, amount').in('range_id', ids).in('bu_code', codes);
+  const out: ExpMap = new Map();
+  for (const r of data ?? []) {
+    const acc = r.account as string;
+    const e = out.get(acc);
+    if (e) e.amount += r.amount as number;
+    else out.set(acc, { amount: r.amount as number, section: r.section as 'controllable' | 'uncontrollable', groupName: r.group_name as string });
+  }
+  return out;
+}
+
+// How many months in the current range are on/after July 2026 (the budget only
+// applies from then). A single pre-July month → 0 (budget shows as zero).
+async function budgetMonthCount(currentRangeId: string): Promise<number> {
+  const { data: r } = await supabase.from('report_ranges').select('kind, period_start, period_end').eq('id', currentRangeId).maybeSingle();
+  if (!r) return 0;
+  if (r.kind === 'month') return (r.period_start as string) >= BUDGET_START ? 1 : 0;
+  const { data: months } = await supabase.from('report_ranges').select('period_start')
+    .eq('kind', 'month').gte('period_start', r.period_start as string).lte('period_end', r.period_end as string);
+  return (months ?? []).filter((m) => (m.period_start as string) >= BUDGET_START).length;
+}
+
+// Actual vs Budget for a BU (or a combined set of BUs). Same shape as the
+// Expenses tab, but prior = Budget and Salaries & Wages is dropped.
+export async function fetchBuBudget(currentRangeId: string, codes: string[]): Promise<BudgetResult> {
+  const [actual, baseline, grossCur, overrides, budgetMonths] = await Promise.all([
+    Promise.all(codes.map((c) => expensesByAccount(currentRangeId, c))).then(mergeExpMaps),
+    budgetBaselineByAccount(codes),
+    Promise.all(codes.map((c) => grossSalesFull(currentRangeId, c))).then((a) => a.reduce((s, v) => s + v, 0)),
+    fetchExpenseSectionOverrides(),
+    budgetMonthCount(currentRangeId),
+  ]);
+  const budget: ExpMap = new Map();
+  for (const [acc, v] of baseline) {
+    budget.set(acc, { amount: (v.amount / BUDGET_BASELINE_MONTHS) * BUDGET_FACTOR * budgetMonths, section: v.section, groupName: v.groupName });
+  }
+  // prior = budget, current = actual; drop the Salaries & Wages section.
+  const sections = buildExpenseSections(actual, budget, grossCur, grossCur, overrides).filter((s) => s.section !== 'salaries');
+  return { sections, budgetMonths };
+}
+
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
 export async function rangesWithExpenses(): Promise<Set<string>> {
   const { data, error } = await supabase.rpc('ranges_with_expenses');
