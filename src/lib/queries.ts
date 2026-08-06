@@ -292,6 +292,33 @@ export async function fetchBuComparison(currentRangeId: string, priorRangeId: st
   return lines;
 }
 
+// The Lakatan Farm's Deferred P&L (its def_-prefixed lines under BU08LF), as a
+// comparison across two ranges — same shape as the regular P&L tab.
+async function farmDeferredSide(rangeId: string): Promise<SideMap> {
+  const { data, error } = await supabase
+    .from('computed_pnl').select('line_item, amount, pct_of_sales').eq('range_id', rangeId).eq('bu_code', FARM_BU_CODE);
+  if (error) throw error;
+  const side: SideMap = new Map();
+  for (const r of data ?? []) {
+    const li = r.line_item as string;
+    if (li.startsWith('def_')) side.set(li.slice(4), { amount: r.amount as number, pct: r.pct_of_sales as number });
+  }
+  return side;
+}
+
+export async function fetchFarmDeferredComparison(currentRangeId: string, priorRangeId?: string): Promise<ComparisonLine[]> {
+  const [cur, pri] = await Promise.all([
+    farmDeferredSide(currentRangeId),
+    priorRangeId ? farmDeferredSide(priorRangeId) : Promise.resolve(new Map() as SideMap),
+  ]);
+  const lines = buildComparisonLines(cur, pri);
+  for (const [key, label] of Object.entries(FARM_PNL_LABELS)) {
+    const l = lines.find((x) => x.key === key);
+    if (l) l.label = label;
+  }
+  return lines;
+}
+
 // Same, but summed across several BUs (a combined box on Home).
 export async function fetchComparisonCombined(currentRangeId: string, priorRangeId: string | undefined, codes: string[], method: AllocMethod = 'gross_sales'): Promise<ComparisonLine[]> {
   const [cur, pri] = await Promise.all([

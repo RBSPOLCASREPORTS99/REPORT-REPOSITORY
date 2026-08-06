@@ -13,7 +13,7 @@ import { useBuLabels } from '../contexts/BuLabelsContext';
 import {
   fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
   fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
-  saveExpenseSection, fetchBuBudget, fetchExpenseReconciliation,
+  saveExpenseSection, fetchBuBudget, fetchExpenseReconciliation, fetchFarmDeferredComparison,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
   type SalesItemRow, type ReconResult,
 } from '../lib/queries';
@@ -23,7 +23,7 @@ import ParametersTable from '../components/ParametersTable';
 import { fetchBuParameters, fetchParamMonthsMissing, type ParamRow } from '../lib/params/paramQueries';
 import { hasParameters, hasStdColumn } from '../lib/params/paramConfig';
 
-type View = 'pnl' | 'expenses' | 'budget' | 'sales' | 'parameters';
+type View = 'pnl' | 'deferred' | 'expenses' | 'budget' | 'sales' | 'parameters';
 
 export default function BuDetail() {
   const { code } = useParams<{ code: string }>();
@@ -31,6 +31,7 @@ export default function BuDetail() {
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [cmp, setCmp] = useState<ComparisonState | null>(null);
   const [lines, setLines] = useState<ComparisonLine[]>([]);
+  const [deferredLines, setDeferredLines] = useState<ComparisonLine[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
   const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
@@ -63,6 +64,7 @@ export default function BuDetail() {
   const expensesAvailable = !!currentId && expenseRanges.has(currentId);
   const salesAvailable = !!currentId && salesRanges.has(currentId);
   const paramsAvailable = !isCombined && hasParameters(code);
+  const deferredAvailable = !isCombined && code === 'BU08LF'; // Lakatan Farm only
 
   useEffect(() => {
     Promise.all([fetchRanges(), code && !isCombined ? fetchTrend(code) : Promise.resolve([]), rangesWithSupport(), rangesWithExpenses(), rangesWithSales()])
@@ -86,7 +88,8 @@ export default function BuDetail() {
     if (view === 'budget' && !expensesAvailable) setView('pnl');
     if (view === 'sales' && !salesAvailable) setView('pnl');
     if (view === 'parameters' && !paramsAvailable) setView('pnl');
-  }, [expensesAvailable, salesAvailable, paramsAvailable, view]);
+    if (view === 'deferred' && !deferredAvailable) setView('pnl');
+  }, [expensesAvailable, salesAvailable, paramsAvailable, deferredAvailable, view]);
 
   useEffect(() => {
     if (!currentId || !code || !cmp) return;
@@ -102,6 +105,8 @@ export default function BuDetail() {
       load = fetchBuBudget(currentId, isCombined ? codes : [code]).then((d) => {
         if (myReq === reqRef.current) { setBudget(d.sections); setBudgetMonths(d.budgetMonths); }
       });
+    } else if (view === 'deferred') {
+      load = fetchFarmDeferredComparison(currentId, cmp.priorId).then((d) => { if (myReq === reqRef.current) setDeferredLines(d); });
     } else if (view === 'sales') {
       load = (isCombined ? fetchSalesCombined(currentId, cmp.priorId, codes) : fetchBuSales(currentId, cmp.priorId, code))
         .then((d) => { if (myReq === reqRef.current) setSalesRows(d); });
@@ -165,14 +170,15 @@ export default function BuDetail() {
 
         <div className="flex flex-wrap items-center gap-2">
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
-          {(expensesAvailable || salesAvailable || paramsAvailable) && (
+          {(expensesAvailable || salesAvailable || paramsAvailable || deferredAvailable) && (
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60 sm:ml-[9%]">
-              {(['pnl', 'expenses', 'budget', 'sales', 'parameters'] as View[]).map((v) => {
+              {(['pnl', 'deferred', 'expenses', 'budget', 'sales', 'parameters'] as View[]).map((v) => {
+                if (v === 'deferred' && !deferredAvailable) return null;
                 if (v === 'expenses' && !expensesAvailable) return null;
                 if (v === 'budget' && !expensesAvailable) return null;
                 if (v === 'sales' && !salesAvailable) return null;
                 if (v === 'parameters' && !paramsAvailable) return null;
-                const label = v === 'pnl' ? 'P&L' : v === 'expenses' ? 'Expenses' : v === 'budget' ? 'Exp. vs Budget' : v === 'sales' ? 'Sales Qty' : 'Parameters';
+                const label = v === 'pnl' ? 'P&L' : v === 'deferred' ? 'Deferred P&L' : v === 'expenses' ? 'Expenses' : v === 'budget' ? 'Exp. vs Budget' : v === 'sales' ? 'Sales Qty' : 'Parameters';
                 return (
                   <button key={v} onClick={() => setView(v)}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === v ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
@@ -192,6 +198,14 @@ export default function BuDetail() {
 
       {loading ? (
         <TableSkeleton />
+      ) : view === 'deferred' ? (
+        deferredLines.length === 0 ? (
+          <p className="rounded-2xl bg-white p-6 text-center text-slate-400 shadow-sm dark:bg-slate-800 dark:text-slate-500">
+            No Deferred P&amp;L entered for this period. Add it on the Lakatan Farm screen → Deferred P&amp;L.
+          </p>
+        ) : (
+          <PnlTable lines={deferredLines} priorLabel={priorLabel} currentLabel={currentLabel} />
+        )
       ) : view === 'expenses' ? (
         <div className="space-y-3">
           {(() => {
