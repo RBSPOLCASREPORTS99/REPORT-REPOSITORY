@@ -19,6 +19,7 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
   const { units } = useUi();
   const { labelFor } = useBuLabels();
   const { value, margin, diff, pctDiff } = pickMetric(metric, bu);
+  const deferred = bu.deferred != null ? (metric === 'net_income_ops' ? bu.deferredOps ?? 0 : bu.deferred) : null;
   const up = diff >= 0;
   const loss = value < 0;
   const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
@@ -74,6 +75,14 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
           </div>
           <span className={`text-[11px] font-semibold tabular-nums ${up ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
             {up ? '▲' : '▼'} {formatPercent(Math.abs(pctDiff))} change
+          </span>
+        </div>
+      )}
+      {deferred != null && (
+        <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t border-indigo-100/70 pt-1.5 dark:border-slate-700/60">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">P&amp;L Deferred</span>
+          <span className={`text-sm font-semibold tabular-nums ${deferred < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}`}>
+            {money(deferred, true)}
           </span>
         </div>
       )}

@@ -7,6 +7,10 @@ import { PNL_LINE_ITEMS } from './constants';
 // it appears in the dashboard like any other BU.
 
 export const FARM_BU_CODE = 'BU08LF';
+// A second, parallel Lakatan Farm P&L ("Deferred P&L") — same input lines,
+// stored under its own pseudo-BU so it never appears as its own dashboard card;
+// it's surfaced as the "P&L Deferred" figure on the Lakatan Farm card instead.
+export const FARM_DEFERRED_BU_CODE = 'BU08LFDEF';
 
 // The lines Finance enters directly. The farmLabel shows the Excel's farm-
 // specific wording; values are stored under the standard P&L keys so the viewer
@@ -72,9 +76,9 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
 const PCT_KEYS = new Set(['net_income_ops_pct', 'net_income_pct']);
 
 // Load the Farm's currently-stored inputs for a range (to pre-fill the form).
-export async function loadFarmInputs(rangeId: string): Promise<FarmInputs> {
+export async function loadFarmInputs(rangeId: string, buCode: string = FARM_BU_CODE): Promise<FarmInputs> {
   const { data, error } = await supabase
-    .from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', FARM_BU_CODE);
+    .from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', buCode);
   if (error) throw error;
   const inputs: FarmInputs = {};
   const inputKeys = new Set(FARM_INPUT_LINES.map((l) => l.key));
@@ -133,14 +137,14 @@ export async function computeFarmAllocations(rangeId: string, grossSales: number
 }
 
 // Save the Farm's P&L for a range (replace prior entry).
-export async function saveFarmEntry(rangeId: string, inputs: FarmInputs): Promise<void> {
+export async function saveFarmEntry(rangeId: string, inputs: FarmInputs, buCode: string = FARM_BU_CODE): Promise<void> {
   const derived = deriveFarmLines(inputs);
   const gs = derived.gross_sales || 0;
-  await supabase.from('computed_pnl').delete().eq('range_id', rangeId).eq('bu_code', FARM_BU_CODE);
+  await supabase.from('computed_pnl').delete().eq('range_id', rangeId).eq('bu_code', buCode);
   const rows = PNL_LINE_ITEMS.map((item) => {
     const amount = derived[item.key] ?? 0;
     return {
-      range_id: rangeId, bu_code: FARM_BU_CODE, line_item: item.key, amount,
+      range_id: rangeId, bu_code: buCode, line_item: item.key, amount,
       pct_of_sales: PCT_KEYS.has(item.key) || gs === 0 ? 0 : amount / gs,
     };
   });

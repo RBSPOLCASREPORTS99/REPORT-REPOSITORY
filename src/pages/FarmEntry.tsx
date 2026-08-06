@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchRanges, type RangeRow } from '../lib/queries';
-import { FARM_INPUT_LINES, deriveFarmLines, loadFarmInputs, saveFarmEntry, computeFarmAllocations, type FarmInputs } from '../lib/farmEntry';
+import { FARM_INPUT_LINES, FARM_BU_CODE, FARM_DEFERRED_BU_CODE, deriveFarmLines, loadFarmInputs, saveFarmEntry, computeFarmAllocations, type FarmInputs } from '../lib/farmEntry';
 import { formatThousands } from '../lib/format';
 
 // Manual entry for Lakatan Farm (BU08LF), which is hand-typed in the Excel
@@ -10,6 +10,8 @@ export default function FarmEntry() {
   const navigate = useNavigate();
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [rangeId, setRangeId] = useState<string>('');
+  const [mode, setMode] = useState<'farm' | 'deferred'>('farm');
+  const buCode = mode === 'deferred' ? FARM_DEFERRED_BU_CODE : FARM_BU_CODE;
   const [inputs, setInputs] = useState<FarmInputs>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,8 +31,8 @@ export default function FarmEntry() {
   useEffect(() => {
     if (!rangeId) return;
     setSaved(false);
-    loadFarmInputs(rangeId).then(setInputs).catch((e) => setError(e.message));
-  }, [rangeId]);
+    loadFarmInputs(rangeId, buCode).then(setInputs).catch((e) => setError(e.message));
+  }, [rangeId, buCode]);
 
   const derived = deriveFarmLines(inputs);
 
@@ -57,7 +59,7 @@ export default function FarmEntry() {
     setSaving(true);
     setError('');
     try {
-      await saveFarmEntry(rangeId, inputs);
+      await saveFarmEntry(rangeId, inputs, buCode);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed.');
@@ -71,10 +73,23 @@ export default function FarmEntry() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Lakatan Farm — manual entry</h1>
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+        {mode === 'deferred' ? 'Lakatan Farm - Deferred P&L' : 'Lakatan Farm'} — manual entry
+      </h1>
+
+      <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-700/60">
+        {([['farm', 'Farm P&L'], ['deferred', 'Deferred P&L']] as const).map(([m, label]) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${mode === m ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        The Farm's P&amp;L is entered by hand (it isn't in QuickBooks). Values in ₱ thousands.
-        Subtotals and Net Income are computed automatically.
+        {mode === 'deferred'
+          ? 'The Farm’s Deferred P&L — entered by hand, same lines as the Farm P&L. Values in ₱ thousands; subtotals and Net Income are computed automatically. Shown as “P&L Deferred” on the Lakatan Farm card.'
+          : 'The Farm’s P&L is entered by hand (it isn’t in QuickBooks). Values in ₱ thousands. Subtotals and Net Income are computed automatically.'}
       </p>
 
       <label className="block text-sm">
@@ -118,7 +133,7 @@ export default function FarmEntry() {
       <div className="flex gap-3">
         <button onClick={() => navigate('/')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Done</button>
         <button onClick={handleSave} disabled={saving} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
-          {saving ? 'Saving…' : 'Save Farm P&L'}
+          {saving ? 'Saving…' : mode === 'deferred' ? 'Save Deferred P&L' : 'Save Farm P&L'}
         </button>
       </div>
     </div>

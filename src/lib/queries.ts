@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS, FARM_PNL_LABELS } from './constants';
 import { TRUCKS } from './pnl/truckConfig';
+import { FARM_BU_CODE, FARM_DEFERRED_BU_CODE } from './farmEntry';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
 const LINE_ORDER = new Map<string, number>(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
@@ -127,6 +128,8 @@ export function pickMetric(metric: BuMetric, d: CardMetricInput): { value: numbe
 export interface BuCardData extends CardMetricInput {
   buCode: string;
   buName: string;
+  deferred?: number;     // Lakatan Farm only: the "P&L Deferred" net income
+  deferredOps?: number;  // …its Net Income from Ops
 }
 
 // Per-BU line items (gross_sales, net_income_ops) for a range — method-independent
@@ -155,7 +158,8 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
     linesByBu(currentRangeId, ['gross_sales', 'net_income_ops']),
     priorRangeId ? linesByBu(priorRangeId, ['gross_sales', 'net_income_ops']) : Promise.resolve(new Map<string, Record<string, number>>()),
   ]);
-  return [...cur.entries()]
+  const cards: BuCardData[] = [...cur.entries()]
+    .filter(([buCode]) => buCode !== FARM_DEFERRED_BU_CODE) // deferred farm P&L is not its own card
     .map(([buCode, netIncome]) => {
       const prior = pri.get(buCode) ?? 0;
       const cl = curLines.get(buCode) ?? {};
@@ -173,8 +177,16 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
         opsDiff: opsCur - opsPri,
         opsPctDiff: opsPri !== 0 ? (opsCur - opsPri) / opsPri : 0,
       };
-    })
-    .sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));
+    });
+  // Attach the Lakatan Farm's Deferred P&L (shown as "P&L Deferred" on its card).
+  if (cur.has(FARM_DEFERRED_BU_CODE) || curLines.has(FARM_DEFERRED_BU_CODE)) {
+    const farm = cards.find((c) => c.buCode === FARM_BU_CODE);
+    if (farm) {
+      farm.deferred = cur.get(FARM_DEFERRED_BU_CODE) ?? 0;
+      farm.deferredOps = curLines.get(FARM_DEFERRED_BU_CODE)?.net_income_ops ?? 0;
+    }
+  }
+  return cards.sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));
 }
 
 export interface ComparisonLine {
