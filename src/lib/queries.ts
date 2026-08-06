@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS, FARM_PNL_LABELS } from './constants';
 import { TRUCKS } from './pnl/truckConfig';
-import { FARM_BU_CODE, FARM_DEFERRED_BU_CODE } from './farmEntry';
+import { FARM_BU_CODE } from './farmEntry';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
 const LINE_ORDER = new Map<string, number>(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
@@ -155,11 +155,10 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
   const [cur, pri, curLines, priLines] = await Promise.all([
     netIncomeByBu(currentRangeId, method),
     priorRangeId ? netIncomeByBu(priorRangeId, method) : Promise.resolve(new Map<string, number>()),
-    linesByBu(currentRangeId, ['gross_sales', 'net_income_ops']),
+    linesByBu(currentRangeId, ['gross_sales', 'net_income_ops', 'def_net_income', 'def_net_income_ops']),
     priorRangeId ? linesByBu(priorRangeId, ['gross_sales', 'net_income_ops']) : Promise.resolve(new Map<string, Record<string, number>>()),
   ]);
   const cards: BuCardData[] = [...cur.entries()]
-    .filter(([buCode]) => buCode !== FARM_DEFERRED_BU_CODE) // deferred farm P&L is not its own card
     .map(([buCode, netIncome]) => {
       const prior = pri.get(buCode) ?? 0;
       const cl = curLines.get(buCode) ?? {};
@@ -178,12 +177,14 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
         opsPctDiff: opsPri !== 0 ? (opsCur - opsPri) / opsPri : 0,
       };
     });
-  // Attach the Lakatan Farm's Deferred P&L (shown as "P&L Deferred" on its card).
-  if (cur.has(FARM_DEFERRED_BU_CODE) || curLines.has(FARM_DEFERRED_BU_CODE)) {
+  // Attach the Lakatan Farm's Deferred P&L (its def_ lines under BU08LF) — shown
+  // as "P&L Deferred" on the Lakatan Farm card.
+  const farmLines = curLines.get(FARM_BU_CODE);
+  if (farmLines && (farmLines.def_net_income != null || farmLines.def_net_income_ops != null)) {
     const farm = cards.find((c) => c.buCode === FARM_BU_CODE);
     if (farm) {
-      farm.deferred = cur.get(FARM_DEFERRED_BU_CODE) ?? 0;
-      farm.deferredOps = curLines.get(FARM_DEFERRED_BU_CODE)?.net_income_ops ?? 0;
+      farm.deferred = farmLines.def_net_income ?? 0;
+      farm.deferredOps = farmLines.def_net_income_ops ?? 0;
     }
   }
   return cards.sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));

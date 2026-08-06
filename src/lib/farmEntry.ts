@@ -7,10 +7,12 @@ import { PNL_LINE_ITEMS } from './constants';
 // it appears in the dashboard like any other BU.
 
 export const FARM_BU_CODE = 'BU08LF';
-// A second, parallel Lakatan Farm P&L ("Deferred P&L") — same input lines,
-// stored under its own pseudo-BU so it never appears as its own dashboard card;
-// it's surfaced as the "P&L Deferred" figure on the Lakatan Farm card instead.
-export const FARM_DEFERRED_BU_CODE = 'BU08LFDEF';
+// A second, parallel Lakatan Farm P&L ("Deferred P&L") — same input lines. It's
+// stored under the SAME (valid) BU08LF bu_code but with a "def_" line-item prefix
+// (computed_pnl.bu_code is FK-constrained to business_units, so a new pseudo-code
+// would be rejected). It never appears as its own card; it's surfaced as the
+// "P&L Deferred" figure on the Lakatan Farm card via its def_net_income line.
+export const FARM_DEFERRED_PREFIX = 'def_';
 
 // The lines Finance enters directly. The farmLabel shows the Excel's farm-
 // specific wording; values are stored under the standard P&L keys so the viewer
@@ -76,13 +78,20 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
 const PCT_KEYS = new Set(['net_income_ops_pct', 'net_income_pct']);
 
 // Load the Farm's currently-stored inputs for a range (to pre-fill the form).
-export async function loadFarmInputs(rangeId: string, buCode: string = FARM_BU_CODE): Promise<FarmInputs> {
+// deferred=true reads the "def_"-prefixed lines (the Deferred P&L).
+export async function loadFarmInputs(rangeId: string, deferred = false): Promise<FarmInputs> {
   const { data, error } = await supabase
-    .from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', buCode);
+    .from('computed_pnl').select('line_item, amount').eq('range_id', rangeId).eq('bu_code', FARM_BU_CODE);
   if (error) throw error;
   const inputs: FarmInputs = {};
   const inputKeys = new Set(FARM_INPUT_LINES.map((l) => l.key));
-  for (const r of data ?? []) if (inputKeys.has(r.line_item as string)) inputs[r.line_item as string] = r.amount as number;
+  for (const r of data ?? []) {
+    const li = r.line_item as string;
+    const isDef = li.startsWith(FARM_DEFERRED_PREFIX);
+    if (isDef !== deferred) continue;
+    const key = deferred ? li.slice(FARM_DEFERRED_PREFIX.length) : li;
+    if (inputKeys.has(key)) inputs[key] = r.amount as number;
+  }
   return inputs;
 }
 
@@ -136,15 +145,19 @@ export async function computeFarmAllocations(rangeId: string, grossSales: number
   };
 }
 
-// Save the Farm's P&L for a range (replace prior entry).
-export async function saveFarmEntry(rangeId: string, inputs: FarmInputs, buCode: string = FARM_BU_CODE): Promise<void> {
+// Save the Farm's P&L for a range (replace prior entry). deferred=true writes the
+// "def_"-prefixed lines; each save only replaces its own line-item set, so the
+// Farm P&L and Deferred P&L (both under BU08LF) don't clobber each other.
+export async function saveFarmEntry(rangeId: string, inputs: FarmInputs, deferred = false): Promise<void> {
   const derived = deriveFarmLines(inputs);
   const gs = derived.gross_sales || 0;
-  await supabase.from('computed_pnl').delete().eq('range_id', rangeId).eq('bu_code', buCode);
+  const prefix = deferred ? FARM_DEFERRED_PREFIX : '';
+  const items = PNL_LINE_ITEMS.map((i) => prefix + i.key);
+  await supabase.from('computed_pnl').delete().eq('range_id', rangeId).eq('bu_code', FARM_BU_CODE).in('line_item', items);
   const rows = PNL_LINE_ITEMS.map((item) => {
     const amount = derived[item.key] ?? 0;
     return {
-      range_id: rangeId, bu_code: buCode, line_item: item.key, amount,
+      range_id: rangeId, bu_code: FARM_BU_CODE, line_item: prefix + item.key, amount,
       pct_of_sales: PCT_KEYS.has(item.key) || gs === 0 ? 0 : amount / gs,
     };
   });

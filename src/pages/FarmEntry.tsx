@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchRanges, type RangeRow } from '../lib/queries';
-import { FARM_INPUT_LINES, FARM_BU_CODE, FARM_DEFERRED_BU_CODE, deriveFarmLines, loadFarmInputs, saveFarmEntry, computeFarmAllocations, type FarmInputs } from '../lib/farmEntry';
+import { FARM_INPUT_LINES, deriveFarmLines, loadFarmInputs, saveFarmEntry, computeFarmAllocations, type FarmInputs } from '../lib/farmEntry';
 import { formatThousands } from '../lib/format';
 
 // Manual entry for Lakatan Farm (BU08LF), which is hand-typed in the Excel
@@ -11,7 +11,7 @@ export default function FarmEntry() {
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [rangeId, setRangeId] = useState<string>('');
   const [mode, setMode] = useState<'farm' | 'deferred'>('farm');
-  const buCode = mode === 'deferred' ? FARM_DEFERRED_BU_CODE : FARM_BU_CODE;
+  const deferred = mode === 'deferred';
   const [inputs, setInputs] = useState<FarmInputs>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,8 +31,8 @@ export default function FarmEntry() {
   useEffect(() => {
     if (!rangeId) return;
     setSaved(false);
-    loadFarmInputs(rangeId, buCode).then(setInputs).catch((e) => setError(e.message));
-  }, [rangeId, buCode]);
+    loadFarmInputs(rangeId, deferred).then(setInputs).catch((e) => setError(e.message));
+  }, [rangeId, deferred]);
 
   const derived = deriveFarmLines(inputs);
 
@@ -59,7 +59,7 @@ export default function FarmEntry() {
     setSaving(true);
     setError('');
     try {
-      await saveFarmEntry(rangeId, inputs, buCode);
+      await saveFarmEntry(rangeId, inputs, deferred);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed.');
