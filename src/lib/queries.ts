@@ -128,8 +128,7 @@ export function pickMetric(metric: BuMetric, d: CardMetricInput): { value: numbe
 export interface BuCardData extends CardMetricInput {
   buCode: string;
   buName: string;
-  deferred?: number;     // Lakatan Farm only: the "P&L Deferred" net income
-  deferredOps?: number;  // …its Net Income from Ops
+  deferred?: CardMetricInput; // Lakatan Farm only: its Deferred P&L metric set
 }
 
 // Per-BU line items (gross_sales, net_income_ops) for a range — method-independent
@@ -155,8 +154,8 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
   const [cur, pri, curLines, priLines] = await Promise.all([
     netIncomeByBu(currentRangeId, method),
     priorRangeId ? netIncomeByBu(priorRangeId, method) : Promise.resolve(new Map<string, number>()),
-    linesByBu(currentRangeId, ['gross_sales', 'net_income_ops', 'def_net_income', 'def_net_income_ops']),
-    priorRangeId ? linesByBu(priorRangeId, ['gross_sales', 'net_income_ops']) : Promise.resolve(new Map<string, Record<string, number>>()),
+    linesByBu(currentRangeId, ['gross_sales', 'net_income_ops', 'def_net_income', 'def_net_income_ops', 'def_gross_sales']),
+    priorRangeId ? linesByBu(priorRangeId, ['gross_sales', 'net_income_ops', 'def_net_income', 'def_net_income_ops']) : Promise.resolve(new Map<string, Record<string, number>>()),
   ]);
   const cards: BuCardData[] = [...cur.entries()]
     .map(([buCode, netIncome]) => {
@@ -177,14 +176,20 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
         opsPctDiff: opsPri !== 0 ? (opsCur - opsPri) / opsPri : 0,
       };
     });
-  // Attach the Lakatan Farm's Deferred P&L (its def_ lines under BU08LF) — shown
-  // as "P&L Deferred" on the Lakatan Farm card.
-  const farmLines = curLines.get(FARM_BU_CODE);
-  if (farmLines && (farmLines.def_net_income != null || farmLines.def_net_income_ops != null)) {
+  // Attach the Lakatan Farm's Deferred P&L (its def_ lines under BU08LF) as a full
+  // metric set, so the card can switch its main figure to it via a dropdown.
+  const cf = curLines.get(FARM_BU_CODE);
+  if (cf && (cf.def_net_income != null || cf.def_net_income_ops != null)) {
     const farm = cards.find((c) => c.buCode === FARM_BU_CODE);
     if (farm) {
-      farm.deferred = farmLines.def_net_income ?? 0;
-      farm.deferredOps = farmLines.def_net_income_ops ?? 0;
+      const pf = priLines.get(FARM_BU_CODE);
+      const dNet = cf.def_net_income ?? 0, dOps = cf.def_net_income_ops ?? 0;
+      const pNet = pf?.def_net_income ?? 0, pOps = pf?.def_net_income_ops ?? 0;
+      farm.deferred = {
+        netIncome: dNet, diff: dNet - pNet, pctDiff: pNet !== 0 ? (dNet - pNet) / pNet : 0,
+        netIncomeOps: dOps, opsDiff: dOps - pOps, opsPctDiff: pOps !== 0 ? (dOps - pOps) / pOps : 0,
+        grossSales: cf.def_gross_sales ?? 0,
+      };
     }
   }
   return cards.sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));

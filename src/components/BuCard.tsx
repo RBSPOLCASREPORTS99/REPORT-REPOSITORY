@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatMoney, formatPercent } from '../lib/format';
 import { useUi } from '../contexts/UiContext';
@@ -18,11 +19,21 @@ export interface CardDnd {
 export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 0, dnd }: { bu: BuCardData; priorLabel?: string; metric?: BuMetric; index?: number; dnd?: CardDnd }) {
   const { units } = useUi();
   const { labelFor } = useBuLabels();
-  const { value, margin, diff, pctDiff } = pickMetric(metric, bu);
-  const deferred = bu.deferred != null ? (metric === 'net_income_ops' ? bu.deferredOps ?? 0 : bu.deferred) : null;
+  // Lakatan Farm: its label doubles as a dropdown to switch the main figure
+  // between the regular P&L and the Deferred P&L.
+  const [source, setSource] = useState<'main' | 'deferred'>('main');
+  const hasDeferred = !!bu.deferred;
+  const showDef = source === 'deferred' && hasDeferred;
+  const active = showDef ? bu.deferred! : bu;
+  const { value, margin, diff, pctDiff } = pickMetric(metric, active);
+  const metricName = metric === 'net_income_ops' ? 'Net income from ops' : 'Net income';
+  // The non-selected figure, shown as a peek line below.
+  const peekInput = showDef ? bu : bu.deferred;
+  const peekVal = peekInput ? pickMetric(metric, peekInput).value : null;
   const up = diff >= 0;
   const loss = value < 0;
   const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
   return (
     <Link
       to={`/bu/${bu.buCode}`}
@@ -40,9 +51,20 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
       <span className="truncate text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
         {labelFor(bu.buCode)}
       </span>
-      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
-        {metric === 'net_income_ops' ? 'Net income from ops' : 'Net income'}
-      </span>
+      {hasDeferred ? (
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value as 'main' | 'deferred')}
+          onClick={stop} onMouseDown={stop}
+          className="-ml-0.5 w-fit cursor-pointer rounded bg-transparent text-[10px] font-medium uppercase tracking-wider text-slate-500 hover:text-indigo-600 focus:outline-none dark:text-slate-400 dark:hover:text-indigo-300"
+          title="Switch between Net Income and the Deferred P&L"
+        >
+          <option value="main">{metricName}</option>
+          <option value="deferred">P&L Deferred</option>
+        </select>
+      ) : (
+        <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{metricName}</span>
+      )}
       <div className="flex items-baseline justify-between gap-3">
         <span
           className={`text-xl font-bold tabular-nums ${
@@ -78,11 +100,11 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
           </span>
         </div>
       )}
-      {deferred != null && (
+      {hasDeferred && peekVal != null && (
         <div className="mt-1.5 flex items-baseline justify-between gap-2 border-t border-indigo-100/70 pt-1.5 dark:border-slate-700/60">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">P&amp;L Deferred</span>
-          <span className={`text-sm font-semibold tabular-nums ${deferred < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}`}>
-            {money(deferred, true)}
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">{showDef ? metricName : 'P&L Deferred'}</span>
+          <span className={`text-sm font-semibold tabular-nums ${peekVal < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}`}>
+            {money(peekVal, true)}
           </span>
         </div>
       )}
