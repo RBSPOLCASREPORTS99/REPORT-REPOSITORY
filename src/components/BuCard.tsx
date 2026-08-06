@@ -33,7 +33,10 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
   const up = diff >= 0;
   const loss = value < 0;
   const money = (v: number, peso = false) => formatMoney(v, 'thousands', units, peso);
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  // Keep the dropdown from triggering the card link: preventDefault stops the
+  // anchor's default navigation, stopPropagation stops React Router's onClick.
+  const onCtrlClick = (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation(); };
+  const onCtrlDown = (e: { stopPropagation: () => void }) => e.stopPropagation();
   return (
     <Link
       to={`/bu/${bu.buCode}`}
@@ -55,7 +58,7 @@ export default function BuCard({ bu, priorLabel, metric = 'net_income', index = 
         <select
           value={source}
           onChange={(e) => setSource(e.target.value as 'main' | 'deferred')}
-          onClick={stop} onMouseDown={stop}
+          onClick={onCtrlClick} onMouseDown={onCtrlDown}
           className="-ml-0.5 w-fit cursor-pointer rounded bg-transparent text-[10px] font-medium uppercase tracking-wider text-slate-500 hover:text-indigo-600 focus:outline-none dark:text-slate-400 dark:hover:text-indigo-300"
           title="Switch between Net Income and the Deferred P&L"
         >
