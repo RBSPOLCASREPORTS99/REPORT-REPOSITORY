@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-02T11:03:52.019Z",
+  "generatedAt": "2026-08-09T06:24:33.186Z",
   "tables": {
     "business_units": 17,
     "periods": 1,
@@ -8,18 +8,18 @@
     "allowed_user_bus": 4,
     "profile_bus": 4,
     "item_units": 72,
-    "pnl_months": 18,
-    "monthly_pnl_inputs": 126,
-    "monthly_pnl_pools": 18,
-    "monthly_trucking": 179,
-    "report_ranges": 42,
-    "computed_pnl": 7116,
-    "expense_lines": 8862,
-    "sales_qty_lines": 5403,
-    "monthly_expense": 2899,
-    "monthly_sales": 1513,
+    "pnl_months": 19,
+    "monthly_pnl_inputs": 133,
+    "monthly_pnl_pools": 19,
+    "monthly_trucking": 185,
+    "report_ranges": 44,
+    "computed_pnl": 7480,
+    "expense_lines": 9311,
+    "sales_qty_lines": 5658,
+    "monthly_expense": 3038,
+    "monthly_sales": 1579,
     "support_sim": 162,
-    "import_batches": 100,
+    "import_batches": 119,
     "pnl_lines": 462
   }
 }
