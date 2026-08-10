@@ -179,6 +179,7 @@ export default function GffcDetail() {
           </p>
           <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
             canEdit={profile?.role === 'finance'}
+            reasonScope="GFFC" rangeId={cmp?.currentId} rangeLabel={currentLabel} canEditReason={profile?.role === 'finance'}
             onReclassify={async (account, section) => {
               try {
                 await saveExpenseSection(gffcOverrideKey(account), section);
