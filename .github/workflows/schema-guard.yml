@@ -1,0 +1,23 @@
+name: schema-guard
+
+# Proves a change to this system cannot reach the five other PAC systems that
+# share its Supabase project. Runs in seconds, so pushes stay fast and the team
+# does not need an approval step to stay safe.
+#
+# Make this a REQUIRED status check on main:
+#   Settings -> Branches -> Add rule -> Require status checks -> schema-guard
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/schema-guard.mjs
