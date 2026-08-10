@@ -33,18 +33,15 @@ export async function persistGffcBranch(rows: GffcBranchRow[]): Promise<void> {
 export async function persistGffcSales(rows: GffcSalesRow[]): Promise<void> {
   if (rows.length === 0) return;
   await replaceMonths('gffc_monthly_sales', [...new Set(rows.map((r) => `${r.year}-${r.month}`))]);
-  // Collapse to one row per (year, month, item), summing quantities — an item
-  // that QuickBooks lists under two categories (e.g. a re-categorised product)
-  // otherwise produces two rows with the same (year, month, item) key and the
-  // insert fails. Keeping item-level uniqueness makes the import work whether or
-  // not the table's PK includes category. The first-seen category is kept.
+  // Collapse to one row per (year, month, category, item) — the table's key —
+  // summing any duplicates, so a repeated item never breaks the insert. An item
+  // that appears under two categories stays as two rows (the key includes category).
   const agg = new Map<string, GffcSalesRow>();
   for (const r of rows) {
     if (r.qty === 0) continue;
-    const k = `${r.year}|${r.month}|${r.item}`;
+    const k = `${r.year}|${r.month}|${r.category}|${r.item}`;
     const e = agg.get(k);
-    if (e) { e.qty += r.qty; if (!e.category) e.category = r.category; }
-    else agg.set(k, { ...r });
+    if (e) e.qty += r.qty; else agg.set(k, { ...r });
   }
   const payload = [...agg.values()];
   for (let i = 0; i < payload.length; i += 500) {

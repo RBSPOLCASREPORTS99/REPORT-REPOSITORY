@@ -286,11 +286,26 @@ export async function fetchGffcBudget(current: Period): Promise<{ sections: Expe
 // ---- Sales by Qty -----------------------------------------------------------
 interface SaleRow { year: number; month: number; item: string; uom: string; qty: number }
 
+// Page through gffc_monthly_sales — a full year can exceed PostgREST's 1000-row
+// cap, which silently drops the later months / categories (e.g. all of July, and
+// PORK / SEAFOODS in June). Fetch every page so nothing is lost.
+async function pageGffcSales<T = Record<string, unknown>>(cols: string, years: number[]): Promise<T[]> {
+  const out: T[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase.from('gffc_monthly_sales').select(cols).in('year', years).range(from, from + page - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as unknown as T[];
+    out.push(...batch);
+    if (batch.length < page) break;
+  }
+  return out;
+}
+
 export async function fetchGffcSales(current: Period, prior?: Period): Promise<{ hasData: boolean; rows: SalesItemRow[] }> {
   const { years } = periodMonths(current);
   const py = prior ? periodMonths(prior).years : [];
-  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, item, uom, qty').in('year', [...new Set([...years, ...py])]);
-  const rows = (data ?? []) as SaleRow[];
+  const rows = await pageGffcSales<SaleRow>('year, month, item, uom, qty', [...new Set([...years, ...py])]);
   const curSet = new Set(monthsInPeriod(current.start, current.end).map((x) => `${x.year}-${x.month}`));
   const priSet = new Set(prior ? monthsInPeriod(prior.start, prior.end).map((x) => `${x.year}-${x.month}`) : []);
 
@@ -335,8 +350,7 @@ interface SaleCatRow { year: number; month: number; category: string; item: stri
 export async function fetchGffcSalesGrouped(current: Period, prior?: Period): Promise<GffcSalesGrouped> {
   const { years } = periodMonths(current);
   const py = prior ? periodMonths(prior).years : [];
-  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, category, item, uom, qty').in('year', [...new Set([...years, ...py])]);
-  const rows = (data ?? []) as SaleCatRow[];
+  const rows = await pageGffcSales<SaleCatRow>('year, month, category, item, uom, qty', [...new Set([...years, ...py])]);
   const curSet = new Set(monthsInPeriod(current.start, current.end).map((x) => `${x.year}-${x.month}`));
   const priSet = new Set(prior ? monthsInPeriod(prior.start, prior.end).map((x) => `${x.year}-${x.month}`) : []);
 
@@ -500,7 +514,7 @@ async function gffcCategoryQty(period: Period): Promise<Record<string, number>> 
   const months = monthsInPeriod(period.start, period.end);
   const years = [...new Set(months.map((x) => x.year))];
   const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
-  const { data } = await supabase.from('gffc_monthly_sales').select('year, month, category, qty').in('year', years);
+  const data = await pageGffcSales('year, month, category, qty', years);
   const out: Record<string, number> = {};
   for (const r of data ?? []) {
     if (!inSet.has(`${r.year}-${r.month}`)) continue;
