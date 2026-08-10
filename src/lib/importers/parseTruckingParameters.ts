@@ -59,6 +59,10 @@ export function parseTruckingParameters(wb: XLSX.WorkBook): Bu10MonthParams[] {
   }
 
   const sum = (r: number, cols: number[]) => cols.reduce((s, c) => s + (numAt(rows, r, c) ?? 0), 0);
+  // KM Run is an odometer delta, so it can never be negative — a negative weekly
+  // value is a bad/partial reading (common when a dashboard is exported mid-month).
+  // Ignore those weeks so one bad reading can't poison "Kilometer Run per Week".
+  const sumPos = (r: number, cols: number[]) => cols.reduce((s, c) => { const v = numAt(rows, r, c); return s + (v != null && v > 0 ? v : 0); }, 0);
   const mean = (r: number, cols: number[]) => {
     const vals = cols.map((c) => numAt(rows, r, c)).filter((v): v is number => v != null);
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
@@ -72,7 +76,7 @@ export function parseTruckingParameters(wb: XLSX.WorkBook): Bu10MonthParams[] {
       maint_cost: sum(rMaint, cols),
       payroll: sum(rPayroll, cols),
       trips: sum(rTrips, cols),
-      km_run: sum(rKmRun, cols),
+      km_run: sumPos(rKmRun, cols),
       weeks: cols.length,
       ave_trips_wk: mean(rAveTrips, cols),
     };
