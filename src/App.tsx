@@ -39,8 +39,11 @@ function Loading() {
 }
 
 export default function App() {
+  // Mounted at the origin root on its own, and under /br/ inside the PAC
+  // portal. Vite sets BASE_URL from the --base the build was given, so the
+  // router follows the build rather than needing to be told twice.
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <UiProvider>
       <AuthProvider>
       <BuLabelsProvider>
