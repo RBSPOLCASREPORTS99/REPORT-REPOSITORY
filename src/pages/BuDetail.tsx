@@ -226,6 +226,7 @@ export default function BuDetail() {
           })()}
           <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
             canEdit={profile?.role === 'finance'}
+            reasonScope={code} rangeId={currentId} rangeLabel={currentLabel} canEditReason={profile?.role === 'finance'}
             onReclassify={async (account, section) => {
               try {
                 await saveExpenseSection(account, section);

@@ -596,6 +596,42 @@ export async function fetchExpenseReconciliation(currentRangeId: string, codes: 
   };
 }
 
+// ---- Expense reasons (per-account notes, with history) ------------------
+export interface ExpenseReasonRow { rangeId: string; rangeLabel: string; periodStart: string; reason: string; updatedAt: string }
+
+// All reasons ever written for an account (scope = BU code / 'GFFC'), newest first.
+export async function fetchExpenseReasons(scope: string, account: string): Promise<ExpenseReasonRow[]> {
+  const { data, error } = await supabase
+    .from('expense_reasons')
+    .select('range_id, reason, updated_at, report_ranges(label, period_start)')
+    .eq('scope', scope).eq('account', account);
+  if (error) return [];
+  return (data ?? []).map((r) => {
+    const rr = r.report_ranges as unknown as { label?: string; period_start?: string } | null;
+    return { rangeId: r.range_id as string, reason: r.reason as string, updatedAt: r.updated_at as string, rangeLabel: rr?.label ?? '', periodStart: rr?.period_start ?? '' };
+  }).sort((a, b) => b.periodStart.localeCompare(a.periodStart));
+}
+
+// The accounts that have a reason for a specific range (to badge the rows).
+export async function fetchReasonAccounts(scope: string, rangeId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from('expense_reasons').select('account').eq('scope', scope).eq('range_id', rangeId);
+  if (error) return new Set();
+  return new Set((data ?? []).map((r) => r.account as string));
+}
+
+// Save (or clear, when blank) an account's reason for a range.
+export async function saveExpenseReason(scope: string, account: string, rangeId: string, reason: string): Promise<void> {
+  const text = reason.trim();
+  if (!text) {
+    const { error } = await supabase.from('expense_reasons').delete().eq('scope', scope).eq('account', account).eq('range_id', rangeId);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from('expense_reasons')
+    .upsert({ scope, account, range_id: rangeId, reason: text, updated_at: new Date().toISOString() }, { onConflict: 'scope,account,range_id' });
+  if (error) throw error;
+}
+
 // Which ranges have any imported expense detail (→ Expenses tab enabled).
 export async function rangesWithExpenses(): Promise<Set<string>> {
   const { data, error } = await supabase.rpc('ranges_with_expenses');
