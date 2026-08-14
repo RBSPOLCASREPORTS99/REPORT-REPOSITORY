@@ -39,10 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     let cancelled = false;
     const uid = session.user.id;
-    Promise.all([
-      supabase.from('profiles').select('user_id, role, full_name').eq('user_id', uid).maybeSingle(),
-      supabase.from('profile_bus').select('bu_code').eq('user_id', uid),
-    ]).then(([profileRes, busRes]) => {
+    (async () => {
+      // Self-provision / refresh this user's profile + BUs from the allow-list.
+      // auth.users is shared across systems, so the signup trigger can't be relied
+      // on; ensure_profile() creates the row for an allow-listed POLCAS email.
+      try { await supabase.rpc('ensure_profile'); } catch { /* ignore */ }
+      const [profileRes, busRes] = await Promise.all([
+        supabase.from('profiles').select('user_id, role, full_name').eq('user_id', uid).maybeSingle(),
+        supabase.from('profile_bus').select('bu_code').eq('user_id', uid),
+      ]);
       if (cancelled) return;
       if (!profileRes.data) { setProfile(null); return; }
       setProfile({
@@ -51,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         full_name: profileRes.data.full_name,
         bus: (busRes.data ?? []).map((r) => r.bu_code as string),
       } as Profile);
-    });
+    })();
     return () => {
       cancelled = true;
     };
