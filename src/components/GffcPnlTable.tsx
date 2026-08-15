@@ -20,6 +20,11 @@ export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { line
     return next;
   });
   const money = (v: number) => formatMoney(v, 'full', units);
+  // A group (Gross Sales / Total Expense) is only collapsible if it actually has
+  // detail rows. The per-branch P&L has no sales-category breakdown, so its Gross
+  // Sales must not show an empty dropdown.
+  const groupsWithDetail = new Set<string>();
+  for (const l of lines) { const g = HEADER_OF[l.kind]; if (g) groupsWithDetail.add(g); }
   const grossC = lines.find((l) => l.kind === 'gross')?.current || 0;
   const grossP = lines.find((l) => l.kind === 'gross')?.prior || 0;
   const th = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
@@ -43,7 +48,7 @@ export default function GffcPnlTable({ lines, priorLabel, currentLabel }: { line
             // Hide detail rows whose group (Gross Sales / Expenses) is collapsed.
             const group = HEADER_OF[line.kind];
             if (group && !expanded.has(group)) return null;
-            const isHeader = COLLAPSIBLE.has(line.kind);
+            const isHeader = COLLAPSIBLE.has(line.kind) && groupsWithDetail.has(line.kind);
             const open = isHeader && expanded.has(line.kind);
             const bold = BOLD.has(line.kind);
             const isPct = line.kind === 'pct';
