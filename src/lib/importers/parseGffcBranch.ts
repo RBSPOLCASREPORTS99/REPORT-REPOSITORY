@@ -45,6 +45,19 @@ function canonicalBranch(raw: string): string | null {
 // already includes them, so they are not re-summed into Total Expense.
 function lineKeyFor(label: string): string | null {
   const s = label.trim().toLowerCase();
+  // Sales categories that break down Gross Sales (keys match GFFC_CATEGORIES so
+  // the branch view shows the same breakdown as the Total P&L).
+  if (s === 'beef meat sales') return 'beef';
+  if (s === 'calamanade sales') return 'calamanade';
+  if (s === 'chicken meat sales') return 'chicken';
+  if (s === 'dairy products sales') return 'dairy';
+  if (s === 'frozen items sales') return 'frozen';
+  if (s === 'fruits and vegetables sales') return 'fruits_veg';
+  if (s === 'grocery items sales') return 'grocery';
+  if (s === 'highland lakatan sales') return 'highland';
+  if (s === 'pork meat sales') return 'pork';
+  if (s === 'seafoods sales') return 'seafoods';
+  if (s === 'other sales/discounts') return 'sales_other';
   if (s === 'gross sales') return 'gross_sales';
   if (s === 'cost of goods sold') return 'cogs';
   if (s === 'admin expense') return 'admin';

@@ -469,7 +469,14 @@ export async function fetchGffcBranchPnl(current: Period, prior?: Period): Promi
     ].filter((blk) => blk.head.current !== 0 || blk.head.prior !== 0 || blk.detail.length > 0);
     expenseBlocks.sort((x, y) => y.head.current - x.head.current);
     const expenseLines = expenseBlocks.flatMap((blk) => [blk.head, ...blk.detail]);
+    // Sales-category breakdown that rolls up into Gross Sales (biggest first),
+    // shown when the Gross Sales row is expanded — same as the Total P&L.
+    const categoryLines = GFFC_CATEGORIES
+      .map((cat) => L(cat.key, cat.label, 'category', c(cat.key), p(cat.key)))
+      .filter((l) => l.current !== 0 || l.prior !== 0)
+      .sort((a, b) => b.current - a.current);
     return [
+      ...categoryLines,
       L('gross_sales', 'Gross Sales', 'gross', gsC, gsP),
       L('cogs', 'Cost of Goods Sold', 'cogs', c('cogs'), p('cogs'), true),
       L('gross_income', 'Gross Income', 'gross_income', giC, giP),
