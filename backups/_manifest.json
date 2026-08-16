@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-08-09T06:24:33.186Z",
+  "generatedAt": "2026-08-16T05:57:34.748Z",
   "tables": {
     "business_units": 17,
     "periods": 1,
-    "profiles": 8,
-    "allowed_users": 7,
+    "profiles": 9,
+    "allowed_users": 8,
     "allowed_user_bus": 4,
     "profile_bus": 4,
     "item_units": 72,
@@ -14,12 +14,12 @@
     "monthly_trucking": 185,
     "report_ranges": 44,
     "computed_pnl": 7480,
-    "expense_lines": 9311,
+    "expense_lines": 9270,
     "sales_qty_lines": 5658,
     "monthly_expense": 3038,
     "monthly_sales": 1579,
     "support_sim": 162,
-    "import_batches": 119,
+    "import_batches": 126,
     "pnl_lines": 462
   }
 }
