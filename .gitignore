@@ -23,3 +23,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code's local approval list. It accumulates the commands you approve,
+# which can include database passwords. Never commit it — each machine keeps
+# its own, and the protection must live here, not in a personal global ignore.
+.claude/settings.local.json
