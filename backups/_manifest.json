@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-16T05:57:34.748Z",
+  "generatedAt": "2026-08-23T05:58:22.158Z",
   "tables": {
     "business_units": 17,
     "periods": 1,
-    "profiles": 9,
-    "allowed_users": 8,
-    "allowed_user_bus": 4,
-    "profile_bus": 4,
+    "profiles": 13,
+    "allowed_users": 12,
+    "allowed_user_bus": 7,
+    "profile_bus": 7,
     "item_units": 72,
     "pnl_months": 19,
     "monthly_pnl_inputs": 133,
