@@ -11,6 +11,7 @@ import { hasStdColumn } from '../lib/params/paramConfig';
 import { useUi } from '../contexts/UiContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatMoney, formatPercent } from '../lib/format';
+import { printTruckPnl } from '../lib/printTruckPnl';
 
 // Simulated P&L per Truck (BU10). Income from the TRUCKING DASHBOARD, expenses
 // by account from the QuickBooks per-truck columns. Same YTD / QTR / Month
@@ -126,6 +127,13 @@ export default function TruckPnl() {
           <div className="flex flex-1 justify-center">
             <SetMonthSelect ranges={ranges} />
           </div>
+          <button
+            onClick={() => data && printTruckPnl(data, priorLabel, currentLabel, units)}
+            disabled={!data?.hasData}
+            title="Print the per-truck P&L — one truck per page"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-emerald-600 dark:hover:bg-emerald-500">
+            <span aria-hidden>🖨</span> Print
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ComparisonControl ranges={ranges} onChange={setCmp} showSetMonth={false} />
