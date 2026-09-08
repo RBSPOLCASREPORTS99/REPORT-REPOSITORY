@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient';
-import { BU_PARAM_CONFIG, type BuParamConfig, type ParamDef } from './paramConfig';
+import { BU_PARAM_CONFIG, configWithCustomItems, customGroupsFor, type BuParamConfig, type CustomItem, type ParamDef } from './paramConfig';
 
 // A resolved parameter row for the comparison table.
 export interface ParamRow {
@@ -112,9 +112,52 @@ export async function fetchParamMonthsMissing(buCode: string, rangeId: string): 
   return list.filter((m) => !have.has(m.id as string)).map((m) => m.label as string);
 }
 
+// User-defined items for a BU (empty if the table is missing or none added).
+export async function fetchCustomItems(buCode: string): Promise<CustomItem[]> {
+  if (customGroupsFor(buCode).length === 0) return [];
+  try {
+    const { data, error } = await supabase.from('br_param_items')
+      .select('bu_code, group_key, item_key, label, sort_order')
+      .eq('bu_code', buCode).order('sort_order', { ascending: true });
+    if (error) return [];
+    return (data ?? []).map((r) => ({
+      buCode: r.bu_code as string, groupKey: r.group_key as string,
+      itemKey: r.item_key as string, label: r.label as string, sortOrder: Number(r.sort_order),
+    }));
+  } catch { return []; }
+}
+
+// Add a new item to an open-ended group (Finance only, enforced by RLS).
+export async function addCustomItem(buCode: string, groupKey: string, label: string): Promise<void> {
+  const g = customGroupsFor(buCode).find((x) => x.groupKey === groupKey);
+  if (!g) throw new Error('This group does not accept custom items.');
+  const name = label.trim();
+  if (!name) throw new Error('Enter a name for the new item.');
+  const existing = await fetchCustomItems(buCode);
+  const sort = existing.filter((i) => i.groupKey === groupKey).reduce((m, i) => Math.max(m, i.sortOrder), 0) + 1;
+  const itemKey = `${g.keyPrefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+  const { error } = await supabase.from('br_param_items')
+    .insert({ bu_code: buCode, group_key: groupKey, item_key: itemKey, label: name, sort_order: sort });
+  if (error) throw error;
+}
+
+export async function renameCustomItem(buCode: string, itemKey: string, label: string): Promise<void> {
+  const name = label.trim();
+  if (!name) throw new Error('Item name cannot be empty.');
+  const { error } = await supabase.from('br_param_items').update({ label: name }).eq('bu_code', buCode).eq('item_key', itemKey);
+  if (error) throw error;
+}
+
+// Delete an item definition and its stored values across all periods.
+export async function deleteCustomItem(buCode: string, itemKey: string): Promise<void> {
+  const { error } = await supabase.from('br_param_items').delete().eq('bu_code', buCode).eq('item_key', itemKey);
+  if (error) throw error;
+  await supabase.from('bu_parameters').delete().eq('bu_code', buCode).eq('param_key', itemKey);
+}
+
 // Build the Parameters comparison rows for a BU (current vs prior range).
 export async function fetchBuParameters(buCode: string, currentRangeId: string, priorRangeId?: string): Promise<ParamRow[] | null> {
-  const config = BU_PARAM_CONFIG[buCode];
+  const config = configWithCustomItems(buCode, await fetchCustomItems(buCode));
   if (!config) return null;
   const [cur, pri, std] = await Promise.all([
     resolveParams(currentRangeId, buCode, config),
@@ -156,7 +199,7 @@ export async function loadBuParameterStd(buCode: string): Promise<Record<string,
 // Save the manual values for a BU + range (only the manual params are stored;
 // P&L and ratio values are recomputed at read time).
 export async function saveBuParameters(rangeId: string, buCode: string, values: Record<string, number>): Promise<void> {
-  const config = BU_PARAM_CONFIG[buCode];
+  const config = configWithCustomItems(buCode, await fetchCustomItems(buCode));
   if (!config) return;
   const manualKeys = config.params.filter((p) => p.source.kind === 'manual').map((p) => p.key);
   const rows = manualKeys

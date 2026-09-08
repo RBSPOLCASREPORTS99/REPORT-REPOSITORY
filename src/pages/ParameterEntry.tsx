@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchRanges, type RangeRow } from '../lib/queries';
 import { useBuLabels } from '../contexts/BuLabelsContext';
-import { BU_PARAM_CONFIG } from '../lib/params/paramConfig';
-import { loadBuParameterInputs, loadBuParameterStd, saveBuParameters, saveBuParameterStd } from '../lib/params/paramQueries';
+import { BU_PARAM_CONFIG, configWithCustomItems, customGroupsFor, type CustomItem } from '../lib/params/paramConfig';
+import { addCustomItem, deleteCustomItem, fetchCustomItems, loadBuParameterInputs, loadBuParameterStd, renameCustomItem, saveBuParameters, saveBuParameterStd } from '../lib/params/paramQueries';
 import { GridSkeleton, Skeleton } from '../components/Skeleton';
 import NumberInput from '../components/NumberInput';
 
@@ -19,6 +19,10 @@ export default function ParameterEntry() {
   const [rangeId, setRangeId] = useState('');
   const [values, setValues] = useState<Record<string, number>>({});
   const [std, setStd] = useState<Record<string, number>>({});
+  const [items, setItems] = useState<CustomItem[]>([]);
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
+  const [addDrafts, setAddDrafts] = useState<Record<string, string>>({});
+  const [itemBusy, setItemBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -39,8 +43,50 @@ export default function ParameterEntry() {
       .catch((e) => setError(e.message));
   }, [rangeId, buCode]);
 
-  const config = BU_PARAM_CONFIG[buCode];
+  // User-defined items for the selected BU (open-ended groups only).
+  const reloadItems = () => fetchCustomItems(buCode).then((it) => {
+    setItems(it);
+    setLabelDrafts(Object.fromEntries(it.map((i) => [i.itemKey, i.label])));
+  });
+  useEffect(() => {
+    setItems([]); setLabelDrafts({});
+    if (buCode) reloadItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buCode]);
+
+  // Effective config = built-in params + injected custom items.
+  const config = useMemo(() => configWithCustomItems(buCode, items) ?? BU_PARAM_CONFIG[buCode], [buCode, items]);
   const showStdCol = !config?.noStd;
+  const customGroups = customGroupsFor(buCode);
+  const customKeys = useMemo(() => new Set(items.map((i) => i.itemKey)), [items]);
+
+  async function handleAddItem(groupKey: string) {
+    const label = (addDrafts[groupKey] ?? '').trim();
+    if (!label) return;
+    setItemBusy(true); setError('');
+    try { await addCustomItem(buCode, groupKey, label); setAddDrafts((d) => ({ ...d, [groupKey]: '' })); await reloadItems(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not add the item.'); }
+    finally { setItemBusy(false); }
+  }
+  async function handleRenameItem(itemKey: string) {
+    const label = (labelDrafts[itemKey] ?? '').trim();
+    const current = items.find((i) => i.itemKey === itemKey)?.label ?? '';
+    if (!label || label === current) { setLabelDrafts((d) => ({ ...d, [itemKey]: current })); return; }
+    setItemBusy(true); setError('');
+    try { await renameCustomItem(buCode, itemKey, label); await reloadItems(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not rename the item.'); }
+    finally { setItemBusy(false); }
+  }
+  async function handleDeleteItem(itemKey: string, label: string) {
+    if (!window.confirm(`Remove "${label}"? Its values in every period will be deleted.`)) return;
+    setItemBusy(true); setError('');
+    try {
+      await deleteCustomItem(buCode, itemKey);
+      setValues((v) => { const n = { ...v }; delete n[itemKey]; return n; });
+      await reloadItems();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not remove the item.'); }
+    finally { setItemBusy(false); }
+  }
 
   async function handleSave() {
     setSaving(true); setError(''); setSaved(false);
@@ -57,6 +103,7 @@ export default function ParameterEntry() {
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-6 w-64" /><GridSkeleton /></div>;
   if (ranges.length === 0) return <p className="text-slate-400 dark:text-slate-500">Import a monthly P&L first to create periods.</p>;
+  if (!config) return null;
 
   return (
     <div className="space-y-4">
@@ -89,13 +136,47 @@ export default function ParameterEntry() {
         {config.params.filter((p) => !p.hidden).map((p, i, list) => {
           const manual = p.source.kind === 'manual';
           const showHeader = !!p.group && p.group !== list[i - 1]?.group;
+          const isCustom = customKeys.has(p.key);
+          // Show the "Add item" control just above an open-ended group's Total row.
+          const addGroup = p.groupTotal ? customGroups.find((g) => g.totalKey === p.key) : undefined;
           return (
             <Fragment key={p.key}>
             {showHeader && (
               <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:border-slate-700/60 dark:bg-slate-700/50 dark:text-indigo-300">{p.group}</div>
             )}
+            {addGroup && (
+              <div className={`grid ${showStdCol ? 'grid-cols-[1fr_7rem_9rem]' : 'grid-cols-[1fr_9rem]'} items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-2 dark:border-slate-700/60 dark:bg-slate-700/20`}>
+                <div className="flex items-center gap-2 pl-4">
+                  <input
+                    value={addDrafts[addGroup.groupKey] ?? ''}
+                    onChange={(e) => setAddDrafts((d) => ({ ...d, [addGroup.groupKey]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddItem(addGroup.groupKey); } }}
+                    placeholder="New item name…"
+                    className="w-full max-w-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm focus:border-slate-400 focus:outline-none" />
+                  <button type="button" onClick={() => handleAddItem(addGroup.groupKey)} disabled={itemBusy || !(addDrafts[addGroup.groupKey] ?? '').trim()}
+                    className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">+ Add</button>
+                </div>
+                {showStdCol && <span />}<span />
+              </div>
+            )}
             <div className={`grid ${showStdCol ? 'grid-cols-[1fr_7rem_9rem]' : 'grid-cols-[1fr_9rem]'} items-center gap-3 border-b border-slate-100 px-4 py-2 dark:border-slate-700/60`}>
-              <span className={`text-sm text-slate-700 dark:text-slate-200 ${p.group ? 'pl-4' : ''}`}>{p.label}</span>
+              {isCustom ? (
+                <span className="flex items-center gap-1.5 pl-4">
+                  <input
+                    value={labelDrafts[p.key] ?? p.label}
+                    onChange={(e) => setLabelDrafts((d) => ({ ...d, [p.key]: e.target.value }))}
+                    onBlur={() => handleRenameItem(p.key)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                    disabled={itemBusy}
+                    title="Rename this item"
+                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm text-slate-700 hover:border-slate-200 focus:border-slate-400 focus:bg-white focus:outline-none dark:text-slate-200 dark:hover:border-slate-700 dark:focus:bg-slate-800" />
+                  <button type="button" onClick={() => handleDeleteItem(p.key, p.label)} disabled={itemBusy}
+                    title="Remove this item" aria-label={`Remove ${p.label}`}
+                    className="shrink-0 rounded px-1.5 text-slate-400 hover:text-red-600 disabled:opacity-40">✕</button>
+                </span>
+              ) : (
+                <span className={`text-sm text-slate-700 dark:text-slate-200 ${p.group ? 'pl-4' : ''}`}>{p.label}</span>
+              )}
               {showStdCol && <NumberInput value={std[p.key]}
                 onChange={(n) => { setStd((s) => ({ ...s, [p.key]: n })); setSaved(false); }}
                 className="w-28 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-right tabular-nums focus:border-slate-400 focus:outline-none" />}

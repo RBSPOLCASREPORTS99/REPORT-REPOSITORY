@@ -197,3 +197,55 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
 export const hasParameters = (buCode?: string): boolean => !!buCode && buCode in BU_PARAM_CONFIG;
 // Whether a BU shows the STD (standards) column at all.
 export const hasStdColumn = (buCode?: string): boolean => !!buCode && !!BU_PARAM_CONFIG[buCode] && !BU_PARAM_CONFIG[buCode].noStd;
+
+// ---- User-defined (custom) items ----------------------------------------
+// Some groups are open-ended: Finance can add items beyond the built-in ones.
+// Each such group names its display header, the "Total" row to fold new items
+// into, and the prefix new item keys carry (so they're easy to recognise).
+export interface CustomItemGroup {
+  buCode: string;
+  groupKey: string;    // stable id stored in br_param_items.group_key
+  groupLabel: string;  // must equal the group's ParamDef.group header
+  totalKey: string;    // the SUMV key whose sum the new items join
+  keyPrefix: string;   // new item_key values start with this
+}
+
+// BU11 → "Kilos Delivered" accepts extra delivered products beyond Yellow Corn
+// and Rice Bran D1. Add a line here to open any other group the same way.
+export const CUSTOM_ITEM_GROUPS: CustomItemGroup[] = [
+  { buCode: 'BU11', groupKey: 'kilos_delivered', groupLabel: 'Kilos Delivered', totalKey: 'kilos_delivered', keyPrefix: 'del_x_' },
+];
+
+export const customGroupsFor = (buCode?: string): CustomItemGroup[] =>
+  buCode ? CUSTOM_ITEM_GROUPS.filter((g) => g.buCode === buCode) : [];
+
+// One user-defined item's definition (loaded from br_param_items).
+export interface CustomItem { buCode: string; groupKey: string; itemKey: string; label: string; sortOrder: number; }
+
+// Build an effective config with the user-defined items injected into their
+// group — each inserted just above the group's Total and added to that Total's
+// sum, so the rest of the engine (resolve, entry form, Parameters table) treats
+// them exactly like the built-in items.
+export function configWithCustomItems(buCode: string, items: CustomItem[]): BuParamConfig | undefined {
+  const base = BU_PARAM_CONFIG[buCode];
+  if (!base) return base;
+  const groups = customGroupsFor(buCode);
+  if (groups.length === 0 || items.length === 0) return base;
+  const params = base.params.map((p) => ({ ...p }));
+  for (const g of groups) {
+    const groupItems = items
+      .filter((i) => i.groupKey === g.groupKey)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
+    if (groupItems.length === 0) continue;
+    const defs = groupItems.map((i) => M(i.itemKey, i.label, 0, { group: g.groupLabel }));
+    const ti = params.findIndex((p) => p.key === g.totalKey);
+    if (ti >= 0 && params[ti].source.kind === 'sum') {
+      const of = [...(params[ti].source as { kind: 'sum'; of: string[] }).of, ...defs.map((d) => d.key)];
+      params[ti] = { ...params[ti], source: { kind: 'sum', of } };
+      params.splice(ti, 0, ...defs);
+    } else {
+      params.push(...defs);
+    }
+  }
+  return { ...base, params };
+}
