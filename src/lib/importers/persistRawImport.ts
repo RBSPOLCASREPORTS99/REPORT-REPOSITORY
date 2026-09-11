@@ -32,6 +32,19 @@ export async function persistExpenseTx(parsed: ParsedExpenseTx, fileName: string
     if (error) throw error;
   }
 
+  // Replace the covered months' transaction detail (for the account drill-down).
+  for (const ym of parsed.months) {
+    await supabase.from('br_expense_tx').delete().eq('year', ym.year).eq('month', ym.month);
+  }
+  for (let i = 0; i < parsed.tx.length; i += 500) {
+    const chunk = parsed.tx.slice(i, i + 500).map((t) => ({
+      year: t.year, month: t.month, txn_date: t.date, bu_code: t.buCode, account: t.account,
+      ref: t.ref, name: t.name, memo: t.memo, amount: t.amount, import_batch_id: batchId,
+    }));
+    const { error } = await supabase.from('br_expense_tx').insert(chunk);
+    if (error) throw error;
+  }
+
   await supabase.from('import_batches').update({ status: 'confirmed' }).eq('id', batchId);
 
   let ranges = 0;

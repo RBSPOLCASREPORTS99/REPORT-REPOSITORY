@@ -16,8 +16,22 @@ export interface MonthlyExpenseRow {
   amount: number; // full pesos
 }
 
+// One QuickBooks transaction line behind an expense account's monthly total.
+export interface ExpenseTxRow {
+  year: number;
+  month: number;
+  date: string; // ISO yyyy-mm-dd
+  buCode: string;
+  account: string;
+  ref: string;
+  name: string;
+  memo: string;
+  amount: number; // full pesos (debit − credit)
+}
+
 export interface ParsedExpenseTx {
   rows: MonthlyExpenseRow[];
+  tx: ExpenseTxRow[];
   months: { year: number; month: number }[];
   buCodes: string[];
   warnings: string[];
@@ -55,9 +69,9 @@ function buFromClass(cls: string): string | null {
   return 'BU' + n;
 }
 
-function ymFromSerial(serial: number): { year: number; month: number } {
+function ymFromSerial(serial: number): { year: number; month: number; date: string } {
   const d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, date: d.toISOString().slice(0, 10) };
 }
 
 export type Classification = Map<string, { section: Section; group: string }>;
@@ -124,16 +138,30 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
   const warnings: string[] = [];
 
   const sheetName = findExpenseTxSheet(wb);
-  if (!sheetName) return { rows: [], months: [], buCodes: [], warnings: ['No QuickBooks expense transaction sheet (Account / Class / Debit / Credit columns) found.'] };
+  if (!sheetName) return { rows: [], tx: [], months: [], buCodes: [], warnings: ['No QuickBooks expense transaction sheet (Account / Class / Debit / Credit columns) found.'] };
   const qb = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets[sheetName], { header: 1, raw: true, defval: '' });
   // header row has Account / Class / Debit / Credit
   let hdr = 0;
   for (let r = 0; r < 5; r++) { if ((qb[r] ?? []).includes('Account') && (qb[r] ?? []).includes('Class')) { hdr = r; break; } }
   const H = qb[hdr] ?? [];
   const cDate = H.indexOf('Date'), cAccount = H.indexOf('Account'), cClass = H.indexOf('Class'), cDebit = H.indexOf('Debit'), cCredit = H.indexOf('Credit');
+  // Ref / Name / Memo for the drill-down detail — matched loosely, as QuickBooks
+  // exports label them inconsistently (Num/Ref, Name/Payee, Memo/Description).
+  const findCol = (cands: string[]) => {
+    for (let i = 0; i < H.length; i++) {
+      const h = (H[i] ?? '').toString().trim().toLowerCase();
+      if (h && cands.some((c) => h === c || h.includes(c))) return i;
+    }
+    return -1;
+  };
+  const cNum = findCol(['num', 'ref', 'doc no', 'document']);
+  const cName = findCol(['name', 'payee', 'vendor', 'supplier']);
+  const cMemo = findCol(['memo', 'description', 'particular']);
+  const cell = (row: (string | number)[], c: number) => (c >= 0 && row[c] != null ? row[c].toString().trim() : '');
 
   // aggregate: key = year|month|bu|account
   const agg = new Map<string, MonthlyExpenseRow>();
+  const tx: ExpenseTxRow[] = [];
   const buSet = new Set<string>();
   const monthSet = new Set<string>();
   const unmappedAccounts = new Set<string>();  // excluded (COGS / taxes)
@@ -163,11 +191,14 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
     }
     const { section, group } = cl;
 
-    const { year, month } = ymFromSerial(date);
+    const { year, month, date: isoDate } = ymFromSerial(date);
     const key = `${year}|${month}|${bu}|${section}|${group}|${account}`;
     const existing = agg.get(key);
     if (existing) existing.amount += amount;
     else agg.set(key, { year, month, buCode: bu, section, groupName: group, account, amount });
+
+    // Keep the individual line for the account's drill-down detail.
+    tx.push({ year, month, date: isoDate, buCode: bu, account, ref: cell(row, cNum), name: cell(row, cName), memo: cell(row, cMemo), amount });
 
     buSet.add(bu);
     monthSet.add(`${year}-${month}`);
@@ -183,5 +214,5 @@ export function parseExpenseTransactions(data: ArrayBuffer, fallback?: Classific
   const months = [...monthSet].map((s) => { const [y, m] = s.split('-').map(Number); return { year: y, month: m }; })
     .sort((a, b) => a.year - b.year || a.month - b.month);
 
-  return { rows: [...agg.values()].filter((r) => r.amount !== 0), months, buCodes: [...buSet], warnings };
+  return { rows: [...agg.values()].filter((r) => r.amount !== 0), tx, months, buCodes: [...buSet], warnings };
 }

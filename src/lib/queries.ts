@@ -596,40 +596,34 @@ export async function fetchExpenseReconciliation(currentRangeId: string, codes: 
   };
 }
 
-// ---- Expense reasons (per-account notes, with history) ------------------
-export interface ExpenseReasonRow { rangeId: string; rangeLabel: string; periodStart: string; reason: string; updatedAt: string }
+// ---- Expense transaction detail (the QB lines behind an account) --------
+export interface ExpenseTxDetail { date: string; ref: string; name: string; memo: string; amount: number }
 
-// All reasons ever written for an account (scope = BU code / 'GFFC'), newest first.
-export async function fetchExpenseReasons(scope: string, account: string): Promise<ExpenseReasonRow[]> {
-  const { data, error } = await supabase
-    .from('expense_reasons')
-    .select('range_id, reason, updated_at, report_ranges(label, period_start)')
-    .eq('scope', scope).eq('account', account);
-  if (error) return [];
-  return (data ?? []).map((r) => {
-    const rr = r.report_ranges as unknown as { label?: string; period_start?: string } | null;
-    return { rangeId: r.range_id as string, reason: r.reason as string, updatedAt: r.updated_at as string, rangeLabel: rr?.label ?? '', periodStart: rr?.period_start ?? '' };
-  }).sort((a, b) => b.periodStart.localeCompare(a.periodStart));
-}
-
-// The accounts that have a reason for a specific range (to badge the rows).
-export async function fetchReasonAccounts(scope: string, rangeId: string): Promise<Set<string>> {
-  const { data, error } = await supabase.from('expense_reasons').select('account').eq('scope', scope).eq('range_id', rangeId);
-  if (error) return new Set();
-  return new Set((data ?? []).map((r) => r.account as string));
-}
-
-// Save (or clear, when blank) an account's reason for a range.
-export async function saveExpenseReason(scope: string, account: string, rangeId: string, reason: string): Promise<void> {
-  const text = reason.trim();
-  if (!text) {
-    const { error } = await supabase.from('expense_reasons').delete().eq('scope', scope).eq('account', account).eq('range_id', rangeId);
-    if (error) throw error;
-    return;
-  }
-  const { error } = await supabase.from('expense_reasons')
-    .upsert({ scope, account, range_id: rangeId, reason: text, updated_at: new Date().toISOString() }, { onConflict: 'scope,account,range_id' });
-  if (error) throw error;
+// The individual transactions making up an account's total for a period. The
+// period is resolved from the range's date span, so a month, quarter or YTD all
+// work; buCodes covers combined BUs (e.g. BU01+BU02). Paginated (PostgREST caps
+// at 1000 rows) and fail-safe (empty if the table/detail isn't there yet).
+export async function fetchExpenseTransactions(buCodes: string[], account: string, rangeId: string): Promise<ExpenseTxDetail[]> {
+  if (buCodes.length === 0) return [];
+  try {
+    const { data: r } = await supabase.from('report_ranges').select('period_start, period_end').eq('id', rangeId).maybeSingle();
+    if (!r?.period_start || !r?.period_end) return [];
+    const out: ExpenseTxDetail[] = [];
+    const page = 1000;
+    for (let from = 0; ; from += page) {
+      const { data, error } = await supabase.from('br_expense_tx')
+        .select('txn_date, ref, name, memo, amount')
+        .in('bu_code', buCodes).eq('account', account)
+        .gte('txn_date', r.period_start).lte('txn_date', r.period_end)
+        .order('txn_date', { ascending: true }).order('id', { ascending: true })
+        .range(from, from + page - 1);
+      if (error) return out;
+      const rows = data ?? [];
+      for (const x of rows) out.push({ date: x.txn_date as string, ref: x.ref as string, name: x.name as string, memo: x.memo as string, amount: Number(x.amount) });
+      if (rows.length < page) break;
+    }
+    return out;
+  } catch { return []; }
 }
 
 // Which ranges have any imported expense detail (→ Expenses tab enabled).

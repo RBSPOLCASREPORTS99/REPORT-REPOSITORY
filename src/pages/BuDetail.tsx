@@ -226,7 +226,7 @@ export default function BuDetail() {
           })()}
           <ExpenseTable sections={expenses} priorLabel={priorLabel} currentLabel={currentLabel}
             canEdit={profile?.role === 'finance'}
-            reasonScope={code} rangeId={currentId} rangeLabel={currentLabel} canEditReason={profile?.role === 'finance'}
+            detailBus={isCombined ? codes : (code ? [code] : [])} rangeId={currentId} rangeLabel={currentLabel}
             onReclassify={async (account, section) => {
               try {
                 await saveExpenseSection(account, section);
@@ -253,7 +253,7 @@ export default function BuDetail() {
           </p>
           <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
             canEdit={profile?.role === 'finance'}
-            reasonScope={code} rangeId={currentId} rangeLabel={currentLabel} canEditReason={profile?.role === 'finance'}
+            detailBus={isCombined ? codes : (code ? [code] : [])} rangeId={currentId} rangeLabel={currentLabel}
             onReclassify={async (account, section) => {
               try {
                 await saveExpenseSection(account, section);

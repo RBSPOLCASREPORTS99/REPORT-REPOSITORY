@@ -176,7 +176,7 @@ export default function TruckPnl() {
             </p>
             <ExpenseTable sections={budget} priorLabel="Budget" currentLabel="Actual"
               canEdit={profile?.role === 'finance'}
-              reasonScope="BU10" rangeId={cmp?.currentId} rangeLabel={currentLabel} canEditReason={profile?.role === 'finance'}
+              detailBus={['BU10']} rangeId={cmp?.currentId} rangeLabel={currentLabel}
               onReclassify={async (account, section) => {
                 try { await saveExpenseSection(truckOverrideKey(account), section); await loadBudget(); }
                 catch (e) { setError((e as Error).message); }

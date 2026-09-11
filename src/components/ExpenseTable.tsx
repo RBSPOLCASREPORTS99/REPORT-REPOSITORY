@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { formatPercent, formatMoney } from '../lib/format';
 import { useUi } from '../contexts/UiContext';
 import { useColHighlight } from '../lib/useColHighlight';
-import { fetchExpenseReasons, fetchReasonAccounts, saveExpenseReason, type ExpenseSection, type ExpenseReasonRow } from '../lib/queries';
+import { fetchExpenseTransactions, type ExpenseSection, type ExpenseTxDetail } from '../lib/queries';
 
 const SECTION_LABELS: Record<string, string> = {
   salaries: 'Salaries and Wages',
@@ -15,28 +15,26 @@ const SECTION_LABELS: Record<string, string> = {
 // Wages (first), Controllable, and Non-controllable — each collapsible (click
 // the section header); all three start collapsed. Finance gets a right-most
 // C / NC button per account to move it between Controllable and Non-controllable.
-// When reasonScope + rangeId are given, clicking the Current cell opens a note
-// ("reason") for that account & period, with the history of prior reasons.
+// When detailBus + rangeId are given, clicking the Current amount opens the
+// account's transaction detail (Date · Ref · Name · Memo · Amount) for the period.
 export default function ExpenseTable({
   sections,
   priorLabel,
   currentLabel,
   canEdit = false,
   onReclassify,
-  reasonScope,
+  detailBus,
   rangeId,
   rangeLabel,
-  canEditReason = false,
 }: {
   sections: ExpenseSection[];
   priorLabel: string;
   currentLabel: string;
   canEdit?: boolean;
   onReclassify?: (account: string, section: 'controllable' | 'uncontrollable') => void;
-  reasonScope?: string;
+  detailBus?: string[];
   rangeId?: string;
   rangeLabel?: string;
-  canEditReason?: boolean;
 }) {
   const { units } = useUi();
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['salaries', 'controllable', 'uncontrollable']));
@@ -47,38 +45,16 @@ export default function ExpenseTable({
   });
   const { tableProps, cellCls } = useColHighlight();
 
-  // ---- Reasons ----
-  const reasonsOn = !!reasonScope && !!rangeId;
-  const [flagged, setFlagged] = useState<Set<string>>(new Set()); // accounts with a reason this range
+  // ---- Transaction detail drill-down ----
+  const detailOn = !!detailBus && detailBus.length > 0 && !!rangeId;
   const [openAcct, setOpenAcct] = useState<string | null>(null);
-  const [history, setHistory] = useState<ExpenseReasonRow[]>([]);
-  const [reasonText, setReasonText] = useState('');
-  const [reasonBusy, setReasonBusy] = useState(false);
-  const [reasonErr, setReasonErr] = useState('');
+  const [txRows, setTxRows] = useState<ExpenseTxDetail[]>([]);
+  const [txBusy, setTxBusy] = useState(false);
 
-  useEffect(() => {
-    if (!reasonsOn) return;
-    let cancelled = false;
-    fetchReasonAccounts(reasonScope!, rangeId!).then((s) => { if (!cancelled) setFlagged(s); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [reasonsOn, reasonScope, rangeId]);
-
-  async function openReason(account: string) {
-    setOpenAcct(account); setReasonErr(''); setReasonBusy(true); setHistory([]); setReasonText('');
-    try {
-      const rows = await fetchExpenseReasons(reasonScope!, account);
-      setHistory(rows);
-      setReasonText(rows.find((r) => r.rangeId === rangeId)?.reason ?? '');
-    } catch (e) { setReasonErr((e as Error).message); } finally { setReasonBusy(false); }
-  }
-  async function saveReason() {
-    if (!openAcct) return;
-    setReasonBusy(true); setReasonErr('');
-    try {
-      await saveExpenseReason(reasonScope!, openAcct, rangeId!, reasonText);
-      const [rows, set] = await Promise.all([fetchExpenseReasons(reasonScope!, openAcct), fetchReasonAccounts(reasonScope!, rangeId!)]);
-      setHistory(rows); setFlagged(set);
-    } catch (e) { setReasonErr((e as Error).message); } finally { setReasonBusy(false); }
+  async function openDetail(account: string) {
+    setOpenAcct(account); setTxRows([]); setTxBusy(true);
+    try { setTxRows(await fetchExpenseTransactions(detailBus!, account, rangeId!)); }
+    finally { setTxBusy(false); }
   }
 
   if (sections.length === 0) return <p className="text-slate-400 dark:text-slate-500">No expense detail for this period.</p>;
@@ -86,6 +62,12 @@ export default function ExpenseTable({
   const money = (v: number) => formatMoney(v, 'full', units);
   const numCls = (v: number) => (v < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100');
   const headCls = 'sticky top-0 z-10 bg-slate-100 px-3 py-2 text-right dark:bg-slate-900/80';
+  const fmtDate = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+  const txTotal = txRows.reduce((s, r) => s + r.amount, 0);
 
   return (
     <>
@@ -136,10 +118,9 @@ export default function ExpenseTable({
                       <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.prior)} ${cellCls(1)}`}>{money(row.prior)}</td>
                       <td className={`px-2 py-2.5 text-right tabular-nums text-slate-400 dark:text-slate-500 ${cellCls(2)}`}>{formatPercent(row.priorPct)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${numCls(row.current)} ${cellCls(3)}`}>
-                        {reasonsOn ? (
-                          <button onClick={() => openReason(row.account)} title="Add / view reason"
-                            className="inline-flex items-center gap-1 rounded px-1 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300">
-                            {flagged.has(row.account) && <span className="text-[11px] leading-none" aria-label="has reason">🗨</span>}
+                        {detailOn && row.current !== 0 ? (
+                          <button onClick={() => openDetail(row.account)} title="View transaction detail"
+                            className="rounded px-1 underline decoration-dotted decoration-slate-300 underline-offset-4 hover:bg-indigo-50 hover:text-indigo-700 hover:decoration-indigo-400 dark:decoration-slate-600 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300">
                             {money(row.current)}
                           </button>
                         ) : money(row.current)}
@@ -174,57 +155,55 @@ export default function ExpenseTable({
       </table>
     </div>
 
-    {reasonsOn && (
-      <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Tip: click a {currentLabel} amount to {canEditReason ? 'add a' : 'view the'} reason for that account, and see the history from earlier periods.</p>
+    {detailOn && (
+      <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">Tip: click a {currentLabel} amount to see the transactions behind that account (Date · Ref · Name · Memo · Amount).</p>
     )}
 
     {openAcct && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true">
         <button aria-label="Close" onClick={() => setOpenAcct(null)} className="absolute inset-0 cursor-default bg-black/50" />
-        <div className="relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800">
+        <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800">
           <div className="flex items-start gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-700">
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Expense reason</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Expense detail — {rangeLabel ?? currentLabel}</p>
               <h3 className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{openAcct}</h3>
             </div>
             <button onClick={() => setOpenAcct(null)} aria-label="Close" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xl text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700">×</button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Reason for {rangeLabel ?? currentLabel}</p>
-            {canEditReason ? (
-              <>
-                <textarea value={reasonText} onChange={(e) => setReasonText(e.target.value)} rows={3}
-                  placeholder="Why did this expense move? (e.g. one-off repair, price increase…)"
-                  className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
-                {reasonErr && <p className="mt-1 text-xs text-red-600">{reasonErr}</p>}
-                <div className="mt-2 flex justify-end">
-                  <button onClick={saveReason} disabled={reasonBusy}
-                    className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-                    {reasonBusy ? 'Saving…' : 'Save reason'}
-                  </button>
-                </div>
-              </>
+          <div className="min-h-0 flex-1 overflow-auto">
+            {txBusy ? (
+              <p className="px-5 py-6 text-sm text-slate-400 dark:text-slate-500">Loading…</p>
+            ) : txRows.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-400 dark:text-slate-500">No imported transaction detail for this account and period. Re-import the QuickBooks expense report to populate it.</p>
             ) : (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900/40 dark:text-slate-200">{reasonText || <span className="text-slate-400 dark:text-slate-500">No reason recorded.</span>}</p>
-            )}
-
-            <p className="mb-1 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">History</p>
-            {reasonBusy && history.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
-            ) : history.filter((h) => h.rangeId !== rangeId).length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500">No earlier reasons.</p>
-            ) : (
-              <ul className="space-y-2">
-                {history.filter((h) => h.rangeId !== rangeId).map((h) => (
-                  <li key={h.rangeId} className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{h.rangeLabel}</span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500">{h.updatedAt ? new Date(h.updatedAt).toLocaleDateString() : ''}</span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{h.reason}</p>
-                  </li>
-                ))}
-              </ul>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-500">
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2 text-left dark:bg-slate-900/80">Date</th>
+                    <th className="sticky top-0 bg-slate-100 px-3 py-2 text-left dark:bg-slate-900/80">Ref</th>
+                    <th className="sticky top-0 bg-slate-100 px-3 py-2 text-left dark:bg-slate-900/80">Name</th>
+                    <th className="sticky top-0 bg-slate-100 px-3 py-2 text-left dark:bg-slate-900/80">Memo</th>
+                    <th className="sticky top-0 bg-slate-100 px-4 py-2 text-right dark:bg-slate-900/80">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txRows.map((t, i) => (
+                    <tr key={i} className="border-b border-slate-100 dark:border-slate-700/60">
+                      <td className="whitespace-nowrap px-4 py-2 text-left text-slate-600 dark:text-slate-300">{fmtDate(t.date)}</td>
+                      <td className="px-3 py-2 text-left text-slate-500 dark:text-slate-400">{t.ref}</td>
+                      <td className="px-3 py-2 text-left text-slate-700 dark:text-slate-200">{t.name}</td>
+                      <td className="px-3 py-2 text-left text-slate-500 dark:text-slate-400">{t.memo}</td>
+                      <td className={`whitespace-nowrap px-4 py-2 text-right tabular-nums ${numCls(t.amount)}`}>{money(t.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-300 bg-slate-100/80 font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-100">
+                    <td className="px-4 py-2 text-left" colSpan={4}>Total — {txRows.length} transaction{txRows.length === 1 ? '' : 's'}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right tabular-nums">{money(txTotal)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             )}
           </div>
         </div>
