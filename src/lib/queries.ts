@@ -214,7 +214,11 @@ async function sideByLine(rangeId: string, buCode: string, method: AllocMethod):
     .eq('range_id', rangeId)
     .eq('bu_code', buCode);
   if (error) throw error;
-  const side = new Map((data ?? []).map((r) => [r.line_item as string, { amount: r.amount as number, pct: r.pct_of_sales as number }]));
+  // Exclude the Lakatan Farm's Deferred P&L lines (def_-prefixed, stored under
+  // the same BU08LF): those belong only to the Deferred P&L tab, not the P&L.
+  const side = new Map((data ?? [])
+    .filter((r) => !(r.line_item as string).startsWith('def_'))
+    .map((r) => [r.line_item as string, { amount: r.amount as number, pct: r.pct_of_sales as number }]));
 
   if (method !== 'gross_sales') {
     const ov = (await supportByBu(rangeId, method)).get(buCode);
