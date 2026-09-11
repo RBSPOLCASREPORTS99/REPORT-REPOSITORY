@@ -4,6 +4,7 @@ import { loadBuConfigs } from './loadBuConfigs';
 import { computeFromInputs, type BuInputs, type PoolInputs } from './computeBuPnl';
 import { PNL_LINE_ITEMS, COGS_VARIANCE_LABELS } from '../constants';
 import { monthLabel } from '../format';
+import { FARM_BU_CODE, FARM_DEFERRED_PREFIX, FARM_INPUT_KEYS, farmComputedRows, farmItemKeys, type FarmInputs } from './farmDerive';
 
 // deriveRanges takes the Supabase client explicitly so both the app (anon +
 // session) and offline scripts (service key) can run it without importing the
@@ -214,6 +215,68 @@ async function materializeSales(db: Db, rangeId: string, yms: Ym[]) {
   }
 }
 
+// The Lakatan Farm is hand-entered per month (not part of the QuickBooks import,
+// so materializeRange skips it). Auto-compute its YTD / quarter figures by
+// summing the monthly Farm entries — the same "sum the months" rule the other
+// BUs follow — and materialize them as BU08LF's computed_pnl for each range, so
+// every read path (P&L, cards, Deferred P&L) picks them up unchanged. Both the
+// regular Farm P&L and the Deferred P&L ("def_" lines) are aggregated. An
+// aggregate is only rewritten when at least one of its months has Farm data, so
+// a period with no monthly breakdown keeps whatever was entered for it directly.
+export async function recomputeFarmAggregates(db: Db, year: number): Promise<void> {
+  const { data: ranges } = await db.from('report_ranges')
+    .select('id, kind, period_start, period_end')
+    .gte('period_start', `${year}-01-01`).lte('period_end', `${year}-12-31`);
+  const all = ranges ?? [];
+  const monthRanges = all.filter((r) => r.kind === 'month');
+  const aggRanges = all.filter((r) => r.kind === 'ytd' || r.kind === 'quarter');
+  if (aggRanges.length === 0 || monthRanges.length === 0) return;
+
+  const monthIds = monthRanges.map((r) => r.id as string);
+  const monthNum = new Map<string, number>();
+  for (const r of monthRanges) monthNum.set(r.id as string, Number((r.period_start as string).slice(5, 7)));
+
+  // Pull the Farm's stored monthly inputs (regular + deferred) from computed_pnl.
+  const { data: farmRows } = await db.from('computed_pnl')
+    .select('range_id, line_item, amount').eq('bu_code', FARM_BU_CODE).in('range_id', monthIds);
+  const byMonth = new Map<string, { regular: FarmInputs; deferred: FarmInputs; hasRegular: boolean; hasDeferred: boolean }>();
+  for (const row of farmRows ?? []) {
+    const rid = row.range_id as string;
+    const li = row.line_item as string;
+    const e = byMonth.get(rid) ?? { regular: {}, deferred: {}, hasRegular: false, hasDeferred: false };
+    if (li.startsWith(FARM_DEFERRED_PREFIX)) {
+      e.hasDeferred = true;
+      const key = li.slice(FARM_DEFERRED_PREFIX.length);
+      if (FARM_INPUT_KEYS.has(key)) e.deferred[key] = Number(row.amount);
+    } else {
+      e.hasRegular = true;
+      if (FARM_INPUT_KEYS.has(li)) e.regular[li] = Number(row.amount);
+    }
+    byMonth.set(rid, e);
+  }
+
+  for (const agg of aggRanges) {
+    const sm = Number((agg.period_start as string).slice(5, 7));
+    const em = Number((agg.period_end as string).slice(5, 7));
+    const memberIds = monthRanges
+      .filter((r) => { const mm = monthNum.get(r.id as string)!; return mm >= sm && mm <= em; })
+      .map((r) => r.id as string);
+    for (const deferred of [false, true]) {
+      const members = memberIds.filter((id) => { const e = byMonth.get(id); return e && (deferred ? e.hasDeferred : e.hasRegular); });
+      if (members.length === 0) continue; // no monthly Farm data for this period — leave it as entered
+      const sum: FarmInputs = {};
+      for (const id of members) {
+        const src = deferred ? byMonth.get(id)!.deferred : byMonth.get(id)!.regular;
+        for (const [k, v] of Object.entries(src)) sum[k] = (sum[k] ?? 0) + v;
+      }
+      await db.from('computed_pnl').delete().eq('range_id', agg.id).eq('bu_code', FARM_BU_CODE).in('line_item', farmItemKeys(deferred));
+      const rows = farmComputedRows(agg.id as string, sum, deferred);
+      const { error } = await db.from('computed_pnl').insert(rows);
+      if (error) throw error;
+    }
+  }
+}
+
 // Rebuild all derived ranges for a year from its stored monthly inputs.
 export async function deriveRanges(db: Db, year: number): Promise<{ ranges: number }> {
   const months = await loadYearMonths(db, year);
@@ -253,6 +316,9 @@ export async function deriveRanges(db: Db, year: number): Promise<{ ranges: numb
     await materializeSales(db, qId, ymOf(qMonths));
     count++;
   }
+
+  // Materialize the Lakatan Farm's YTD / quarter figures from its monthly entries.
+  await recomputeFarmAggregates(db, year);
 
   return { ranges: count };
 }

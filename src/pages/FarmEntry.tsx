@@ -20,9 +20,11 @@ export default function FarmEntry() {
 
   useEffect(() => {
     fetchRanges()
-      .then((r) => {
+      // Enter the Farm per month; YTD / quarter figures auto-combine from these.
+      .then((all) => {
+        const r = all.filter((x) => x.kind === 'month');
         setRanges(r);
-        if (r.length > 0) setRangeId(r[0].id);
+        if (r.length > 0) setRangeId((id) => id || r[0].id);
         setLoading(false);
       })
       .catch((e) => { setError(e.message); setLoading(false); });
@@ -93,12 +95,15 @@ export default function FarmEntry() {
       </p>
 
       <label className="block text-sm">
-        <span className="font-medium text-slate-700 dark:text-slate-200">Period</span>
+        <span className="font-medium text-slate-700 dark:text-slate-200">Month</span>
         <select value={rangeId} onChange={(e) => setRangeId(e.target.value)}
           className="mt-1 block rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base">
           {ranges.map((r) => <option key={r.id} value={r.id}>{r.label}{!r.is_published ? ' (draft)' : ''}</option>)}
         </select>
       </label>
+      <p className="text-xs text-slate-400 dark:text-slate-500">
+        Enter each month — the YTD and quarter totals compute automatically by summing the months.
+      </p>
 
       <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         {FARM_INPUT_LINES.map((line) => (
