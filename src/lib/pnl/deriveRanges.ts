@@ -215,6 +215,34 @@ async function materializeSales(db: Db, rangeId: string, yms: Ym[]) {
   }
 }
 
+// Materialize BU10's monthly parameters (kilos / fuel / maint / trips / km, from
+// the TRUCKING DASHBOARD, stored raw in br_truck_params) into bu_parameters for
+// each month's report_range. Run on every P&L import so the Parameters tab fills
+// in no matter the order the dashboard and the P&L were imported. No-op if no raw
+// truck params for the year.
+export async function materializeTruckParams(db: Db, year: number): Promise<void> {
+  const { data: raw } = await db.from('br_truck_params').select('month, param_key, value').eq('year', year);
+  if (!raw || raw.length === 0) return;
+  const byMonth = new Map<number, { param_key: string; value: number }[]>();
+  for (const r of raw) {
+    const m = Number(r.month);
+    (byMonth.get(m) ?? byMonth.set(m, []).get(m)!).push({ param_key: r.param_key as string, value: Number(r.value) });
+  }
+  const { data: ranges } = await db.from('report_ranges')
+    .select('id, period_start').eq('kind', 'month')
+    .gte('period_start', `${year}-01-01`).lte('period_start', `${year}-12-31`);
+  for (const rng of ranges ?? []) {
+    const m = Number(String(rng.period_start).slice(5, 7));
+    const vals = byMonth.get(m);
+    if (!vals) continue;
+    await db.from('bu_parameters').delete().eq('range_id', rng.id).eq('bu_code', 'BU10');
+    const rows = vals
+      .filter((v) => v.value != null && !Number.isNaN(v.value))
+      .map((v) => ({ range_id: rng.id as string, bu_code: 'BU10', param_key: v.param_key, value: v.value }));
+    if (rows.length) { const { error } = await db.from('bu_parameters').insert(rows); if (error) throw error; }
+  }
+}
+
 // The Lakatan Farm is hand-entered per month (not part of the QuickBooks import,
 // so materializeRange skips it). Auto-compute its YTD / quarter figures by
 // summing the monthly Farm entries — the same "sum the months" rule the other
@@ -319,6 +347,8 @@ export async function deriveRanges(db: Db, year: number): Promise<{ ranges: numb
 
   // Materialize the Lakatan Farm's YTD / quarter figures from its monthly entries.
   await recomputeFarmAggregates(db, year);
+  // Materialize BU10's monthly parameters from the stored raw dashboard data.
+  await materializeTruckParams(db, year);
 
   return { ranges: count };
 }

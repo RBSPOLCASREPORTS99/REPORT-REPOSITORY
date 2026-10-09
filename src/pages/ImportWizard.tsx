@@ -70,6 +70,7 @@ export default function ImportWizard() {
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [truckParams, setTruckParams] = useState<Bu10MonthParams[]>([]);
+  const [truckSkipped, setTruckSkipped] = useState<string[]>([]);
   const [dashMonthExists, setDashMonthExists] = useState(false);
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
   const [gffcExpense, setGffcExpense] = useState<GffcExpenseRow[]>([]);
@@ -270,7 +271,11 @@ export default function ImportWizard() {
       const res = await persistTruckingDashboard({ year, month, parsed: dashboard, fileName, userId: user.id });
       if (res.truckMonths === 0 && res.allocMonths === 0) { setConfirmError(`No truck or BU data found in this dashboard.`); return; }
       // Also store the BU10 Parameters (kilos/fuel/maint/trips/km) per month.
-      if (truckParams.length) await persistTruckingParameters(truckParams);
+      setTruckSkipped([]);
+      if (truckParams.length) {
+        const pr = await persistTruckingParameters(truckParams);
+        setTruckSkipped(pr.skipped);
+      }
       setStep('done');
     } catch (e) { setConfirmError(e instanceof Error ? e.message : 'Import failed.'); } finally { setConfirming(false); }
   }
@@ -309,6 +314,11 @@ export default function ImportWizard() {
       <div className="space-y-4 rounded-2xl bg-white dark:bg-slate-800 p-6 text-center shadow-sm">
         <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import confirmed</p>
         <p className="text-sm text-slate-500 dark:text-slate-400">YTD and quarter figures were refreshed from your imported months. Publish the period so BU Heads and the GM can see it.</p>
+        {truckSkipped.length > 0 && (
+          <p className="mx-auto max-w-md rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-left text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            BU10 Parameters were stored for {truckSkipped.join(', ')} but not shown yet — those months have no P&amp;L imported. They’ll appear on BU10 → Parameters automatically once you import each month’s P&amp;L (no need to re-import the dashboard).
+          </p>
+        )}
         <button onClick={() => navigate('/')} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">Back to Home</button>
       </div>
     );
