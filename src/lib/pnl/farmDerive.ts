@@ -1,5 +1,3 @@
-import { PNL_LINE_ITEMS } from '../constants';
-
 // Pure Lakatan Farm (BU08LF) P&L math — no Supabase — so both the browser entry
 // screen (farmEntry.ts) and the offline range-aggregator (deriveRanges.ts) can
 // share it. The Farm is hand-entered, not computed from QuickBooks.
@@ -20,6 +18,7 @@ export const FARM_INPUT_LINES: { key: string; label: string; farmHint?: string }
   { key: 'operations_expense', label: 'Operations Expense', farmHint: 'Other Ops' },
   { key: 'repairs_expense', label: 'Repairs & Maintenance', farmHint: 'Land Prep' },
   { key: 'salaries_expense', label: 'Salaries & Wages', farmHint: 'Planting' },
+  { key: 'land_rental', label: 'Land Rental', farmHint: 'Land Rental' },
   { key: 'other_income', label: 'Other Income' },
   { key: 'admin_allocated', label: 'Admin Expense (allocated)' },
   { key: 'cost_of_money_allocated', label: 'Cost of Money (allocated)' },
@@ -43,7 +42,7 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
   const trucking = 0; // the Farm carries no trucking allocation
   const totalExpense =
     v('admin_expense') + v('discounting_expense') + v('operations_expense') +
-    v('repairs_expense') + v('salaries_expense') + trucking;
+    v('repairs_expense') + v('salaries_expense') + v('land_rental') + trucking;
   const netIncomeOps = grossIncome - totalExpense + v('other_income');
   const totalAllocated = v('admin_allocated') + v('cost_of_money_allocated');
   const totalSupport = v('support_finance') + v('support_hr') + v('support_management');
@@ -58,6 +57,7 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
     operations_expense: v('operations_expense'),
     repairs_expense: v('repairs_expense'),
     salaries_expense: v('salaries_expense'),
+    land_rental: v('land_rental'),
     trucking_expense: trucking,
     total_expense: totalExpense,
     other_income: v('other_income'),
@@ -77,16 +77,21 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
 
 export interface FarmPnlRow { range_id: string; bu_code: string; line_item: string; amount: number; pct_of_sales: number }
 
+// Every line the Farm derives (inputs + subtotals) — the Farm owns its own key
+// set (including farm-only lines like land_rental) rather than the global
+// PNL_LINE_ITEMS, so adding a Farm line never touches the other BUs.
+export const FARM_PNL_KEYS = Object.keys(deriveFarmLines({}));
+
 // The computed_pnl rows for a Farm P&L (or, deferred=true, its Deferred P&L).
 export function farmComputedRows(rangeId: string, inputs: FarmInputs, deferred = false): FarmPnlRow[] {
   const derived = deriveFarmLines(inputs);
   const gs = derived.gross_sales || 0;
   const prefix = deferred ? FARM_DEFERRED_PREFIX : '';
-  return PNL_LINE_ITEMS.map((item) => {
-    const amount = derived[item.key] ?? 0;
+  return FARM_PNL_KEYS.map((key) => {
+    const amount = derived[key] ?? 0;
     return {
-      range_id: rangeId, bu_code: FARM_BU_CODE, line_item: prefix + item.key, amount,
-      pct_of_sales: PCT_KEYS.has(item.key) || gs === 0 ? 0 : amount / gs,
+      range_id: rangeId, bu_code: FARM_BU_CODE, line_item: prefix + key, amount,
+      pct_of_sales: PCT_KEYS.has(key) || gs === 0 ? 0 : amount / gs,
     };
   });
 }
@@ -94,4 +99,4 @@ export function farmComputedRows(rangeId: string, inputs: FarmInputs, deferred =
 // The line-item keys a Farm save owns (regular or deferred) — used to delete only
 // its own rows before re-inserting.
 export const farmItemKeys = (deferred = false): string[] =>
-  PNL_LINE_ITEMS.map((i) => (deferred ? FARM_DEFERRED_PREFIX : '') + i.key);
+  FARM_PNL_KEYS.map((k) => (deferred ? FARM_DEFERRED_PREFIX : '') + k);

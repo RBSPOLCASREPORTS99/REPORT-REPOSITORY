@@ -12,6 +12,10 @@ LINE_ORDER.set('cogs_variance', 1.3);
 LINE_ORDER.set('cogs_total', 1.6);
 LINE_LABEL.set('cogs_variance', 'Reclass or Adjusted Variance');
 LINE_LABEL.set('cogs_total', 'Total Cost of Goods Sold');
+// Lakatan Farm-only operating-cost line, below Planting (salaries_expense, 7) and
+// before Total Expense (9). Not in PNL_LINE_ITEMS, so other BUs never show it.
+LINE_ORDER.set('land_rental', 7.5);
+LINE_LABEL.set('land_rental', 'Land Rental');
 const PCT_KEYS = new Set(['net_income_ops_pct', 'net_income_pct']);
 
 export interface RangeRow {
