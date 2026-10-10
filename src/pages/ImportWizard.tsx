@@ -16,6 +16,8 @@ import { isTruckingDashboard, parseTruckingDashboard, excelSerial, type ParsedDa
 import { persistTruckingDashboard } from '../lib/importers/persistTruckingDashboard';
 import { parseTruckingParameters, type Bu10MonthParams } from '../lib/importers/parseTruckingParameters';
 import { persistTruckingParameters } from '../lib/importers/persistTruckingParameters';
+import { hasLakatanRentSheet, parseLakatanRent, type RentMonthRow } from '../lib/importers/parseLakatanRent';
+import { persistLakatanRent } from '../lib/importers/persistLakatanRent';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
 import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, parseGffcSalesByItem, isGffcSalesByItemWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { parseBuParameterStd, isBuParametersWorkbook, type BuStdImport } from '../lib/importers/parseParameters';
@@ -31,7 +33,10 @@ import { fetchStoredExpenseClassification } from '../lib/queries';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
-type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'paramstd' | 'done';
+type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'paramstd' | 'rent' | 'done';
+
+const RENT_MIN_YEAR = 2025; // the Farm Land Rental import covers 2025 through the current year
+const RENT_MAX_YEAR = new Date().getFullYear();
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = [2024, 2025, 2026, 2027];
@@ -71,6 +76,8 @@ export default function ImportWizard() {
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [truckParams, setTruckParams] = useState<Bu10MonthParams[]>([]);
   const [truckSkipped, setTruckSkipped] = useState<string[]>([]);
+  const [rentRows, setRentRows] = useState<RentMonthRow[]>([]);
+  const [rentResult, setRentResult] = useState<{ updated: number; skipped: string[] } | null>(null);
   const [dashMonthExists, setDashMonthExists] = useState(false);
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
   const [gffcExpense, setGffcExpense] = useState<GffcExpenseRow[]>([]);
@@ -129,6 +136,7 @@ export default function ImportWizard() {
 
   async function handleFile(file: File) {
     setParseError('');
+    setRentResult(null); setTruckSkipped([]);
     setFileName(file.name);
     try {
       const buf = await file.arrayBuffer();
@@ -141,6 +149,15 @@ export default function ImportWizard() {
         if (std.length === 0) { setParseError('No parameter standards (STD column) found in this workbook.'); return; }
         setParamStd(std);
         setStep('paramstd');
+        return;
+      }
+
+      // Lakatan "Rent Schedule" → update the Farm's Land Rental expense line.
+      if (hasLakatanRentSheet(wb)) {
+        const rent = parseLakatanRent(wb);
+        if (rent.length === 0) { setParseError('No monthly rent rows found in the "Rent by Month" sheet.'); return; }
+        setRentRows(rent);
+        setStep('rent');
         return;
       }
 
@@ -290,6 +307,19 @@ export default function ImportWizard() {
       setStep('done');
     } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
   }
+  async function handleConfirmRent() {
+    if (!user) return;
+    setConfirming(true); setConfirmError('');
+    try {
+      const res = await persistLakatanRent(rentRows, RENT_MIN_YEAR, RENT_MAX_YEAR);
+      if (res.updated === 0 && res.applicable > 0) {
+        setConfirmError('None of these months have an imported P&L yet, so the Land Rental line could not be updated. Import the months’ P&L first.');
+        return;
+      }
+      setRentResult({ updated: res.updated, skipped: res.skipped });
+      setStep('done');
+    } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
+  }
   async function handleConfirmParamStd() {
     if (!user) return;
     setConfirming(true); setConfirmError('');
@@ -314,6 +344,18 @@ export default function ImportWizard() {
       <div className="space-y-4 rounded-2xl bg-white dark:bg-slate-800 p-6 text-center shadow-sm">
         <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import confirmed</p>
         <p className="text-sm text-slate-500 dark:text-slate-400">YTD and quarter figures were refreshed from your imported months. Publish the period so BU Heads and the GM can see it.</p>
+        {rentResult && (() => {
+          // Summarize skipped months by year (e.g. "2025 ×12, 2026 ×3").
+          const byYear = new Map<string, number>();
+          for (const s of rentResult.skipped) { const y = s.slice(0, 4); byYear.set(y, (byYear.get(y) ?? 0) + 1); }
+          const summary = [...byYear.entries()].map(([y, n]) => `${y} ×${n}`).join(', ');
+          return (
+            <p className="mx-auto max-w-md rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-left text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+              Lakatan Farm Land Rental updated for <span className="font-semibold">{rentResult.updated}</span> month{rentResult.updated === 1 ? '' : 's'}.
+              {rentResult.skipped.length > 0 && <> {rentResult.skipped.length} month{rentResult.skipped.length === 1 ? '' : 's'} ({summary}) ha{rentResult.skipped.length === 1 ? 's' : 've'} no imported P&amp;L yet and were skipped — re-import this file after importing those months.</>}
+            </p>
+          );
+        })()}
         {truckSkipped.length > 0 && (
           <p className="mx-auto max-w-md rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-left text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             BU10 Parameters were stored for {truckSkipped.join(', ')} but not shown yet — those months have no P&amp;L imported. They’ll appear on BU10 → Parameters automatically once you import each month’s P&amp;L (no need to re-import the dashboard).
@@ -666,13 +708,61 @@ export default function ImportWizard() {
     );
   }
 
+  // ---- Lakatan Farm: Land Rental from the Rent Schedule -------------------
+  if (step === 'rent') {
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const applicable = rentRows.filter((r) => r.year >= RENT_MIN_YEAR && r.year <= RENT_MAX_YEAR);
+    const years = [...new Set(applicable.map((r) => r.year))].sort((a, b) => a - b);
+    const cellFor = (y: number, m: number) => applicable.find((r) => r.year === y && r.month === m)?.amount ?? 0;
+    const yearTotal = (y: number) => applicable.filter((r) => r.year === y).reduce((s, r) => s + r.amount, 0);
+    const peso = (v: number) => (v ? `₱${Math.round(v).toLocaleString('en-PH')}` : '—');
+    return (
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Update Lakatan Farm — Land Rental</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Reads the <span className="font-medium">Rent by Month</span> sheet and sets the Farm's <span className="font-medium">Land Rental</span>
+          {' '}expense line for each month from {RENT_MIN_YEAR} on, keeping every other entered Farm figure. YTD/quarter re-roll automatically.
+          A month with no imported P&amp;L yet is skipped (re-import after that month's P&amp;L). Re-importing replaces the Land Rental values.
+        </p>
+        <div className="overflow-x-auto rounded-2xl bg-white p-3 shadow-sm dark:bg-slate-800">
+          <table className="min-w-full text-right text-xs tabular-nums">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <th className="px-2 py-1 text-left">Year</th>
+                {MON.map((m) => <th key={m} className="px-2 py-1">{m}</th>)}
+                <th className="px-2 py-1">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {years.map((y) => (
+                <tr key={y} className="border-t border-slate-100 dark:border-slate-700/60">
+                  <td className="px-2 py-1 text-left font-semibold text-slate-700 dark:text-slate-200">{y}</td>
+                  {MON.map((_, i) => <td key={i} className="px-2 py-1 text-slate-600 dark:text-slate-300">{peso(cellFor(y, i + 1))}</td>)}
+                  <td className="px-2 py-1 font-semibold text-slate-900 dark:text-slate-100">{peso(yearTotal(y))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">Values shown in full pesos; stored on the Farm P&amp;L in ₱'000.</p>
+        {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
+          <button onClick={handleConfirmRent} disabled={confirming || applicable.length === 0} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {confirming ? 'Updating…' : `Update ${applicable.length} month${applicable.length === 1 ? '' : 's'}`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Upload step --------------------------------------------------------
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Upload a monthly QuickBooks <strong>P&L by Class</strong> export (one per month), or the Expense,
-        Sales-in-Qty, Parameters, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
+        Sales-in-Qty, Parameters, Lakatan <strong>Rent Schedule</strong>, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
       </p>
       <div
         onDragOver={(e) => e.preventDefault()}
