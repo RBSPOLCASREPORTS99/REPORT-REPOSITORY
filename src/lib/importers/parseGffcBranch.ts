@@ -59,12 +59,14 @@ function lineKeyFor(label: string): string | null {
   if (s === 'seafoods sales') return 'seafoods';
   if (s === 'other sales/discounts') return 'sales_other';
   if (s === 'gross sales') return 'gross_sales';
-  if (s === 'cost of goods sold') return 'cogs';
+  // Inventory Loss is folded into Cost of Goods Sold (sums with it under 'cogs').
+  if (s === 'cost of goods sold' || s === 'inventory loss') return 'cogs';
   if (s === 'admin expense') return 'admin';
   if (s === 'finance expense') return 'finance';
   if (s === 'operations expense') return 'operations';
   if (s === 'mcp ops expense - allocated') return 'mcp_ops';
-  if (s === 'repairs/maint. expense') return 'repairs';
+  // Repairs/Maintenance — the sheet labels it either plainly or "- allocated".
+  if (s === 'repairs/maint. expense' || s === 'repairs/maint. expense - allocated') return 'repairs';
   if (s === 'salaries & wages') return 'salaries';
   if (s === 'sales crew') return 'sal_sales_crew';
   if (s === 'manager - allocated') return 'sal_manager';
