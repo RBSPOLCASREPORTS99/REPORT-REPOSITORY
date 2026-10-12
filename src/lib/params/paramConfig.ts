@@ -176,9 +176,11 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       PNL('labor_cost', ['salaries_expense']),
       PNL('ops_cost', ['operations_expense', 'repairs_expense']),
       SUM('total_cost', ['labor_cost', 'ops_cost']),
-      R('labor_cost_per_kilo', 'Labor Cost per Kilo', 'labor_cost', 'processed_kilos', 2, { peso: true, cost: true }),
-      R('ops_cost_per_kilo', 'Ops Cost per Kilo', 'ops_cost', 'processed_kilos', 2, { peso: true, cost: true }),
-      R('cost_per_kilo', 'Cost per Kilo', 'total_cost', 'processed_kilos', 2, { peso: true, cost: true }),
+      // Per-kilo costs are over Kilos Processed + Kilos Delivered (kilos_basis,
+      // summed at the end so both totals are resolved first).
+      R('labor_cost_per_kilo', 'Labor Cost per Kilo', 'labor_cost', 'kilos_basis', 2, { peso: true, cost: true }),
+      R('ops_cost_per_kilo', 'Ops Cost per Kilo', 'ops_cost', 'kilos_basis', 2, { peso: true, cost: true }),
+      R('cost_per_kilo', 'Cost per Kilo', 'total_cost', 'kilos_basis', 2, { peso: true, cost: true }),
       // Kilos Processed (dried at MFBD) — per product, summed into the total.
       M('proc_banana', 'Banana', 0, { group: 'Kilos Processed' }),
       M('proc_cassava', 'Cassava', 0, { group: 'Kilos Processed' }),
@@ -190,6 +192,10 @@ export const BU_PARAM_CONFIG: Record<string, BuParamConfig> = {
       M('del_yellow_corn', 'Yellow Corn', 0, { group: 'Kilos Delivered' }),
       M('del_rice_bran', 'Rice Bran D1', 0, { group: 'Kilos Delivered' }),
       SUMV('kilos_delivered', 'Total', ['del_yellow_corn', 'del_rice_bran'], 0, { group: 'Kilos Delivered', groupTotal: true }),
+      // Denominator for the per-kilo costs = Processed + Delivered (hidden). Must
+      // come after both totals so the sum engine resolves them first; picks up
+      // any custom Kilos Delivered items automatically (they fold into the total).
+      SUM('kilos_basis', ['processed_kilos', 'kilos_delivered']),
     ],
   },
 };
