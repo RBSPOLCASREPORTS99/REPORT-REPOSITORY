@@ -27,6 +27,7 @@ const CompanyPnl = lazy(() => import('./pages/CompanyPnl'));
 const RoiLabor = lazy(() => import('./pages/RoiLabor'));
 const RoiLaborEntry = lazy(() => import('./pages/RoiLaborEntry'));
 const SupportPnl = lazy(() => import('./pages/SupportPnl'));
+const RetainedEarnings = lazy(() => import('./pages/RetainedEarnings'));
 const SupportPnlEntry = lazy(() => import('./pages/SupportPnlEntry'));
 const ParameterEntry = lazy(() => import('./pages/ParameterEntry'));
 const Users = lazy(() => import('./pages/Users'));
@@ -66,6 +67,7 @@ export default function App() {
                 <Route path="/company" element={<CompanyPnl />} />
                 <Route path="/roi-labor" element={<RoiLabor />} />
                 <Route path="/support/:unit" element={<SupportPnl />} />
+                <Route path="/retained-earnings" element={<RetainedEarnings />} />
                 {/* Trucking simulated-P&L viewer — data is RLS-gated (Finance, or
                     a BU Head assigned BU10); the /trucking entry stays Finance-only. */}
                 <Route path="/truck-pnl" element={<TruckPnl />} />
