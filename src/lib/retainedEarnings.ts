@@ -31,7 +31,9 @@ export const defaultFunds = (): ReFund[] => [
 // POLCAS overall Net Income for a full year, in full pesos (company P&L is ₱'000).
 export async function fetchCompanyNetIncomeForYear(year: number): Promise<number> {
   const r = await fetchCompanyPnl({ start: `${year}-01-01`, end: `${year}-12-31` });
-  return r.hasData ? r.net * 1000 : 0;
+  // Round to centavos — the ₱'000 → full-peso conversion otherwise leaves a
+  // floating-point tail (e.g. 11,421,583.139999999).
+  return r.hasData ? Math.round(r.net * 1000 * 100) / 100 : 0;
 }
 
 function normFund(f: Partial<ReFund>): ReFund {
