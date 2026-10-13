@@ -92,8 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signInWithEmail(email: string) {
+    const em = normEmail(email);
+    if (!em) return { error: 'Enter your email.' };
+    // Only emails registered in the system (the Users allow-list) may sign in.
+    const { data: allowed, error: rpcErr } = await supabase.rpc('is_br_allowed_email', { p_email: em });
+    if (rpcErr) return { error: rpcErr.message };
+    if (!allowed) return { error: "This email isn't registered. Ask Finance to add you on the Users screen." };
     const { error } = await supabase.auth.signInWithOtp({
-      email: normEmail(email),
+      email: em,
       options: { emailRedirectTo: window.location.origin },
     });
     return { error: error?.message ?? null };
