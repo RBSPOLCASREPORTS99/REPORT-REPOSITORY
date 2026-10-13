@@ -72,19 +72,19 @@ export default function Login() {
         ) : (
           <div className="mt-8 space-y-4">
             <p className="rounded-lg bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950/40 dark:text-green-300">
-              We emailed <span className="font-semibold">{email.trim().toLowerCase()}</span> a sign-in link.
-              Click it, or enter the 6-digit code from that email below (some email apps open links
-              automatically, which can break the one-time link).
+              We emailed <span className="font-semibold">{email.trim().toLowerCase()}</span> an 8-digit code.
+              Enter it below to sign in here. (You can also click the link in the email, but it opens a
+              separate browser — the code signs you in right in this window.)
             </p>
             <form onSubmit={handleVerify} className="space-y-3">
               <input
                 type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="123456"
+                value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="12345678"
                 className="block w-full rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-center text-lg tracking-widest focus:border-brand-500 focus:outline-none"
               />
               {error && <p className="text-sm text-red-600">{error}</p>}
-              <button type="submit" disabled={busy || code.trim().length === 0}
+              <button type="submit" disabled={busy || code.trim().length < 8}
                 className="w-full rounded-lg bg-brand-600 px-4 py-3 text-base font-medium text-white disabled:opacity-50">
                 {busy ? 'Verifying…' : 'Verify & sign in'}
               </button>
