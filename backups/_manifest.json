@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T11:34:11.959Z",
+  "generatedAt": "2026-10-18T09:51:03.041Z",
   "tables": {
     "business_units": 17,
     "periods": 1,
@@ -14,12 +14,12 @@
     "monthly_trucking": 201,
     "report_ranges": 49,
     "computed_pnl": 9127,
-    "expense_lines": 10242,
+    "expense_lines": 10236,
     "sales_qty_lines": 6294,
     "monthly_expense": 3276,
     "monthly_sales": 1707,
     "support_sim": 162,
-    "import_batches": 160,
+    "import_batches": 163,
     "pnl_lines": 462
   }
 }
