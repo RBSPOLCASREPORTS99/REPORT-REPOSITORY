@@ -1,26 +1,18 @@
 import { supabase } from './supabaseClient';
 import { fetchRanges, fetchExpenseSectionOverrides, type RangeRow, type ExpenseSection, type ExpenseRow } from './queries';
+import { SERVICE_BUS, serviceBasis, monthsInPeriod, fetchSupportConfig, type SupportMethod, type SupportUnit } from './supportAlloc';
 
 // Simulated Support-Unit P&L (Finance / HR / Management). Revenue is simulated as
 // a % of company revenue (excluding any configured BUs); expenses are the unit's
 // actual figures captured from the P&L-per-Class import. All values ₱'000.
+//
+// The shared support-allocation pieces (SERVICE_BUS, serviceBasis, config, the
+// simulated per-BU allocation) live in ./supportAlloc — a leaf module, so
+// queries.ts can use them without an import cycle. Re-exported here for callers
+// that already import from this module.
+export { SERVICE_BUS, fetchSupportConfig, simulatedSupportByBu, supportConfigured } from './supportAlloc';
+export type { SupportMethod, SupportUnit, SupportConfig } from './supportAlloc';
 
-// The BUs a support unit bills, with their pivot columns (for import) and the
-// label shown in the services breakdown.
-export const SERVICE_BUS: { code: string; label: string; cols: string[] }[] = [
-  { code: 'BU0102', label: 'BU01/BU02', cols: ['BU01 - Bodega 1', 'BU02 - Bodega 2'] },
-  { code: 'BU04', label: 'BU04', cols: ['BU04 - Bodega 4 Wooden Pallets'] },
-  { code: 'BU05', label: 'BU05', cols: ['BU05 - Trading'] },
-  { code: 'BU06', label: 'BU06', cols: ['BU06 - CCG/CPG/PGF'] },
-  { code: 'BU07', label: 'BU07', cols: ['BU07 - Hogs Partnership Growing'] },
-  { code: 'BU08', label: 'BU08', cols: ['Total BU08 - Lakatan Growing/Trading'] },
-  { code: 'BU09', label: 'BU09', cols: ['BU09 - Hog Feeds Production'] },
-  { code: 'BU10', label: 'BU10', cols: ['Total BU10 - TRUCK'] },
-  { code: 'BU11', label: 'BU11', cols: ['BU11 - Agri-Solutions'] },
-];
-
-export type SupportMethod = 'pct' | 'per_txn' | 'per_pax';
-export type SupportUnit = 'FINANCE' | 'HR' | 'MANCOM';
 export const SUPPORT_UNITS: { unit: SupportUnit; label: string; slug: string }[] = [
   { unit: 'FINANCE', label: 'Finance P&L', slug: 'finance' },
   { unit: 'HR', label: 'HR P&L', slug: 'hr' },
@@ -39,29 +31,11 @@ export const UNIT_METHODS: Record<SupportUnit, { value: SupportMethod; label: st
   MANCOM: [{ value: 'pct', label: '% of Revenue' }],
 };
 
-const monthsInPeriod = (start: string, end: string) => {
-  const [sy, sm] = start.split('-').map(Number);
-  const [ey, em] = end.split('-').map(Number);
-  const out: { year: number; month: number }[] = [];
-  let y = sy, m = sm;
-  while (y < ey || (y === ey && m <= em)) { out.push({ year: y, month: m }); m++; if (m > 12) { m = 1; y++; } }
-  return out;
-};
 const periodOf = (ranges: RangeRow[], id?: string) => {
   const r = ranges.find((x) => x.id === id);
   return r ? { start: r.period_start, end: r.period_end } : undefined;
 };
 
-export interface SupportConfig { pct: number; exclude: string[]; method: SupportMethod; rate: number }
-export async function fetchSupportConfig(unit: SupportUnit): Promise<SupportConfig> {
-  const { data } = await supabase.from('support_unit_config').select('pct_of_revenue, exclude_bus, method, rate').eq('unit', unit).maybeSingle();
-  return {
-    pct: data ? Number(data.pct_of_revenue) : 0,
-    exclude: (data?.exclude_bus as string[]) ?? [],
-    method: (data?.method as SupportMethod) ?? 'pct',
-    rate: data ? Number(data.rate) : 0,
-  };
-}
 export async function saveSupportPct(unit: SupportUnit, pct: number): Promise<void> {
   const { error } = await supabase.from('support_unit_config').upsert({ unit, pct_of_revenue: pct }, { onConflict: 'unit' });
   if (error) throw error;
@@ -69,33 +43,6 @@ export async function saveSupportPct(unit: SupportUnit, pct: number): Promise<vo
 export async function saveSupportConfig(unit: SupportUnit, method: SupportMethod, rate: number): Promise<void> {
   const { error } = await supabase.from('support_unit_config').upsert({ unit, method, rate }, { onConflict: 'unit' });
   if (error) throw error;
-}
-
-// Month ids for a period.
-async function monthIds(period: { start: string; end: string }): Promise<string[]> {
-  const months = monthsInPeriod(period.start, period.end);
-  const years = [...new Set(months.map((x) => x.year))];
-  const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
-  const { data: pm } = await supabase.from('pnl_months').select('id, year, month').in('year', years);
-  return (pm ?? []).filter((r) => inSet.has(`${r.year}-${r.month}`)).map((r) => r.id as string);
-}
-
-// Per-BU service basis over a period: revenue (% method) or summed counts.
-async function serviceBasis(period: { start: string; end: string }, unit: SupportUnit, method: SupportMethod): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
-  if (method === 'pct') {
-    const ids = await monthIds(period);
-    if (ids.length === 0) return out;
-    const { data } = await supabase.from('monthly_support_bu_revenue').select('bu_code, gross_sales').in('month_id', ids);
-    for (const r of data ?? []) out.set(r.bu_code as string, (out.get(r.bu_code as string) ?? 0) + Number(r.gross_sales));
-  } else {
-    const months = monthsInPeriod(period.start, period.end);
-    const years = [...new Set(months.map((x) => x.year))];
-    const inSet = new Set(months.map((x) => `${x.year}-${x.month}`));
-    const { data } = await supabase.from('support_bu_count').select('year, month, bu_code, count').eq('unit', unit).in('year', years);
-    for (const r of data ?? []) if (inSet.has(`${r.year}-${r.month}`)) out.set(r.bu_code as string, (out.get(r.bu_code as string) ?? 0) + Number(r.count));
-  }
-  return out;
 }
 
 // ---- Expenses tab: grouped Salaries & Wages / Controllable / Non-controllable,

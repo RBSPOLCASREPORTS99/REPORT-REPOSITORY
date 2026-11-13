@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
+import { simulatedSupportByBu, type SupportOverride } from './supportAlloc';
 import { BUSINESS_UNITS, PNL_LINE_ITEMS, COGS_VARIANCE_LABELS, FARM_PNL_LABELS } from './constants';
 import { TRUCKS } from './pnl/truckConfig';
-import { FARM_BU_CODE } from './farmEntry';
+import { FARM_BU_CODE } from './pnl/farmDerive';
 
 const BU_SORT = new Map(BUSINESS_UNITS.map((bu, i) => [bu.code, i]));
 const LINE_ORDER = new Map<string, number>(PNL_LINE_ITEMS.map((item, i) => [item.key, i]));
@@ -45,32 +46,21 @@ export async function setRangePublished(rangeId: string, isPublished: boolean): 
   if (error) throw error;
 }
 
-export type AllocMethod = 'gross_sales' | 'revenue' | 'per_txn';
+export type AllocMethod = 'gross_sales' | 'simulated';
 export const ALLOC_METHOD_LABELS: Record<AllocMethod, string> = {
   gross_sales: 'Gross Sales',
-  revenue: '% Revenue',
-  per_txn: 'Per Transaction',
+  simulated: 'Simulated (Finance/HR/Mgmt)',
 };
 
-interface SupportOverride { finance: number; hr: number; mancom: number }
-
-// Imported alternative-method support allocations for a range, keyed by BU.
-// Empty for the default gross-sales method (which lives in computed_pnl).
+// Alternative-method support allocation for a range, keyed by BU. The default
+// gross-sales allocation lives in computed_pnl; the "Simulated" method computes
+// each BU's Finance/HR/Management bill in-system from the Support units'
+// configured method + manual counts (so it works for every month, no import).
 async function supportByBu(rangeId: string, method: AllocMethod): Promise<Map<string, SupportOverride>> {
   if (method === 'gross_sales') return new Map();
-  const { data, error } = await supabase
-    .from('support_sim')
-    .select('bu_code, center, amount')
-    .eq('range_id', rangeId)
-    .eq('method', method);
-  if (error) throw error;
-  const m = new Map<string, SupportOverride>();
-  for (const r of data ?? []) {
-    const bu = r.bu_code as string;
-    if (!m.has(bu)) m.set(bu, { finance: 0, hr: 0, mancom: 0 });
-    (m.get(bu)! as unknown as Record<string, number>)[r.center as string] = r.amount as number;
-  }
-  return m;
+  const { data: r } = await supabase.from('report_ranges').select('period_start, period_end').eq('id', rangeId).maybeSingle();
+  if (!r?.period_start || !r?.period_end) return new Map();
+  return simulatedSupportByBu({ start: r.period_start as string, end: r.period_end as string });
 }
 
 // Which report_ranges have any imported support allocations (→ toggle enabled).

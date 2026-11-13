@@ -1,9 +1,10 @@
 import { ALLOC_METHOD_LABELS, type AllocMethod } from '../lib/queries';
 
-const METHODS: AllocMethod[] = ['gross_sales', 'revenue', 'per_txn'];
+const METHODS: AllocMethod[] = ['gross_sales', 'simulated'];
 
-// Support-center allocation method as a dropdown. The two alternatives are only
-// available when the support workbook has been imported for the current range.
+// Support-center allocation method as a dropdown. "Simulated" allocates each
+// BU's Finance/HR/Management bill from the Support units' configured method +
+// manual counts; it's offered whenever the support units are configured.
 export default function AllocMethodToggle({
   method,
   available,

@@ -14,7 +14,8 @@ import { fetchCompanyPnl } from '../lib/companyQueries';
 import AllocMethodToggle from '../components/AllocMethodToggle';
 import { useBuLabels } from '../contexts/BuLabelsContext';
 import { useCombine } from '../contexts/CombineContext';
-import { fetchBuCards, fetchRanges, rangesWithSupport, fetchTruckPnl, type BuCardData, type BuMetric, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
+import { fetchBuCards, fetchRanges, fetchTruckPnl, type BuCardData, type BuMetric, type RangeRow, type AllocMethod, type TruckPnlResult } from '../lib/queries';
+import { supportConfigured } from '../lib/supportAlloc';
 
 export default function Home() {
   const { profile } = useAuth();
@@ -31,20 +32,22 @@ export default function Home() {
   const [company, setCompany] = useState<{ net: number; priorNet: number; grossSales: number } | null>(null);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
   const [buMetric, setBuMetric] = useState<BuMetric>('net_income');
-  const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
+  const [supportOn, setSupportOn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0); // bump to re-fetch
   const [error, setError] = useState('');
 
   const currentId = cmp?.currentId;
-  const methodAvailable = !!currentId && supportRanges.has(currentId);
+  // Simulated support allocation is offered on every month once the support
+  // units are configured (it's computed in-system from their manual counts).
+  const methodAvailable = !!currentId && supportOn;
   const reqRef = useRef(0); // guards against out-of-order responses
 
   useEffect(() => {
-    Promise.all([fetchRanges(), rangesWithSupport()])
-      .then(([r, sup]) => {
+    Promise.all([fetchRanges(), supportConfigured()])
+      .then(([r, on]) => {
         setRanges(r);
-        setSupportRanges(sup);
+        setSupportOn(on);
         if (r.length === 0) setLoading(false);
       })
       .catch((e) => { setError(e.message); setLoading(false); });

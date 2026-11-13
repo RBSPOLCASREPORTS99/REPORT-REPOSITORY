@@ -10,8 +10,9 @@ import ExpenseTable from '../components/ExpenseTable';
 import SalesTable from '../components/SalesTable';
 import { TableSkeleton } from '../components/Skeleton';
 import { useBuLabels } from '../contexts/BuLabelsContext';
+import { supportConfigured } from '../lib/supportAlloc';
 import {
-  fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges, rangesWithSupport,
+  fetchBuComparison, fetchComparisonCombined, fetchTrend, fetchRanges,
   fetchBuExpenses, fetchExpensesCombined, rangesWithExpenses, fetchBuSales, fetchSalesCombined, rangesWithSales,
   saveExpenseSection, fetchBuBudget, fetchExpenseReconciliation, fetchFarmDeferredComparison,
   type ComparisonLine, type TrendPoint, type RangeRow, type AllocMethod, type ExpenseSection,
@@ -34,7 +35,7 @@ export default function BuDetail() {
   const [deferredLines, setDeferredLines] = useState<ComparisonLine[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [method, setMethod] = useState<AllocMethod>('gross_sales');
-  const [supportRanges, setSupportRanges] = useState<Set<string>>(new Set());
+  const [supportOn, setSupportOn] = useState(false);
   const [view, setView] = useState<View>('pnl');
   const [expenseRanges, setExpenseRanges] = useState<Set<string>>(new Set());
   const [expenses, setExpenses] = useState<ExpenseSection[]>([]);
@@ -60,18 +61,18 @@ export default function BuDetail() {
   const priorLabel = cmp?.priorLabel ?? 'Prior';
   const currentLabel = cmp?.currentLabel ?? 'Current';
 
-  const methodAvailable = !!currentId && supportRanges.has(currentId);
+  const methodAvailable = !!currentId && supportOn;
   const expensesAvailable = !!currentId && expenseRanges.has(currentId);
   const salesAvailable = !!currentId && salesRanges.has(currentId);
   const paramsAvailable = !isCombined && hasParameters(code);
   const deferredAvailable = !isCombined && code === 'BU08LF'; // Lakatan Farm only
 
   useEffect(() => {
-    Promise.all([fetchRanges(), code && !isCombined ? fetchTrend(code) : Promise.resolve([]), rangesWithSupport(), rangesWithExpenses(), rangesWithSales()])
+    Promise.all([fetchRanges(), code && !isCombined ? fetchTrend(code) : Promise.resolve([]), supportConfigured(), rangesWithExpenses(), rangesWithSales()])
       .then(([r, t, sup, exp, sal]) => {
         setRanges(r);
         setTrend(t);
-        setSupportRanges(sup);
+        setSupportOn(sup);
         setExpenseRanges(exp);
         setSalesRanges(sal);
         if (r.length === 0) setLoading(false);
