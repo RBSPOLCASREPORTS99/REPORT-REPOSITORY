@@ -87,6 +87,10 @@ async function netIncomeByBu(rangeId: string, method: AllocMethod = 'gross_sales
     // Net Income shifts by (old support − new support); ops & allocated are unchanged.
     const ov = await supportByBu(rangeId, method);
     for (const [bu, o] of ov) {
+      // Only adjust BUs that actually have a P&L — never inject a support-billed
+      // BU that isn't a computed P&L card (e.g. BU06, which is in the support
+      // list but not in BU_CONFIGS), or it would appear as a phantom box.
+      if (!net.has(bu)) continue;
       const newSupport = o.finance + o.hr + o.mancom;
       const oldNet = net.get(bu) ?? 0;
       const oldSupport = support.get(bu) ?? 0;
