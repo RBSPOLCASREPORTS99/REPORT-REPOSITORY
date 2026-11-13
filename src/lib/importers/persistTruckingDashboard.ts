@@ -52,29 +52,8 @@ export async function persistTruckingDashboard(args: DashboardPersistArgs): Prom
     if (error) throw error;
   }
 
-  // 2. Store the FULL per-truck income history (raw, keyed by calendar month and
-  // independent of which P&L months exist), so each month's income materializes
-  // whenever its P&L is imported — order-independent, like the BU10 parameters.
-  for (const [y, ms] of monthsByYear) {
-    const { error } = await supabase.from('br_truck_income').delete().eq('year', y).in('month', [...ms]);
-    if (error) throw error;
-  }
-  const incomeRows: { year: number; month: number; truck_code: string; plate: string; income: number }[] = [];
-  for (const m of parsed.months) {
-    const income = parsed.truckIncome.get(m.serial);
-    if (!income) continue;
-    for (const t of TRUCKS) {
-      if (income[t.code] != null) incomeRows.push({ year: m.year, month: m.month, truck_code: t.code, plate: t.plate, income: income[t.code] });
-    }
-  }
-  for (let i = 0; i < incomeRows.length; i += 500) {
-    const { error } = await supabase.from('br_truck_income').insert(incomeRows.slice(i, i + 500));
-    if (error) throw error;
-  }
-
-  // 3. For every imported P&L month the dashboard covers: refresh the per-BU
-  // trucking allocation, then re-derive those years (which materializes income
-  // from br_truck_income into monthly_truck_income).
+  // 2. For every imported P&L month the dashboard covers: store per-truck income
+  // AND refresh the per-BU trucking allocation, then re-derive those years.
   const { data: pmonths } = await supabase.from('pnl_months').select('id, year, month');
   const affectedYears = new Set<number>();
   let truckMonths = 0;
@@ -85,7 +64,11 @@ export async function persistTruckingDashboard(args: DashboardPersistArgs): Prom
     if (!income && !alloc) continue;
     const monthId = pm.id as string;
 
-    if (income) truckMonths++;
+    if (income) {
+      await supabase.from('monthly_truck_income').delete().eq('month_id', monthId);
+      const rows = TRUCKS.filter((t) => income[t.code] != null).map((t) => ({ month_id: monthId, truck_code: t.code, plate: t.plate, income: income[t.code] / 1000 }));
+      if (rows.length) { const { error } = await supabase.from('monthly_truck_income').insert(rows); if (error) throw error; truckMonths++; }
+    }
     if (alloc) {
       await supabase.from('monthly_trucking').delete().eq('month_id', monthId);
       const rows = TRUCKING_CODES.map((code) => ({ month_id: monthId, trucking_code: code, amount: alloc[code] ?? 0 })).filter((r) => r.amount !== 0);

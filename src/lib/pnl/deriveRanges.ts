@@ -243,31 +243,6 @@ export async function materializeTruckParams(db: Db, year: number): Promise<void
   }
 }
 
-// Materialize per-truck trucking income (from the TRUCKING DASHBOARD, stored raw
-// in br_truck_income) into monthly_truck_income for each month's pnl_months row.
-// Run on every P&L import so the Simulated P&L per Truck shows income no matter
-// the order the dashboard and the P&L were imported. Income is ÷1000 (full pesos
-// → ₱'000, matching the per-BU P&L). No-op if no raw income for the year.
-export async function materializeTruckIncome(db: Db, year: number): Promise<void> {
-  const { data: raw } = await db.from('br_truck_income').select('month, truck_code, plate, income').eq('year', year);
-  if (!raw || raw.length === 0) return;
-  const byMonth = new Map<number, { truck_code: string; plate: string | null; income: number }[]>();
-  for (const r of raw) {
-    const m = Number(r.month);
-    (byMonth.get(m) ?? byMonth.set(m, []).get(m)!).push({ truck_code: r.truck_code as string, plate: (r.plate as string) ?? null, income: Number(r.income) });
-  }
-  const { data: pmonths } = await db.from('pnl_months').select('id, month').eq('year', year);
-  for (const pm of pmonths ?? []) {
-    const rows = byMonth.get(Number(pm.month));
-    if (!rows) continue;
-    await db.from('monthly_truck_income').delete().eq('month_id', pm.id);
-    const ins = rows
-      .filter((r) => r.income != null && !Number.isNaN(r.income))
-      .map((r) => ({ month_id: pm.id as string, truck_code: r.truck_code, plate: r.plate, income: r.income / 1000 }));
-    if (ins.length) { const { error } = await db.from('monthly_truck_income').insert(ins); if (error) throw error; }
-  }
-}
-
 // The Lakatan Farm is hand-entered per month (not part of the QuickBooks import,
 // so materializeRange skips it). Auto-compute its YTD / quarter figures by
 // summing the monthly Farm entries — the same "sum the months" rule the other
@@ -374,8 +349,6 @@ export async function deriveRanges(db: Db, year: number): Promise<{ ranges: numb
   await recomputeFarmAggregates(db, year);
   // Materialize BU10's monthly parameters from the stored raw dashboard data.
   await materializeTruckParams(db, year);
-  // Materialize per-truck income from the stored raw dashboard data.
-  await materializeTruckIncome(db, year);
 
   return { ranges: count };
 }
