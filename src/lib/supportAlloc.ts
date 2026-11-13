@@ -82,8 +82,11 @@ export async function simulatedSupportByBu(period: { start: string; end: string 
     const bu = SUPPORT_TO_BU[b.code] ?? b.code;
     if (!out.has(bu)) out.set(bu, { finance: 0, hr: 0, mancom: 0 });
   }
+  // Only Finance and HR are simulated (per-#Transaction / per-PAX). Management
+  // always stays on the default Gross-Sales allocation, so it is NOT computed
+  // here (mancom is left 0 and the caller keeps the default value).
   const units: { unit: SupportUnit; key: keyof SupportOverride }[] = [
-    { unit: 'FINANCE', key: 'finance' }, { unit: 'HR', key: 'hr' }, { unit: 'MANCOM', key: 'mancom' },
+    { unit: 'FINANCE', key: 'finance' }, { unit: 'HR', key: 'hr' },
   ];
   for (const { unit, key } of units) {
     const cfg = await fetchSupportConfig(unit);

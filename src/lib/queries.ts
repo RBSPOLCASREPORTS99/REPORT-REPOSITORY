@@ -75,26 +75,25 @@ async function netIncomeByBu(rangeId: string, method: AllocMethod = 'gross_sales
     .from('computed_pnl')
     .select('bu_code, line_item, amount')
     .eq('range_id', rangeId)
-    .in('line_item', ['net_income', 'total_support_centers']);
+    .in('line_item', ['net_income', 'support_finance', 'support_hr']);
   if (error) throw error;
   const net = new Map<string, number>();
-  const support = new Map<string, number>();
+  const finHr = new Map<string, number>(); // default (gross-sales) Finance + HR support per BU
   for (const r of data ?? []) {
     if (r.line_item === 'net_income') net.set(r.bu_code as string, r.amount as number);
-    else support.set(r.bu_code as string, r.amount as number);
+    else finHr.set(r.bu_code as string, (finHr.get(r.bu_code as string) ?? 0) + (r.amount as number));
   }
   if (method !== 'gross_sales') {
-    // Net Income shifts by (old support − new support); ops & allocated are unchanged.
+    // Simulated swaps ONLY Finance + HR to the per-#Transaction / per-PAX amounts;
+    // Management stays on the default Gross-Sales allocation. Net Income shifts by
+    // (default Finance+HR − simulated Finance+HR).
     const ov = await supportByBu(rangeId, method);
     for (const [bu, o] of ov) {
       // Only adjust BUs that actually have a P&L — never inject a support-billed
       // BU that isn't a computed P&L card (e.g. BU06, which is in the support
       // list but not in BU_CONFIGS), or it would appear as a phantom box.
       if (!net.has(bu)) continue;
-      const newSupport = o.finance + o.hr + o.mancom;
-      const oldNet = net.get(bu) ?? 0;
-      const oldSupport = support.get(bu) ?? 0;
-      net.set(bu, oldNet + oldSupport - newSupport);
+      net.set(bu, (net.get(bu) ?? 0) + (finHr.get(bu) ?? 0) - (o.finance + o.hr));
     }
   }
   return net;
@@ -223,11 +222,13 @@ async function sideByLine(rangeId: string, buCode: string, method: AllocMethod):
     if (ov) {
       const gs = side.get('gross_sales')?.amount ?? 0;
       const pct = (v: number) => (gs !== 0 ? v / gs : 0);
+      // Swap ONLY Finance + HR to the simulated amounts; keep Management on its
+      // default Gross-Sales allocation (unchanged under Simulated).
+      const defMancom = side.get('support_management')?.amount ?? 0;
+      const oldSupport = side.get('total_support_centers')?.amount ?? 0;
       side.set('support_finance', { amount: ov.finance, pct: pct(ov.finance) });
       side.set('support_hr', { amount: ov.hr, pct: pct(ov.hr) });
-      side.set('support_management', { amount: ov.mancom, pct: pct(ov.mancom) });
-      const newSupport = ov.finance + ov.hr + ov.mancom;
-      const oldSupport = side.get('total_support_centers')?.amount ?? 0;
+      const newSupport = ov.finance + ov.hr + defMancom;
       side.set('total_support_centers', { amount: newSupport, pct: pct(newSupport) });
       const newNet = (side.get('net_income')?.amount ?? 0) + oldSupport - newSupport;
       side.set('net_income', { amount: newNet, pct: pct(newNet) });
