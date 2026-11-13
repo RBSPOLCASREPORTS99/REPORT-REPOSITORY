@@ -29,7 +29,7 @@ import { parseGffcBranchPnl, type GffcBranchRow } from '../lib/importers/parseGf
 import { GFFC_CATEGORIES, GFFC_EXPENSE_KEYS } from '../lib/gffc/gffcConfig';
 import { persistExpenseTx, persistSalesTx } from '../lib/importers/persistRawImport';
 import { loadStoredAlloc, truckIncomeExists } from '../lib/truckingRecompute';
-import { fetchStoredExpenseClassification } from '../lib/queries';
+import { fetchStoredExpenseClassification, fetchStoredNetIncomeByMonth } from '../lib/queries';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -72,6 +72,9 @@ export default function ImportWizard() {
   const [trucking, setTrucking] = useState<TruckingInputs>({}); // per-BU trucking cost (grid + preview), pre-filled from the dashboard
   const [monthExists, setMonthExists] = useState(false);
   const [importedAt, setImportedAt] = useState<string | null>(null);
+  // Net Income per BU already in the system for this month (₱'000) — to highlight
+  // what a re-import changes.
+  const [prevNet, setPrevNet] = useState<Record<string, number> | null>(null);
   const [support, setSupport] = useState<ParsedSupport | null>(null);
   const [dashboard, setDashboard] = useState<ParsedDashboard | null>(null);
   const [truckParams, setTruckParams] = useState<Bu10MonthParams[]>([]);
@@ -117,10 +120,12 @@ export default function ImportWizard() {
         const { data: b } = await supabase.from('import_batches').select('created_at').eq('id', pm.import_batch_id).maybeSingle();
         if (b?.created_at) ts = b.created_at as string;
       }
+      const pn = pm ? await fetchStoredNetIncomeByMonth(year, month) : {};
       if (cancelled) return;
       setTrucking(Object.fromEntries(Object.entries(a).map(([k, v]) => [k, round5(v as number)])));
       setMonthExists(!!pm);
       setImportedAt(ts);
+      setPrevNet(pm ? pn : null);
     })().catch(() => {});
     return () => { cancelled = true; };
   }, [step, year, month]);
@@ -383,6 +388,14 @@ export default function ImportWizard() {
     // Safety check: a wrong/empty file yields near-zero totals.
     const companyGross = extractPools(pivot).company_gross_sales; // ₱'000
     const suspicious = companyGross <= 0 || previews.every((p) => p.rawNI === 0);
+    // Compare a re-import against the version already in the system: per-BU Net
+    // Income change, highlighted in red where it differs (≥ ₱1).
+    const comparing = monthExists && !!prevNet;
+    const gridCols = comparing ? 'grid-cols-[1fr_6rem_6rem_7rem]' : 'grid-cols-[1fr_7rem_7rem]';
+    const prevTotal = comparing ? previews.reduce((s, p) => s + (prevNet![p.cfg.buCode] ?? 0), 0) : 0;
+    const totalDelta = totalNetIncome - prevTotal;
+    const changed = (d: number) => Math.round(d * 1000) !== 0;
+    const deltaStr = (d: number) => `${d >= 0 ? '+' : '−'}₱${formatThousands(Math.abs(d))}k`;
     return (
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import monthly P&L</h1>
@@ -425,23 +438,35 @@ export default function ImportWizard() {
           </div>
         </div>
 
+        {comparing && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-medium text-red-600">Change</span> shows how each BU's Net Income differs from the version currently in the system — red means it changed.
+          </p>
+        )}
         <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
-          <div className="grid grid-cols-[1fr_7rem_7rem] items-end gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+          <div className={`grid ${gridCols} items-end gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500`}>
             <span>{monthLabel(year, month)} · ₱'000</span>
             <span className="text-right">Raw NI in Excel</span>
             <span className="text-right">Net Income</span>
+            {comparing && <span className="text-right">Change vs current</span>}
           </div>
-          {previews.map(({ cfg, netIncome, rawNI }) => (
-            <div key={cfg.buCode} className="grid grid-cols-[1fr_7rem_7rem] items-center gap-x-3 px-4 py-2.5">
+          {previews.map(({ cfg, netIncome, rawNI }) => {
+            const delta = comparing ? netIncome - (prevNet![cfg.buCode] ?? 0) : 0;
+            const chg = comparing && changed(delta);
+            return (
+            <div key={cfg.buCode} className={`grid ${gridCols} items-center gap-x-3 px-4 py-2.5 ${chg ? 'bg-red-50 dark:bg-red-950/30' : ''}`}>
               <span className="text-sm text-slate-900 dark:text-slate-100">{cfg.buName}</span>
               <span className={`text-right text-sm tabular-nums ${rawNI < 0 ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>₱{formatThousands(rawNI)}k</span>
               <span className={`text-right text-sm font-medium tabular-nums ${netIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(netIncome)}k</span>
+              {comparing && <span className={`text-right text-sm font-medium tabular-nums ${chg ? 'text-red-600' : 'text-slate-400 dark:text-slate-600'}`}>{chg ? deltaStr(delta) : '—'}</span>}
             </div>
-          ))}
-          <div className="grid grid-cols-[1fr_7rem_7rem] items-center gap-x-3 border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+            );
+          })}
+          <div className={`grid ${gridCols} items-center gap-x-3 border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-900/40`}>
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Total</span>
             <span className={`text-right text-sm font-semibold tabular-nums ${totalRawNI < 0 ? 'text-red-600' : 'text-slate-700 dark:text-slate-200'}`}>₱{formatThousands(totalRawNI)}k</span>
             <span className={`text-right text-sm font-semibold tabular-nums ${totalNetIncome < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>₱{formatThousands(totalNetIncome)}k</span>
+            {comparing && <span className={`text-right text-sm font-semibold tabular-nums ${changed(totalDelta) ? 'text-red-600' : 'text-slate-400 dark:text-slate-600'}`}>{changed(totalDelta) ? deltaStr(totalDelta) : '—'}</span>}
           </div>
           <p className="px-4 py-2 text-[11px] text-slate-400 dark:text-slate-500">
             <span className="font-medium">Raw NI in Excel</span> = the BU's own Net Income from the QuickBooks

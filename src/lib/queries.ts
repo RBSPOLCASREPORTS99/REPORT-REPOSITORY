@@ -189,6 +189,18 @@ export async function fetchBuCards(currentRangeId: string, priorRangeId?: string
   return cards.sort((a, b) => (BU_SORT.get(a.buCode) ?? 999) - (BU_SORT.get(b.buCode) ?? 999));
 }
 
+// Stored Net Income per BU for a month (₱'000), to compare a re-import against
+// the version already in the system. Keyed by bu_code; empty if not imported.
+export async function fetchStoredNetIncomeByMonth(year: number, month: number): Promise<Record<string, number>> {
+  const start = `${year}-${String(month).padStart(2, '0')}-01`;
+  const { data: r } = await supabase.from('report_ranges').select('id').eq('kind', 'month').eq('period_start', start).maybeSingle();
+  if (!r?.id) return {};
+  const { data } = await supabase.from('computed_pnl').select('bu_code, amount').eq('range_id', r.id as string).eq('line_item', 'net_income');
+  const out: Record<string, number> = {};
+  for (const row of data ?? []) out[row.bu_code as string] = Number(row.amount);
+  return out;
+}
+
 export interface ComparisonLine {
   key: string;
   label: string;
