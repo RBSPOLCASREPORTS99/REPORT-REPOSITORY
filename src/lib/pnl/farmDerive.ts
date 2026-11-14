@@ -21,7 +21,8 @@ export const FARM_INPUT_LINES: { key: string; label: string; farmHint?: string }
   { key: 'land_rental', label: 'Land Rental', farmHint: 'Land Rental' },
   { key: 'other_income', label: 'Other Income' },
   { key: 'admin_allocated', label: 'Admin Expense (allocated)' },
-  { key: 'cost_of_money_allocated', label: 'Cost of Money (allocated)' },
+  // The Farm carries NO Cost of Money allocation (removed by request) — its
+  // cost_of_money_allocated line is always 0 and is not an entry field.
   { key: 'support_finance', label: 'Support: Finance' },
   { key: 'support_hr', label: 'Support: Human Resource' },
   { key: 'support_management', label: 'Support: Management' },
@@ -44,7 +45,7 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
     v('admin_expense') + v('discounting_expense') + v('operations_expense') +
     v('repairs_expense') + v('salaries_expense') + v('land_rental') + trucking;
   const netIncomeOps = grossIncome - totalExpense + v('other_income');
-  const totalAllocated = v('admin_allocated') + v('cost_of_money_allocated');
+  const totalAllocated = v('admin_allocated'); // Farm has no Cost of Money
   const totalSupport = v('support_finance') + v('support_hr') + v('support_management');
   const netIncome = netIncomeOps - totalAllocated - totalSupport;
 
@@ -63,7 +64,7 @@ export function deriveFarmLines(inp: FarmInputs): Record<string, number> {
     other_income: v('other_income'),
     net_income_ops: netIncomeOps,
     admin_allocated: v('admin_allocated'),
-    cost_of_money_allocated: v('cost_of_money_allocated'),
+    cost_of_money_allocated: 0, // Farm carries no Cost of Money allocation
     total_allocated_expense: totalAllocated,
     support_finance: v('support_finance'),
     support_hr: v('support_hr'),

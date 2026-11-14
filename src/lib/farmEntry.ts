@@ -44,7 +44,6 @@ function monthsInPeriod(start: string, end: string): { year: number; month: numb
 // for the period aren't imported yet.
 export interface FarmAllocations {
   admin_allocated: number;
-  cost_of_money_allocated: number;
   support_finance: number;
   support_hr: number;
   support_management: number;
@@ -72,7 +71,6 @@ export async function computeFarmAllocations(rangeId: string, grossSales: number
   const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
   return {
     admin_allocated: r5(share * sum.admin_pool),
-    cost_of_money_allocated: r5(share * sum.cost_money_pool),
     support_finance: r5(share * sum.finance_pool),
     support_hr: r5(share * sum.hr_pool),
     support_management: r5(share * sum.mancom_pool),
