@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { findPnlSheet, detectMonthFromName } from '../lib/importers/parseMonthlyPnl';
 import { persistMonthlyPnl } from '../lib/importers/persistMonthlyPnl';
 import { computeSide, extractPools, type TruckingInputs } from '../lib/pnl/computeBuPnl';
-import { BU_CONFIGS, TRUCKING_CODES, PULLS, COLS, type BuConfig } from '../lib/pnl/buConfig';
+import { BU_CONFIGS, TRUCKING_CODES, PULLS, COLS, COST_OF_MONEY_BUS, type BuConfig } from '../lib/pnl/buConfig';
 import { loadBuConfigs } from '../lib/pnl/loadBuConfigs';
 import { supabase } from '../lib/supabaseClient';
 import { lookupValue, type ParsedPivot } from '../lib/importers/parsePivotTab';
@@ -18,6 +18,8 @@ import { parseTruckingParameters, type Bu10MonthParams } from '../lib/importers/
 import { persistTruckingParameters } from '../lib/importers/persistTruckingParameters';
 import { hasLakatanRentSheet, parseLakatanRent, type RentMonthRow } from '../lib/importers/parseLakatanRent';
 import { persistLakatanRent } from '../lib/importers/persistLakatanRent';
+import { parseBuPurchases, type ParsedBuPurchases } from '../lib/importers/parseBuPurchases';
+import { persistBuPurchases } from '../lib/importers/persistBuPurchases';
 import { isGffcWorkbook, parseGffcPnl, type GffcMonthInputs } from '../lib/importers/parseGffcPnl';
 import { parseGffcExpense, parseGffcSales, isGffcExpenseWorkbook, parseGffcSalesByItem, isGffcSalesByItemWorkbook, type GffcExpenseRow, type GffcSalesRow } from '../lib/importers/parseGffcData';
 import { parseBuParameterStd, isBuParametersWorkbook, type BuStdImport } from '../lib/importers/parseParameters';
@@ -33,7 +35,7 @@ import { fetchStoredExpenseClassification } from '../lib/queries';
 import { monthLabel, formatThousands } from '../lib/format';
 import { useAuth } from '../contexts/AuthContext';
 
-type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'paramstd' | 'rent' | 'done';
+type Step = 'upload' | 'month' | 'support' | 'expense' | 'sales' | 'dashboard' | 'gffc' | 'paramstd' | 'rent' | 'purchases' | 'done';
 
 const RENT_MIN_YEAR = 2025; // the Farm Land Rental import covers 2025 through the current year
 const RENT_MAX_YEAR = new Date().getFullYear();
@@ -77,6 +79,7 @@ export default function ImportWizard() {
   const [truckParams, setTruckParams] = useState<Bu10MonthParams[]>([]);
   const [truckSkipped, setTruckSkipped] = useState<string[]>([]);
   const [rentRows, setRentRows] = useState<RentMonthRow[]>([]);
+  const [buPurchases, setBuPurchases] = useState<ParsedBuPurchases | null>(null);
   const [rentResult, setRentResult] = useState<{ updated: number; skipped: string[] } | null>(null);
   const [dashMonthExists, setDashMonthExists] = useState(false);
   const [gffcMonths, setGffcMonths] = useState<GffcMonthInputs[] | null>(null);
@@ -149,6 +152,21 @@ export default function ImportWizard() {
         if (std.length === 0) { setParseError('No parameter standards (STD column) found in this workbook.'); return; }
         setParamStd(std);
         setStep('paramstd');
+        return;
+      }
+
+      // "PAC Purchases by BU" → per-BU monthly purchases for the Cost of Money
+      // allocation. Detected by file name (its sheet looks like a plain pivot).
+      if (/purchas/i.test(file.name)) {
+        const parsed = parseBuPurchases(buf);
+        if (Object.keys(parsed.byBu).length === 0) {
+          setParseError('No BU purchase columns found in this file (expected a "BU## …" header with the amount two columns to its right).');
+          return;
+        }
+        setBuPurchases(parsed);
+        const det = detectMonthFromName(file.name) ?? detectMonthFromName(wb.SheetNames[0]);
+        if (det) { setYear(det.year); setMonth(det.month); }
+        setStep('purchases');
         return;
       }
 
@@ -317,6 +335,14 @@ export default function ImportWizard() {
         return;
       }
       setRentResult({ updated: res.updated, skipped: res.skipped });
+      setStep('done');
+    } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
+  }
+  async function handleConfirmPurchases() {
+    if (!buPurchases || !user) return;
+    setConfirming(true); setConfirmError('');
+    try {
+      await persistBuPurchases({ year, month, parsed: buPurchases, fileName, userId: user.id });
       setStep('done');
     } catch (e) { setConfirmError(errMessage(e)); } finally { setConfirming(false); }
   }
@@ -756,13 +782,76 @@ export default function ImportWizard() {
     );
   }
 
+  // ---- PAC Purchases by BU: Cost of Money allocation basis ----------------
+  if (step === 'purchases' && buPurchases) {
+    const peso = (v: number) => `₱${Math.round(v).toLocaleString('en-PH')}`;
+    const included = COST_OF_MONEY_BUS;
+    // One row per mapped BU (summing the source columns that roll up to it).
+    const byBuRows = Object.entries(buPurchases.byBu)
+      .map(([bu, amount]) => ({ bu, amount, used: included.includes(bu) }))
+      .sort((a, b) => Number(b.used) - Number(a.used) || b.amount - a.amount);
+    const usedTotal = byBuRows.filter((r) => r.used).reduce((s, r) => s + r.amount, 0);
+    return (
+      <div className="space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import Purchases by BU</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Sets each BU's <span className="font-medium">Purchases</span> for the month. The company
+          {' '}<span className="font-medium">Cost of Money</span> is then split by each BU's
+          {' '}<span className="font-medium">Purchases + Expenses</span> share (BU06, BU10 and the Farm excluded).
+          Import this month's <span className="font-medium">P&amp;L first</span>; re-importing replaces the month.
+        </p>
+        <div className="flex gap-3">
+          <label className="flex-1 text-sm">
+            <span className="mb-1 block text-slate-500 dark:text-slate-400">Month</span>
+            <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+              {MONTH_NAMES.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+            </select>
+          </label>
+          <label className="flex-1 text-sm">
+            <span className="mb-1 block text-slate-500 dark:text-slate-400">Year</span>
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
+          <div className="grid grid-cols-[1fr_10rem_6rem] gap-x-3 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+            <span>Business Unit</span>
+            <span className="text-right">Purchases (₱)</span>
+            <span className="text-right">In basis?</span>
+          </div>
+          {byBuRows.map((r) => (
+            <div key={r.bu} className="grid grid-cols-[1fr_10rem_6rem] items-center gap-x-3 px-4 py-2">
+              <span className="text-sm text-slate-900 dark:text-slate-100">{r.bu}</span>
+              <span className="text-right text-sm tabular-nums text-slate-600 dark:text-slate-300">{peso(r.amount)}</span>
+              <span className={`text-right text-xs font-medium ${r.used ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>{r.used ? 'Yes' : 'Excluded'}</span>
+            </div>
+          ))}
+          <div className="grid grid-cols-[1fr_10rem_6rem] items-center gap-x-3 bg-slate-50 dark:bg-slate-700/40 px-4 py-2 font-semibold">
+            <span className="text-sm text-slate-900 dark:text-slate-100">Total in basis</span>
+            <span className="text-right text-sm tabular-nums text-slate-900 dark:text-slate-100">{peso(usedTotal)}</span>
+            <span />
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">Amounts shown in full pesos; stored in ₱'000 to match the P&amp;L.</p>
+        {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+        <div className="flex gap-3">
+          <button onClick={() => setStep('upload')} className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">Cancel</button>
+          <button onClick={handleConfirmPurchases} disabled={confirming || byBuRows.filter((r) => r.used).length === 0} className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50">
+            {confirming ? 'Importing…' : `Import purchases for ${monthLabel(year, month)}`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Upload step --------------------------------------------------------
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import</h1>
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Upload a monthly QuickBooks <strong>P&L by Class</strong> export (one per month), or the Expense,
-        Sales-in-Qty, Parameters, Lakatan <strong>Rent Schedule</strong>, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
+        Sales-in-Qty, Parameters, <strong>Purchases by BU</strong>, Lakatan <strong>Rent Schedule</strong>, or FINANCE/HR/MANCOM support workbook — the type is detected automatically.
       </p>
       <div
         onDragOver={(e) => e.preventDefault()}

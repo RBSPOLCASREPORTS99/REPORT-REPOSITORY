@@ -63,7 +63,7 @@ export const PNL_LINE_ITEMS: PnlLineItemDef[] = [
   { key: 'other_income', label: 'Other Income', matches: ['OTHER INCOME', 'NET OTHER INCOME'] },
   { key: 'net_income_ops', label: 'Net Income from Operations', matches: ['NET INCOME FROM OPS'] },
   { key: 'admin_allocated', label: 'Admin Expense (allocated)', matches: ['ADMIN EXPENSE - ALLOCATED', 'ADMIN EXPENSE -ALLOCATED', 'ADMIN EXPENSE – ALLOCATED'] },
-  { key: 'cost_of_money_allocated', label: 'Cost of Money (allocated)', matches: ['COST OF MONEY - ALLOCATED', 'COST OF MONEY -ALLOCATED', 'COST OF MONEY – ALLOCATED'] },
+  { key: 'cost_of_money_allocated', label: 'Cost of Money - purchases based', matches: ['COST OF MONEY - ALLOCATED', 'COST OF MONEY -ALLOCATED', 'COST OF MONEY – ALLOCATED'] },
   { key: 'total_allocated_expense', label: 'Total Allocated Expense', matches: ['TOTAL ALLOCATED EXPENSE'] },
   { key: 'support_finance', label: 'Support: Finance', matches: ['FINANCE'] },
   { key: 'support_hr', label: 'Support: Human Resource', matches: ['HUMAN RESOURCE'] },

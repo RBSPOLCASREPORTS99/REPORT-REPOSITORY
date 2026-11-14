@@ -119,6 +119,14 @@ export const BU_CONFIGS: BuConfig[] = [
   },
 ];
 
+// The BUs that share the company Cost of Money pool under the Purchases-based
+// allocation (= pool × each BU's (Purchases + Expenses) share). These are exactly
+// the auto-computed BUs: BU06, BU10 (Trucking) and the Lakatan Farm (BU08LF,
+// manual) are excluded by request.
+export const COST_OF_MONEY_BUS = BU_CONFIGS
+  .filter((c) => !c.manualEntry)
+  .map((c) => c.buCode);
+
 // Short BU codes that appear in the trucking allocation block, in order.
 export const TRUCKING_CODES = [
   'BU01', 'BU02', 'BU03', 'BU04', 'BU05', 'BU06', 'BU07', 'BU08', 'BU09', 'BU10', 'BU11', 'OT',

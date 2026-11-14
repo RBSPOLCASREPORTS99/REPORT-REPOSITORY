@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TRUCKING_CODES, type BuConfig } from './buConfig';
 import { loadBuConfigs } from './loadBuConfigs';
-import { computeFromInputs, type BuInputs, type PoolInputs } from './computeBuPnl';
+import { computeFromInputs, type BuInputs, type PoolInputs, type SideAmounts } from './computeBuPnl';
 import { PNL_LINE_ITEMS, COGS_VARIANCE_LABELS } from '../constants';
 import { monthLabel } from '../format';
 import { FARM_BU_CODE, FARM_DEFERRED_PREFIX, FARM_INPUT_KEYS, farmComputedRows, farmItemKeys, type FarmInputs } from './farmDerive';
@@ -23,6 +23,7 @@ interface MonthData {
   variance: Map<string, number>; // bu_code -> COGS "Reclass or Adjusted Variance" (₱ '000)
   pools: PoolInputs;
   trucking: Record<string, number>; // code -> amount
+  purchases: Map<string, number>; // bu_code -> purchases (₱'000); empty if none imported
 }
 
 
@@ -39,6 +40,25 @@ const firstDay = (y: number, m: number) => `${y}-${String(m).padStart(2, '0')}-0
 
 async function loadYearMonths(db: Db, year: number): Promise<MonthData[]> {
   const { data: months } = await db.from('pnl_months').select('id, year, month').eq('year', year);
+
+  // Per-month per-BU purchases (₱'000) for the Purchases-based Cost of Money
+  // allocation. The table may not exist yet (migration 0043 unapplied) — on any
+  // error treat purchases as absent, so the allocation falls back to Gross Sales.
+  const monthIds = (months ?? []).map((m) => m.id as string);
+  const purByMonth = new Map<string, Map<string, number>>();
+  if (monthIds.length) {
+    const { data: purRows, error: purErr } = await db
+      .from('br_bu_purchases').select('month_id, bu_code, amount').in('month_id', monthIds);
+    if (!purErr) {
+      for (const p of purRows ?? []) {
+        const mid = p.month_id as string;
+        const mm = purByMonth.get(mid) ?? new Map<string, number>();
+        mm.set(p.bu_code as string, (mm.get(p.bu_code as string) ?? 0) + Number(p.amount));
+        purByMonth.set(mid, mm);
+      }
+    }
+  }
+
   const out: MonthData[] = [];
   for (const m of months ?? []) {
     const [{ data: inputs }, { data: pool }, { data: truck }] = await Promise.all([
@@ -65,6 +85,7 @@ async function loadYearMonths(db: Db, year: number): Promise<MonthData[]> {
         finance_pool: pool.finance_pool, hr_pool: pool.hr_pool, mancom_pool: pool.mancom_pool, bu10_truck_total: pool.bu10_truck_total,
       } : { ...ZERO_POOLS },
       trucking,
+      purchases: purByMonth.get(m.id as string) ?? new Map<string, number>(),
     });
   }
   return out.sort((a, b) => a.month - b.month);
@@ -84,6 +105,47 @@ function addPools(a: PoolInputs, b: PoolInputs): PoolInputs {
     cost_money_pool: a.cost_money_pool + b.cost_money_pool, finance_pool: a.finance_pool + b.finance_pool,
     hr_pool: a.hr_pool + b.hr_pool, mancom_pool: a.mancom_pool + b.mancom_pool, bu10_truck_total: a.bu10_truck_total + b.bu10_truck_total,
   };
+}
+
+// Re-split the company Cost of Money pool across the given BUs by each one's
+// (Purchases + Total Expense) basis — the "Cost of Money - purchases based"
+// allocation — mutating each side's cost_of_money_allocated,
+// total_allocated_expense, net_income and net_income_pct in place. A no-op
+// unless the range's months carry imported purchases (so a period without a
+// purchases import keeps the default Gross-Sales Cost of Money). BU06, BU10 and
+// the Farm are already absent here (not in `computed`), so excluding them needs
+// no special case.
+function reallocateCostOfMoney(
+  computed: { cfg: BuConfig; side: SideAmounts }[],
+  months: MonthData[],
+  costMoneyPool: number,
+): void {
+  const purByBu = new Map<string, number>();
+  let totalPurchases = 0;
+  for (const m of months) {
+    for (const [bu, amt] of m.purchases) {
+      purByBu.set(bu, (purByBu.get(bu) ?? 0) + amt);
+      totalPurchases += amt;
+    }
+  }
+  if (totalPurchases <= 0 || costMoneyPool === 0) return; // no purchases -> keep Gross-Sales split
+
+  const basis = new Map<string, number>();
+  let denom = 0;
+  for (const { cfg, side } of computed) {
+    const b = (purByBu.get(cfg.buCode) ?? 0) + (side.total_expense ?? 0);
+    basis.set(cfg.buCode, b);
+    denom += b;
+  }
+  if (denom <= 0) return;
+
+  for (const { cfg, side } of computed) {
+    const newCostMoney = costMoneyPool * (basis.get(cfg.buCode)! / denom);
+    side.cost_of_money_allocated = newCostMoney;
+    side.total_allocated_expense = (side.admin_allocated ?? 0) + newCostMoney;
+    side.net_income = (side.net_income_ops ?? 0) - side.total_allocated_expense - (side.total_support_centers ?? 0);
+    side.net_income_pct = side.gross_sales !== 0 ? side.net_income / side.gross_sales : 0;
+  }
 }
 
 // Sum a set of months and materialize a report_range + its computed_pnl.
@@ -116,16 +178,27 @@ async function materializeRange(
     rangeId = created.id;
   }
 
-  const rows: Record<string, unknown>[] = [];
+  // Pass 1: compute every (non-manual) BU's side from the summed inputs.
+  const computed: { cfg: BuConfig; side: SideAmounts; variance: number }[] = [];
   for (const cfg of configs) {
     if (cfg.manualEntry) continue; // Lakatan Farm is entered separately, not derived
     const bu = months.reduce((acc, m) => addBu(acc, m.inputs.get(cfg.buCode) ?? ZERO_BU), { ...ZERO_BU });
     const truckNumer = cfg.truckingMembers.reduce((s, code) => s + (truckByCode[code] ?? 0), 0);
     const side = computeFromInputs(bu, pools, cfg, truckNumer, truckDenom);
+    const variance = months.reduce((s, m) => s + (m.variance.get(cfg.buCode) ?? 0), 0);
+    computed.push({ cfg, side, variance });
+  }
+
+  // If this range's months carry imported purchases, re-split the Cost of Money
+  // pool across these BUs by (Purchases + Total Expense) instead of Gross Sales.
+  reallocateCostOfMoney(computed, months, pools.cost_money_pool);
+
+  // Pass 2: emit the computed_pnl rows from each (possibly adjusted) side.
+  const rows: Record<string, unknown>[] = [];
+  for (const { cfg, side, variance } of computed) {
     const gs = side.gross_sales || 0;
     const pctOf = (key: string, amount: number) => (PCT_KEYS.has(key) || gs === 0 ? 0 : amount / gs);
     const push = (key: string, amount: number) => rows.push({ range_id: rangeId, bu_code: cfg.buCode, line_item: key, amount, pct_of_sales: pctOf(key, amount) });
-    const variance = months.reduce((s, m) => s + (m.variance.get(cfg.buCode) ?? 0), 0);
     for (const item of PNL_LINE_ITEMS) {
       const amount = side[item.key] ?? 0;
       // For the variance BUs, split COGS: Cost of Goods Sold (= Total − variance),
